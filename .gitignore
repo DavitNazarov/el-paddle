@@ -1,0 +1,6 @@
+.next/
+node_modules/
+test-output/
+.env*
+!.env.example
+npm-debug.log*
