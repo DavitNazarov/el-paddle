@@ -6,6 +6,25 @@
 */
 :root {
   color-scheme: dark;
+
+  /* Shared brand tokens (mirrored in PadelHome inline vars) */
+  --padel-red: #8c1916;
+  --padel-red-2: #6f1210;
+  --padel-red-3: #3b0605;
+  --padel-ink: #130202;
+  --padel-ivory: #f6efe1;
+  --padel-parchment: #fff5e6;
+  --padel-muted: #decfbd;
+  --padel-line: rgba(246, 239, 225, 0.18);
+  --padel-line-strong: rgba(246, 239, 225, 0.36);
+  --padel-gold: #e0c477;
+  --padel-gold-2: #f2e3ad;
+  --padel-gold-deep: #a8863c;
+  --padel-ember: #e0342b;
+  --padel-glow: rgba(224, 196, 119, 0.5);
+  --padel-focus-ring: rgba(224, 196, 119, 0.45);
+  --padel-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --padel-ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html {
@@ -16,7 +35,7 @@ html {
 
 body {
   margin: 0;
-  background: #801917;
+  background: var(--padel-red);
   color: #ffffff;
   font-family:
     var(--font-sans), ui-sans-serif, system-ui, -apple-system,
@@ -24,8 +43,8 @@ body {
 }
 
 ::selection {
-  background: #d9bf73;
-  color: #130202;
+  background: var(--padel-gold);
+  color: var(--padel-ink);
 }
 
 button,
@@ -52,11 +71,17 @@ p {
   text-wrap: pretty;
 }
 
-/* Branded scrollbar — keeps the editorial red/gold system in the chrome */
+/* Accessible focus for keyboard users outside component styles */
+:focus-visible {
+  outline: 2px solid var(--padel-gold);
+  outline-offset: 3px;
+}
+
+/* Branded scrollbar */
 @supports (scrollbar-width: thin) {
   html {
     scrollbar-width: thin;
-    scrollbar-color: rgba(217, 191, 115, 0.55) #130202;
+    scrollbar-color: rgba(217, 191, 115, 0.55) var(--padel-ink);
   }
 }
 
@@ -65,12 +90,12 @@ p {
 }
 
 ::-webkit-scrollbar-track {
-  background: #130202;
+  background: var(--padel-ink);
 }
 
 ::-webkit-scrollbar-thumb {
   background: rgba(217, 191, 115, 0.45);
-  border: 2px solid #130202;
+  border: 2px solid var(--padel-ink);
   border-radius: 999px;
 }
 

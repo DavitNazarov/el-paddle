@@ -28,6 +28,7 @@ import {
   ArrowUpRight,
   CalendarDays,
   Check,
+  ChevronDown,
   Instagram,
   Mail,
   MapPin,
@@ -39,6 +40,7 @@ import {
   Trophy,
   Users,
   X,
+  Zap,
 } from 'lucide-react';
 import { PadelBall3D } from './PadelBall3D';
 
@@ -52,7 +54,13 @@ const padelVars = {
   '--padel-muted': '#decfbd',
   '--padel-line': 'rgba(246, 239, 225, 0.18)',
   '--padel-line-strong': 'rgba(246, 239, 225, 0.36)',
-  '--padel-gold': '#d9bf73',
+  '--padel-gold': '#e0c477',
+  '--padel-gold-2': '#f2e3ad',
+  '--padel-gold-deep': '#a8863c',
+  '--padel-ember': '#e0342b',
+  '--padel-glow': 'rgba(224, 196, 119, 0.5)',
+  '--padel-shadow': '0 30px 90px -30px rgba(0, 0, 0, 0.65)',
+  '--padel-shadow-gold': '0 24px 70px -28px rgba(224, 196, 119, 0.35)',
 } as CSSProperties;
 
 const navItems = [
@@ -341,7 +349,12 @@ function Preloader() {
               className="h-auto w-[150px] object-contain md:w-[190px]"
             />
           </motion.div>
-          <div className="mt-10 flex w-[200px] flex-col items-center gap-4">
+          <div className="mt-10 flex w-[min(240px,72vw)] flex-col items-center gap-4">
+            <div className="preloader-court h-16 w-full border border-[var(--padel-line)] p-2" aria-hidden>
+              <div className="preloader-court__inner relative h-full w-full border border-[var(--padel-line-strong)]">
+                <span className="preloader-court__net" />
+              </div>
+            </div>
             <div className="h-px w-full overflow-hidden bg-[var(--padel-line)]">
               <motion.div
                 className="h-full bg-[var(--padel-gold)]"
@@ -767,6 +780,9 @@ function SectionIntro({
 }) {
   return (
     <div className={align === 'center' ? 'mx-auto max-w-3xl text-center' : 'max-w-3xl'}>
+      <div
+        className={`section-intro-frame ${align === 'center' ? 'section-intro-frame--center' : ''}`}
+      >
       <p
         className={`section-kicker mb-5 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.34em] text-[var(--padel-gold)] ${
           align === 'center' ? 'justify-center' : ''
@@ -794,19 +810,128 @@ function SectionIntro({
           {copy}
         </p>
       ) : null}
+      </div>
     </div>
   );
 }
 
 function PageProgress() {
   const { scrollYProgress } = useScroll();
+  const glowOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.35, 0.7, 1]);
 
   return (
-    <motion.div
-      aria-hidden
-      className="fixed left-0 top-0 z-[90] h-[2px] w-full origin-left bg-gradient-to-r from-[var(--padel-gold)] via-[#efe1b8] to-[var(--padel-gold)]"
-      style={{ scaleX: scrollYProgress }}
-    />
+    <>
+      <motion.div
+        aria-hidden
+        className="page-progress fixed left-0 top-0 z-[90] h-[3px] w-full origin-left"
+        style={{ scaleX: scrollYProgress }}
+      />
+      <motion.div
+        aria-hidden
+        className="page-progress__glow pointer-events-none fixed left-0 top-0 z-[89] h-8 w-full origin-left"
+        style={{ scaleX: scrollYProgress, opacity: glowOpacity }}
+      />
+    </>
+  );
+}
+
+function SectionCourtDivider() {
+  return (
+    <div className="court-divider" aria-hidden>
+      <span className="court-divider__line" />
+      <span className="court-divider__net">
+        <span className="court-divider__mesh" />
+      </span>
+      <span className="court-divider__line" />
+    </div>
+  );
+}
+
+function FloatingEntryBar() {
+  const reduceMotion = useReducedMotion();
+  const { scrollY } = useScroll();
+  const [visible, setVisible] = useState(false);
+
+  useMotionValueEvent(scrollY, 'change', (latest) => {
+    setVisible((previous) => {
+      const next = latest > window.innerHeight * 0.72;
+      return previous === next ? previous : next;
+    });
+  });
+
+  return (
+    <AnimatePresence>
+      {visible ? (
+        <motion.aside
+          initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 16, scale: 0.98 }}
+          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          className="floating-entry fixed bottom-5 left-1/2 z-[80] flex w-[min(92vw,26rem)] -translate-x-1/2 items-center gap-3 rounded-full border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/88 px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl md:bottom-7"
+          aria-label="Quick registration"
+        >
+          <span className="floating-entry__pulse hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--padel-line)] sm:flex">
+            <Zap className="h-4 w-4 text-[var(--padel-gold)]" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1 pl-1 sm:pl-0">
+            <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.32em] text-[var(--padel-gold)]">
+              Draw filling fast
+            </p>
+            <p className="truncate text-sm font-medium text-[var(--padel-ivory)]">
+              4 team slots remain
+            </p>
+          </div>
+          <Magnetic strength={0.18}>
+            <a
+              href="#registration"
+              className="btn-premium inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-[var(--padel-ivory)] px-4 py-2 text-sm font-semibold text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+            >
+              Enter
+              <ArrowRight className="h-4 w-4" />
+            </a>
+          </Magnetic>
+        </motion.aside>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function BackToTop() {
+  const reduceMotion = useReducedMotion();
+  const { scrollY } = useScroll();
+  const [visible, setVisible] = useState(false);
+
+  useMotionValueEvent(scrollY, 'change', (latest) => {
+    setVisible((previous) => {
+      const next = latest > window.innerHeight * 1.4;
+      return previous === next ? previous : next;
+    });
+  });
+
+  const scrollUp = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    });
+  };
+
+  return (
+    <AnimatePresence>
+      {visible ? (
+        <motion.button
+          type="button"
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.85 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          onClick={scrollUp}
+          aria-label="Back to top"
+          className="back-to-top fixed bottom-5 right-5 z-[75] flex h-12 w-12 items-center justify-center rounded-full border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/80 text-[var(--padel-ivory)] backdrop-blur-md transition-colors duration-200 hover:border-[var(--padel-gold)] hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] md:bottom-7 md:right-7"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </motion.button>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
@@ -840,6 +965,7 @@ function MobileMenu({
           exit={{ clipPath: 'inset(0 0 100% 0)' }}
           transition={{ duration: 0.55, ease: [0.76, 0, 0.24, 1] }}
         >
+          <div className="mobile-menu__lines" aria-hidden />
           <button
             type="button"
             aria-label="Close menu"
@@ -878,7 +1004,7 @@ function MobileMenu({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-6 py-3.5 text-base font-semibold text-[var(--padel-red)]"
+            className="btn-premium mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-6 py-3.5 text-base font-semibold text-[var(--padel-red)]"
           >
             Request entry
             <ArrowRight className="h-5 w-5" />
@@ -935,7 +1061,7 @@ function PadelNav() {
             : '0 18px 70px rgba(0,0,0,0.18)',
         }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 rounded-full border border-[var(--padel-line)] px-3 text-[var(--padel-ivory)] backdrop-blur-xl md:h-16 md:px-4"
+        className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 rounded-full border border-[var(--padel-line)] px-3 text-[var(--padel-ivory)] backdrop-blur-xl md:h-16 md:px-4 nav-shell"
       >
         <a
           href="#top"
@@ -950,7 +1076,7 @@ function PadelNav() {
             priority
             className="h-9 w-9 object-contain md:h-10 md:w-10"
           />
-          <span className="hidden text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-[var(--padel-muted)] sm:inline">
+          <span className="gold-ink font-display hidden text-[0.82rem] font-semibold uppercase tracking-[0.34em] sm:inline">
             El Padel
           </span>
         </a>
@@ -963,11 +1089,17 @@ function PadelNav() {
                 key={item.href}
                 href={item.href}
                 aria-current={isActive ? 'true' : undefined}
-                className="group relative rounded-full px-4 py-2 text-sm font-medium text-[var(--padel-muted)] transition-colors duration-200 hover:text-[var(--padel-ivory)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+                className="nav-link group relative rounded-full px-4 py-2 text-sm font-medium text-[var(--padel-muted)] transition-colors duration-200 hover:text-[var(--padel-ivory)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
               >
                 <span className={isActive ? 'text-[var(--padel-ivory)]' : ''}>
                   {item.label}
                 </span>
+                <span
+                  className={`nav-link__underline absolute bottom-1 left-4 right-4 h-px origin-left bg-[var(--padel-gold)] transition-transform duration-300 ${
+                    isActive ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                  }`}
+                  aria-hidden
+                />
                 {isActive ? (
                   <motion.span
                     layoutId="nav-active-pill"
@@ -984,7 +1116,7 @@ function PadelNav() {
           <Magnetic strength={0.22}>
             <a
               href="#registration"
-              className="group hidden min-h-11 items-center gap-2 rounded-full bg-[var(--padel-ivory)] px-4 py-2.5 text-sm font-semibold text-[var(--padel-red)] transition duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] sm:inline-flex md:px-5"
+              className="btn-premium group hidden min-h-11 items-center gap-2 rounded-full bg-[var(--padel-ivory)] px-4 py-2.5 text-sm font-semibold text-[var(--padel-red)] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] sm:inline-flex md:px-5"
             >
               Request entry
               <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
@@ -1022,6 +1154,7 @@ function Hero() {
       id="top"
       className="poster-hero relative isolate h-dvh min-h-[640px] overflow-hidden px-4 pb-36 pt-24 text-[var(--padel-ivory)] md:px-10 md:pb-32 md:pt-28"
     >
+      <div className="aurora" aria-hidden />
       <div className="premium-noise absolute inset-0 -z-10" aria-hidden />
       <div className="poster-vignette absolute inset-0 -z-10" aria-hidden />
 
@@ -1043,6 +1176,13 @@ function Hero() {
         <p className="font-display -mt-2 text-sm font-semibold uppercase tracking-[0.62em] text-[var(--padel-gold)] md:text-base">
           Tournament
         </p>
+        <div className="hero-chips mt-5 flex flex-wrap items-center justify-center gap-2">
+          {['Tbilisi', 'Summer Open', '2026'].map((chip) => (
+            <span key={chip} className="hero-chip">
+              {chip}
+            </span>
+          ))}
+        </div>
       </motion.div>
 
       <motion.div
@@ -1105,23 +1245,25 @@ function Hero() {
         style={reduceMotion ? undefined : { y: footerY }}
         className="poster-footer absolute bottom-5 left-4 right-4 z-10 mx-auto grid max-w-7xl gap-6 md:bottom-8 md:left-10 md:right-10 md:grid-cols-2"
       >
-        <div className="poster-meta md:max-w-md">
-          <p className="mb-3 text-[0.62rem] font-semibold uppercase tracking-[0.4em] text-[var(--padel-gold)]">
+        <div className="poster-meta glass-card md:max-w-md border border-[var(--padel-line)] p-5 backdrop-blur-sm">
+          <p className="mb-3 flex items-center gap-2 text-[0.62rem] font-semibold uppercase tracking-[0.4em] text-[var(--padel-gold)]">
+            <CalendarDays className="h-3.5 w-3.5" aria-hidden />
             Match days
           </p>
           <div className="flex items-end justify-between gap-6 pr-2">
-            <span className="text-3xl font-light leading-none md:text-4xl">00 - 00</span>
-            <span className="text-2xl font-light lowercase leading-none md:text-3xl">july</span>
+            <span className="font-display text-3xl font-light leading-none md:text-4xl">00 - 00</span>
+            <span className="font-display text-2xl font-light lowercase leading-none md:text-3xl">july</span>
           </div>
-          <span className="mt-5 block h-1 w-full bg-[var(--padel-ivory)]" />
+          <span className="poster-meta__bar mt-5 block h-1 w-full" />
         </div>
 
-        <div className="poster-meta md:ml-auto md:max-w-xl md:self-end md:text-right">
-          <span className="mb-5 block h-1 w-full bg-[var(--padel-ivory)]" />
-          <p className="mb-3 text-[0.62rem] font-semibold uppercase tracking-[0.4em] text-[var(--padel-gold)]">
+        <div className="poster-meta glass-card md:ml-auto md:max-w-xl md:self-end md:text-right border border-[var(--padel-line)] p-5 backdrop-blur-sm">
+          <span className="poster-meta__bar mb-5 block h-1 w-full" />
+          <p className="mb-3 flex items-center gap-2 text-[0.62rem] font-semibold uppercase tracking-[0.4em] text-[var(--padel-gold)] md:justify-end">
+            <MapPin className="h-3.5 w-3.5" aria-hidden />
             Venue
           </p>
-          <p className="text-2xl font-light uppercase leading-tight md:text-3xl">
+          <p className="font-display text-2xl font-light uppercase leading-tight md:text-3xl">
             <strong className="font-extrabold">KUS TBA Padel</strong> Courts
           </p>
         </div>
@@ -1132,10 +1274,17 @@ function Hero() {
         initial={{ opacity: 0 }}
         animate={{ opacity: reduceMotion ? 1 : [0.3, 1, 0.3] }}
         transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-        className="pointer-events-none absolute bottom-3 left-1/2 z-20 hidden -translate-x-1/2 flex-col items-center gap-1 text-[0.62rem] font-semibold uppercase tracking-[0.4em] text-[var(--padel-muted)] md:flex"
+        className="scroll-cue pointer-events-none absolute bottom-3 left-1/2 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 text-[0.62rem] font-semibold uppercase tracking-[0.4em] text-[var(--padel-muted)] md:flex"
       >
         Scroll
-        <span className="h-8 w-px bg-gradient-to-b from-[var(--padel-muted)] to-transparent" />
+        <span className="scroll-cue__track flex h-10 w-6 items-start justify-center rounded-full border border-[var(--padel-line)] p-1">
+          <motion.span
+            className="scroll-cue__dot h-2 w-1 rounded-full bg-[var(--padel-gold)]"
+            animate={reduceMotion ? undefined : { y: [0, 14, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </span>
+        <ChevronDown className="h-4 w-4 text-[var(--padel-gold)]/70" aria-hidden />
       </motion.div>
     </ScrollSection>
   );
@@ -1231,6 +1380,7 @@ function EventSection() {
       id="event"
       className="section-pad premium-red relative overflow-hidden px-5 md:px-10"
     >
+      <div className="aurora" aria-hidden />
       <div className="premium-noise absolute inset-0" aria-hidden />
       <div className="relative mx-auto max-w-7xl">
         <Reveal>
@@ -1250,7 +1400,8 @@ function EventSection() {
           {stats.map((stat, index) => (
             <Reveal key={stat.label} delay={index * 0.06}>
               <Parallax speed={index === 1 ? 0.34 : 0.14}>
-              <div className="stat-card relative border border-[var(--padel-line)] px-6 py-8 text-center">
+              <div className={`stat-card glass-card relative border border-[var(--padel-line)] px-6 py-8 text-center ${index === 1 ? 'stat-card--featured' : ''}`}>
+                <span className="stat-card__glow" aria-hidden />
                 <span className="stat-card__tick stat-card__tick--tl" aria-hidden />
                 <span className="stat-card__tick stat-card__tick--br" aria-hidden />
                 <p className="stat-card__value font-display text-6xl font-semibold text-[var(--padel-ivory)] transition-colors duration-300 md:text-7xl">
@@ -1368,7 +1519,7 @@ function FlowSection() {
               <Parallax speed={[0.1, 0.28, 0.16][index] ?? 0.14}>
               <Tilt max={4}>
                 <article
-                  className="flow-card group relative flex min-h-80 flex-col overflow-hidden border border-[var(--padel-line)] bg-white/[0.025] p-8"
+                  className="flow-card glass-card group relative flex min-h-80 flex-col overflow-hidden border border-[var(--padel-line)] p-8"
                   onMouseEnter={() => setHovered(index)}
                   onMouseLeave={() => setHovered(null)}
                 >
@@ -1429,6 +1580,7 @@ function RegistrationSection() {
       id="registration"
       className="section-pad premium-red relative overflow-hidden px-5 md:px-10"
     >
+      <div className="aurora" aria-hidden />
       <div className="premium-noise absolute inset-0" aria-hidden />
       <div className="relative mx-auto grid max-w-7xl gap-16 lg:grid-cols-[0.82fr_1.18fr] lg:items-start lg:gap-24">
         <Reveal>
@@ -1441,7 +1593,7 @@ function RegistrationSection() {
               copy="The form is short by design. Players can apply quickly, and the organizer can confirm category, partner status and schedule details."
             />
 
-            <div className="entry-meter mt-14 border border-[var(--padel-line)] p-7">
+            <div className="entry-meter glass-card mt-14 border border-[var(--padel-line)] p-7">
               <div className="mb-6 flex items-end justify-between gap-8">
                 <div>
                   <span className="live-badge mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--padel-line)] px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.3em] text-[var(--padel-ivory)]">
@@ -1526,19 +1678,27 @@ function RegistrationSection() {
                 <p className="font-display mt-2 text-4xl font-semibold text-[var(--padel-ink)]">
                   Summer Open
                 </p>
+                <div className="form-steps mt-4 flex items-center gap-2" aria-hidden>
+                  {[1, 2, 3].map((step) => (
+                    <span key={step} className={`form-steps__dot ${step === 1 ? 'form-steps__dot--active' : ''}`} />
+                  ))}
+                  <span className="ml-1 text-[0.62rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-ink)]/45">
+                    Step 1 of 1
+                  </span>
+                </div>
               </div>
               <Sparkles className="mt-1 h-6 w-6 text-[var(--padel-red)]" />
             </div>
 
             <div className="grid gap-7 md:grid-cols-2">
-              <Field label="Full name">
+              <Field label="Full name" hint="Required">
                 <input required name="name" autoComplete="name" placeholder="Nika Beridze" />
               </Field>
-              <Field label="Phone">
+              <Field label="Phone" hint="Required">
                 <input required name="phone" type="tel" autoComplete="tel" placeholder="+995 555 000 000" />
               </Field>
-              <Field label="Category">
-                <select required name="category" defaultValue="">
+              <Field label="Category" hint="Required">
+                <select required name="category" defaultValue="" className="field-select">
                   <option value="" disabled>
                     Select category
                   </option>
@@ -1560,7 +1720,7 @@ function RegistrationSection() {
             <button
               type="submit"
               disabled={sending}
-              className="group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-6 py-3.5 text-base font-semibold text-[var(--padel-ivory)] transition duration-200 hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)] disabled:cursor-wait disabled:opacity-80"
+              className="btn-premium btn-premium--dark group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-6 py-3.5 text-base font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)] disabled:cursor-wait disabled:opacity-80"
             >
               {sending ? (
                 <>
@@ -1588,17 +1748,22 @@ function Field({
   label,
   children,
   className = '',
+  hint,
 }: {
   label: string;
   children: ReactNode;
   className?: string;
+  hint?: string;
 }) {
   return (
-    <label className={`block ${className}`}>
-      <span className="mb-1 block text-[0.66rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-ink)]/60">
-        {label}
+    <label className={`field-shell block ${className}`}>
+      <span className="field-shell__label mb-1 flex items-center justify-between gap-3 text-[0.66rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-ink)]/60">
+        <span>{label}</span>
+        {hint ? <span className="normal-case tracking-normal text-[var(--padel-ink)]/40">{hint}</span> : null}
       </span>
-      {children}
+      <span className="field-shell__control relative block">
+        {children}
+      </span>
     </label>
   );
 }
@@ -1629,16 +1794,21 @@ function AtmosphereSection() {
             <Reveal key={item.title} delay={index * 0.06}>
               <Parallax speed={[0.12, 0.42, 0.26][index] ?? 0.2}>
               <Tilt max={5}>
-              <figure className="group">
+              <figure className="group atmosphere-card">
                 <div className={`visual-poster ${item.className ?? ''}`}>
                   {item.image ? (
-                    <Image
-                      src={item.image}
-                      alt={item.title}
-                      fill
-                      sizes="(max-width: 768px) 90vw, 30vw"
-                      className="visual-poster__image object-cover"
-                    />
+                    <>
+                      <Image
+                        src={item.image}
+                        alt={item.title}
+                        fill
+                        sizes="(max-width: 768px) 90vw, 30vw"
+                        className="visual-poster__image object-cover"
+                      />
+                      <span className="visual-poster__overlay" aria-hidden>
+                        <span className="visual-poster__overlay-label">Poster study</span>
+                      </span>
+                    </>
                   ) : (
                     <>
                       <div className="visual-poster__grain" aria-hidden />
@@ -1670,6 +1840,7 @@ function ContactSection() {
       id="contact"
       className="section-pad premium-red relative overflow-hidden px-5 md:px-10"
     >
+      <div className="aurora" aria-hidden />
       <div className="premium-noise absolute inset-0" aria-hidden />
       <div className="relative mx-auto grid max-w-7xl gap-16 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-24">
         <Reveal>
@@ -1715,6 +1886,13 @@ function ContactSection() {
         <Reveal delay={0.08}>
           <Parallax speed={0.22}>
           <div className="court-card bg-[var(--padel-parchment)] p-7 text-[var(--padel-ink)] md:p-10 lg:p-12">
+            <div className="court-card__diagram" aria-hidden>
+              <span className="court-card__baseline court-card__baseline--top" />
+              <span className="court-card__baseline court-card__baseline--bottom" />
+              <span className="court-card__net" />
+              <span className="court-card__service court-card__service--left" />
+              <span className="court-card__service court-card__service--right" />
+            </div>
             <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--padel-red)]">
               <Navigation className="h-4 w-4" />
               Location
@@ -1777,13 +1955,22 @@ function FinalCta() {
             <WordReveal text="Serious padel." delay={0.18} className="section-accent" />
           </h2>
           <Magnetic className="mt-12" strength={0.25}>
-            <a
-              href="#registration"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-7 py-3.5 text-base font-semibold text-[var(--padel-red)] transition duration-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
-            >
-              Request entry
-              <ArrowRight className="h-5 w-5" />
-            </a>
+            <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <a
+                href="#registration"
+                className="btn-premium inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-7 py-3.5 text-base font-semibold text-[var(--padel-red)] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+              >
+                Request entry
+                <ArrowRight className="h-5 w-5" />
+              </a>
+              <a
+                href="#contact"
+                className="btn-ghost inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[var(--padel-line-strong)] px-7 py-3.5 text-base font-semibold text-[var(--padel-ivory)] transition-colors duration-200 hover:border-[var(--padel-gold)] hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+              >
+                Contact us
+                <ArrowUpRight className="h-5 w-5" />
+              </a>
+            </div>
           </Magnetic>
 
           <p className="mt-16 text-xs uppercase tracking-[0.32em] text-[var(--padel-muted)]/70">
@@ -1801,46 +1988,51 @@ function SiteFooter() {
 
   return (
     <footer className="site-footer relative overflow-hidden border-t border-[var(--padel-line)] bg-[var(--padel-ink)] px-5 pb-10 pt-16 md:px-10">
-      <div className="mx-auto flex max-w-7xl flex-col gap-12">
-        <div className="flex flex-wrap items-end justify-between gap-8">
+      <div className="site-footer__mesh" aria-hidden />
+      <div className="relative mx-auto flex max-w-7xl flex-col gap-12">
+        <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
           <p className="font-script select-none text-7xl leading-[0.9] text-[var(--padel-gold)] md:text-9xl">
             El Padel
           </p>
-          <Magnetic strength={0.3}>
-            <a
-              href="#top"
-              aria-label="Back to top"
-              className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--padel-line-strong)] text-[var(--padel-ivory)] transition-colors duration-200 hover:border-[var(--padel-gold)] hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+          <div className="flex flex-wrap items-center justify-between gap-6 lg:justify-end">
+            <nav
+              aria-label="Footer navigation"
+              className="flex flex-wrap gap-x-8 gap-y-3 text-sm font-medium text-[var(--padel-muted)]"
             >
-              <ArrowUp className="h-5 w-5" />
-            </a>
-          </Magnetic>
+              {navItems.map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="footer-link transition-colors duration-200 hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+            <Magnetic strength={0.3}>
+              <a
+                href="#top"
+                aria-label="Back to top"
+                className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--padel-line-strong)] text-[var(--padel-ivory)] transition-colors duration-200 hover:border-[var(--padel-gold)] hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+              >
+                <ArrowUp className="h-5 w-5" />
+              </a>
+            </Magnetic>
+          </div>
         </div>
-
-        <nav
-          aria-label="Footer navigation"
-          className="flex flex-wrap gap-x-8 gap-y-3 text-sm font-medium text-[var(--padel-muted)]"
-        >
-          {navItems.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="transition-colors duration-200 hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
 
         <div className="flex flex-wrap items-center justify-between gap-6 border-t border-[var(--padel-line)] pt-8 text-xs font-medium uppercase tracking-[0.26em] text-[var(--padel-muted)]/70">
           <span>© {year} El Padel Tournament Tbilisi</span>
           <span className="hidden md:inline">Every Match Is a Battle · Every Point Is Honor</span>
-          <a
-            href="https://www.instagram.com/"
-            className="transition-colors duration-200 hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
-          >
-            Instagram
-          </a>
+          <div className="flex items-center gap-5">
+            <a
+              href="https://www.instagram.com/"
+              className="footer-social inline-flex items-center gap-2 transition-colors duration-200 hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+            >
+              <Instagram className="h-4 w-4" />
+              Instagram
+            </a>
+          </div>
         </div>
       </div>
     </footer>
@@ -1859,15 +2051,23 @@ export function PadelHome() {
       <PageProgress />
       <PadelNav />
       <SnapScrollController />
+      <FloatingEntryBar />
+      <BackToTop />
       <main>
         <Hero />
         <MarqueeBand />
+        <SectionCourtDivider />
         <AboutSection />
+        <SectionCourtDivider />
         <EventSection />
+        <SectionCourtDivider />
         <FlowSection />
+        <SectionCourtDivider />
         <RegistrationSection />
         <MarqueeBand reverse />
+        <SectionCourtDivider />
         <AtmosphereSection />
+        <SectionCourtDivider />
         <ContactSection />
         <FinalCta />
       </main>
@@ -1899,6 +2099,370 @@ export function PadelHome() {
 
         .el-padel-page section[id] {
           scroll-margin-top: 0;
+        }
+
+        /* ================================================================ */
+        /* Creative system — aurora, gold ink, premium buttons, glass       */
+        /* ================================================================ */
+
+        /* ---- Page progress + glow trail ---- */
+        .page-progress {
+          background: linear-gradient(
+            90deg,
+            var(--padel-gold-deep),
+            var(--padel-gold) 40%,
+            #efe1b8 55%,
+            var(--padel-gold) 72%,
+            var(--padel-gold-deep)
+          );
+          box-shadow: 0 0 18px rgba(224, 196, 119, 0.45);
+        }
+
+        .page-progress__glow {
+          background: linear-gradient(
+            180deg,
+            rgba(224, 196, 119, 0.35),
+            transparent
+          );
+          filter: blur(8px);
+        }
+
+        /* ---- Court divider between sections ---- */
+        .court-divider {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding-inline: 1.25rem;
+          background: var(--padel-ink);
+        }
+
+        .court-divider__line {
+          flex: 1;
+          height: 1px;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            var(--padel-line-strong),
+            transparent
+          );
+        }
+
+        .court-divider__net {
+          display: flex;
+          height: 1.35rem;
+          width: 2.4rem;
+          align-items: center;
+          justify-content: center;
+          border-inline: 1px solid var(--padel-line-strong);
+        }
+
+        .court-divider__mesh {
+          display: block;
+          height: 100%;
+          width: 100%;
+          background: repeating-linear-gradient(
+            90deg,
+            var(--padel-line) 0 2px,
+            transparent 2px 6px
+          );
+          opacity: 0.85;
+        }
+
+        /* ---- Floating entry bar + back to top ---- */
+        .floating-entry {
+          box-shadow:
+            0 24px 80px rgba(0, 0, 0, 0.45),
+            0 0 0 1px rgba(224, 196, 119, 0.08);
+        }
+
+        .floating-entry__pulse {
+          animation: pulse-ring 2.4s ease-in-out infinite;
+        }
+
+        @keyframes float-idle {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-4px);
+          }
+        }
+
+        @keyframes pulse-ring {
+          0%,
+          100% {
+            box-shadow: 0 0 0 0 rgba(224, 196, 119, 0.25);
+          }
+          55% {
+            box-shadow: 0 0 0 8px rgba(224, 196, 119, 0);
+          }
+        }
+
+        .back-to-top {
+          box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+        }
+
+        /* ---- Navigation shell ---- */
+        .nav-shell {
+          box-shadow:
+            inset 0 1px 0 rgba(246, 239, 225, 0.06),
+            0 18px 70px rgba(0, 0, 0, 0.18);
+        }
+
+        .nav-link__underline {
+          pointer-events: none;
+        }
+
+        /* ---- Hero chips + meta bars ---- */
+        .hero-chip {
+          display: inline-flex;
+          align-items: center;
+          border: 1px solid var(--padel-line);
+          border-radius: 999px;
+          padding: 0.35rem 0.85rem;
+          font-size: 0.62rem;
+          font-weight: 600;
+          letter-spacing: 0.28em;
+          text-transform: uppercase;
+          color: var(--padel-muted);
+          background: rgba(19, 2, 2, 0.22);
+          backdrop-filter: blur(6px);
+        }
+
+        .poster-meta__bar {
+          background: linear-gradient(
+            90deg,
+            var(--padel-ivory),
+            rgba(224, 196, 119, 0.85) 55%,
+            var(--padel-ivory)
+          );
+          box-shadow: 0 0 16px rgba(224, 196, 119, 0.18);
+        }
+
+        .scroll-cue__track {
+          background: rgba(19, 2, 2, 0.28);
+        }
+
+        /* ---- Section intro frame ---- */
+        .section-intro-frame {
+          position: relative;
+          padding-left: 1.1rem;
+          border-left: 2px solid rgba(224, 196, 119, 0.35);
+        }
+
+        .section-intro-frame--center {
+          padding-left: 0;
+          border-left: none;
+          padding-top: 1.1rem;
+          border-top: 2px solid rgba(224, 196, 119, 0.35);
+        }
+
+        .section-kicker__index {
+          animation: index-glow 3s ease-in-out infinite;
+        }
+
+        @keyframes index-glow {
+          0%,
+          100% {
+            box-shadow: 0 0 0 0 rgba(224, 196, 119, 0);
+          }
+          50% {
+            box-shadow: 0 0 0 6px rgba(224, 196, 119, 0.12);
+          }
+        }
+
+        /* ---- Ghost button ---- */
+        .btn-ghost {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          transition:
+            transform 0.32s var(--padel-ease-out),
+            border-color 0.32s ease,
+            color 0.32s ease;
+        }
+
+        .btn-ghost:hover {
+          transform: translateY(-2px);
+        }
+
+        /* ---- Mobile menu court lines ---- */
+        .mobile-menu__lines {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          opacity: 0.35;
+          background:
+            linear-gradient(90deg, transparent 18%, var(--padel-line) 18%, var(--padel-line) calc(18% + 1px), transparent calc(18% + 1px)),
+            linear-gradient(90deg, transparent 82%, var(--padel-line) 82%, var(--padel-line) calc(82% + 1px), transparent calc(82% + 1px)),
+            linear-gradient(180deg, transparent 28%, var(--padel-line) 28%, var(--padel-line) calc(28% + 1px), transparent calc(28% + 1px));
+        }
+
+        /* ---- Animated aurora glow (used behind red sections) ---- */
+        .aurora {
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          pointer-events: none;
+          overflow: hidden;
+        }
+
+        .aurora::before,
+        .aurora::after {
+          content: '';
+          position: absolute;
+          border-radius: 999px;
+          filter: blur(70px);
+          opacity: 0.55;
+          will-change: transform;
+        }
+
+        .aurora::before {
+          top: -12%;
+          left: -8%;
+          height: 46rem;
+          width: 46rem;
+          background: radial-gradient(circle, rgba(224, 196, 119, 0.22), transparent 62%);
+          animation: aurora-drift-a 24s ease-in-out infinite alternate;
+        }
+
+        .aurora::after {
+          right: -12%;
+          bottom: -18%;
+          height: 42rem;
+          width: 42rem;
+          background: radial-gradient(circle, rgba(224, 52, 43, 0.24), transparent 60%);
+          animation: aurora-drift-b 30s ease-in-out infinite alternate;
+        }
+
+        @keyframes aurora-drift-a {
+          from {
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+          to {
+            transform: translate3d(6rem, 4rem, 0) scale(1.14);
+          }
+        }
+
+        @keyframes aurora-drift-b {
+          from {
+            transform: translate3d(0, 0, 0) scale(1.05);
+          }
+          to {
+            transform: translate3d(-5rem, -3rem, 0) scale(0.9);
+          }
+        }
+
+        /* ---- Gold gradient ink (headlines / wordmarks) ---- */
+        .gold-ink {
+          background: linear-gradient(
+            105deg,
+            var(--padel-gold-deep) 0%,
+            var(--padel-gold) 34%,
+            var(--padel-gold-2) 52%,
+            var(--padel-gold) 68%,
+            var(--padel-gold-deep) 100%
+          );
+          background-size: 220% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: gold-shift 8s ease-in-out infinite;
+        }
+
+        @keyframes gold-shift {
+          0%,
+          100% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+        }
+
+        /* ---- Premium button (shared CTA behaviour) ---- */
+        .btn-premium {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          transition:
+            transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+            box-shadow 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .btn-premium::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -140%;
+          z-index: 1;
+          height: 100%;
+          width: 55%;
+          background: linear-gradient(
+            100deg,
+            transparent,
+            rgba(255, 255, 255, 0.55),
+            transparent
+          );
+          transform: skewX(-18deg);
+          transition: left 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+          pointer-events: none;
+        }
+
+        .btn-premium:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--padel-shadow-gold);
+        }
+
+        .btn-premium:hover::after {
+          left: 150%;
+        }
+
+        .btn-premium > * {
+          position: relative;
+          z-index: 2;
+        }
+
+        /* Dark (red) variant sheen is subtler */
+        .btn-premium.btn-premium--dark::after {
+          background: linear-gradient(
+            100deg,
+            transparent,
+            rgba(224, 196, 119, 0.5),
+            transparent
+          );
+        }
+
+        /* ---- Glass panel treatment ---- */
+        .glass-card {
+          position: relative;
+          background: linear-gradient(
+            160deg,
+            rgba(246, 239, 225, 0.055),
+            rgba(246, 239, 225, 0.015)
+          );
+          backdrop-filter: blur(6px);
+          transition:
+            transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+            border-color 0.4s ease,
+            box-shadow 0.4s ease,
+            background-color 0.4s ease;
+        }
+
+        .glass-card:hover {
+          border-color: rgba(224, 196, 119, 0.4);
+          box-shadow: var(--padel-shadow-gold);
+          transform: translateY(-2px);
+        }
+
+        .glass-card::before {
+          content: '';
+          position: absolute;
+          inset: 1px;
+          border-radius: inherit;
+          border: 1px solid rgba(246, 239, 225, 0.04);
+          pointer-events: none;
         }
 
         /* ---- Custom cursor ring ---- */
@@ -2305,9 +2869,11 @@ export function PadelHome() {
         .poster-hero,
         .premium-red {
           background:
+            radial-gradient(circle at 22% 18%, rgba(224, 196, 119, 0.1), transparent 30%),
+            radial-gradient(circle at 78% 82%, rgba(224, 52, 43, 0.16), transparent 34%),
             radial-gradient(circle at 50% 38%, rgba(246, 239, 225, 0.07), transparent 22rem),
-            linear-gradient(180deg, rgba(19, 2, 2, 0.1), transparent 24%, rgba(19, 2, 2, 0.3) 100%),
-            linear-gradient(135deg, #8c1916 0%, #781311 48%, #4b0807 100%);
+            linear-gradient(180deg, rgba(19, 2, 2, 0.12), transparent 24%, rgba(19, 2, 2, 0.34) 100%),
+            linear-gradient(135deg, #97201c 0%, #781311 46%, #440706 100%);
         }
 
         .hero-crest {
@@ -2510,7 +3076,35 @@ export function PadelHome() {
         .stat-card {
           transition:
             background-color 0.3s ease,
-            transform 0.3s ease;
+            transform 0.3s ease,
+            border-color 0.3s ease;
+          overflow: hidden;
+        }
+
+        .stat-card__glow {
+          position: absolute;
+          inset: auto -30% -60% -30%;
+          height: 70%;
+          background: radial-gradient(circle, rgba(224, 196, 119, 0.16), transparent 68%);
+          opacity: 0;
+          transition: opacity 0.35s ease;
+          pointer-events: none;
+        }
+
+        .stat-card:hover .stat-card__glow {
+          opacity: 1;
+        }
+
+        @media (min-width: 768px) {
+          .stat-card--featured {
+            transform: translateY(-0.75rem);
+            border-color: rgba(224, 196, 119, 0.35);
+            background: rgba(246, 239, 225, 0.04);
+          }
+
+          .stat-card--featured .stat-card__glow {
+            opacity: 0.65;
+          }
         }
 
         .stat-card:hover {
@@ -2607,8 +3201,47 @@ export function PadelHome() {
         .marquee-band {
           overflow: hidden;
           border-block: 1px solid var(--padel-line);
-          background: var(--padel-ink);
+          background:
+            linear-gradient(90deg, var(--padel-ink), rgba(19, 2, 2, 0.94) 12%, rgba(19, 2, 2, 0.94) 88%, var(--padel-ink)),
+            var(--padel-ink);
           padding-block: 1.15rem;
+          position: relative;
+        }
+
+        .marquee-band::before,
+        .marquee-band::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 4rem;
+          z-index: 2;
+          pointer-events: none;
+        }
+
+        .marquee-band::before {
+          left: 0;
+          background: linear-gradient(90deg, var(--padel-ink), transparent);
+        }
+
+        .marquee-band::after {
+          right: 0;
+          background: linear-gradient(270deg, var(--padel-ink), transparent);
+        }
+
+        .preloader-court__inner {
+          background: rgba(140, 25, 22, 0.12);
+        }
+
+        .preloader-court__net {
+          position: absolute;
+          left: 50%;
+          top: 0;
+          bottom: 0;
+          width: 1px;
+          transform: translateX(-50%);
+          background: var(--padel-gold);
+          opacity: 0.55;
         }
 
         .marquee-band__track {
@@ -2754,7 +3387,53 @@ export function PadelHome() {
           outline: none;
           transition:
             border-color 0.25s ease,
-            background-color 0.25s ease;
+            background-color 0.25s ease,
+            transform 0.25s var(--padel-ease-out);
+        }
+
+        .field-select {
+          appearance: none;
+          cursor: pointer;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238c1916' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 0.15rem center;
+          padding-right: 1.5rem;
+        }
+
+        .field-shell__control::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          height: 2px;
+          width: 100%;
+          background: var(--padel-red);
+          transform: scaleX(0);
+          transform-origin: left;
+          transition: transform 0.4s var(--padel-ease-out);
+        }
+
+        .field-shell:focus-within .field-shell__control::after {
+          transform: scaleX(1);
+        }
+
+        .field-shell:focus-within input,
+        .field-shell:focus-within textarea,
+        .field-shell:focus-within select {
+          transform: translateY(-1px);
+        }
+
+        .form-steps__dot {
+          display: inline-block;
+          height: 0.45rem;
+          width: 0.45rem;
+          border-radius: 999px;
+          background: rgba(19, 2, 2, 0.14);
+        }
+
+        .form-steps__dot--active {
+          width: 1.6rem;
+          background: linear-gradient(90deg, var(--padel-red), #b32420);
         }
 
         .premium-form textarea {
@@ -2773,20 +3452,11 @@ export function PadelHome() {
         }
 
         .premium-form label::after {
-          content: '';
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          height: 2px;
-          width: 100%;
-          background: var(--padel-red);
-          transform: scaleX(0);
-          transform-origin: left;
-          transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          display: none;
         }
 
         .premium-form label:focus-within::after {
-          transform: scaleX(1);
+          display: none;
         }
 
         .premium-form input:focus,
@@ -2811,7 +3481,132 @@ export function PadelHome() {
         }
 
         .group:hover .visual-poster__image {
-          transform: scale(1.05);
+          transform: scale(1.06);
+        }
+
+        .visual-poster__overlay {
+          position: absolute;
+          inset: 0;
+          z-index: 3;
+          display: flex;
+          align-items: flex-end;
+          justify-content: flex-start;
+          padding: 1.5rem;
+          background: linear-gradient(180deg, transparent 35%, rgba(19, 2, 2, 0.72));
+          opacity: 0;
+          transition: opacity 0.45s var(--padel-ease-out);
+        }
+
+        .group:hover .visual-poster__overlay {
+          opacity: 1;
+        }
+
+        .visual-poster__overlay-label {
+          font-size: 0.62rem;
+          font-weight: 600;
+          letter-spacing: 0.32em;
+          text-transform: uppercase;
+          color: var(--padel-gold);
+        }
+
+        .atmosphere-card:hover figcaption {
+          color: var(--padel-ivory);
+        }
+
+        .court-card {
+          position: relative;
+          overflow: hidden;
+        }
+
+        .court-card__diagram {
+          position: absolute;
+          right: -1.5rem;
+          top: 1.5rem;
+          height: 8.5rem;
+          width: 5.5rem;
+          opacity: 0.16;
+          pointer-events: none;
+        }
+
+        .court-card__baseline {
+          position: absolute;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: var(--padel-red);
+        }
+
+        .court-card__baseline--top {
+          top: 12%;
+        }
+
+        .court-card__baseline--bottom {
+          bottom: 12%;
+        }
+
+        .court-card__net {
+          position: absolute;
+          left: 50%;
+          top: 12%;
+          bottom: 12%;
+          width: 2px;
+          transform: translateX(-50%);
+          background: var(--padel-red);
+        }
+
+        .court-card__service {
+          position: absolute;
+          top: 12%;
+          bottom: 12%;
+          width: 38%;
+          border: 2px solid var(--padel-red);
+        }
+
+        .court-card__service--left {
+          left: 0;
+        }
+
+        .court-card__service--right {
+          right: 0;
+        }
+
+        .site-footer__mesh {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          opacity: 0.22;
+          background:
+            repeating-linear-gradient(
+              90deg,
+              var(--padel-line) 0 1px,
+              transparent 1px 48px
+            ),
+            repeating-linear-gradient(
+              0deg,
+              var(--padel-line) 0 1px,
+              transparent 1px 48px
+            );
+        }
+
+        .footer-link {
+          position: relative;
+        }
+
+        .footer-link::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          bottom: -0.2rem;
+          height: 1px;
+          width: 100%;
+          background: var(--padel-gold);
+          transform: scaleX(0);
+          transform-origin: left;
+          transition: transform 0.3s var(--padel-ease-out);
+        }
+
+        .footer-link:hover::after {
+          transform: scaleX(1);
         }
 
         .visual-poster__grain {
@@ -3025,10 +3820,15 @@ export function PadelHome() {
           .flow-card__tag,
           .score-rail__call,
           .visual-poster__image,
+          .visual-poster__overlay,
           .principle-row__check,
-          .premium-form label::after,
-          .contact-link .contact-link__text {
+          .field-shell__control::after,
+          .contact-link .contact-link__text,
+          .floating-entry,
+          .floating-entry__pulse,
+          .section-kicker__index {
             transition: none !important;
+            animation: none !important;
           }
 
           .hero-badge__svg,
@@ -3037,6 +3837,14 @@ export function PadelHome() {
           .marquee-band__track,
           .submit-spinner {
             animation: none !important;
+          }
+
+          .stat-card--featured {
+            transform: none;
+          }
+
+          .visual-poster__overlay {
+            opacity: 1;
           }
         }
       `}</style>
