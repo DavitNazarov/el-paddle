@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { Fraunces, Inter, Luxurious_Script } from 'next/font/google';
 import './globals.css';
@@ -23,6 +23,12 @@ const luxuriousScript = Luxurious_Script({
   variable: '--font-script',
   display: 'swap',
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#8c1916',
+};
 
 export const metadata: Metadata = {
   title: 'El Padel Tournament Tbilisi — Every Point Is Honor',

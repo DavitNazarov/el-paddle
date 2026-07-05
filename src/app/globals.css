@@ -35,6 +35,49 @@ select {
   font: inherit;
 }
 
+a,
+button,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* Branded scrollbar — keeps the editorial red/gold system in the chrome */
+@supports (scrollbar-width: thin) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(217, 191, 115, 0.55) #130202;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #130202;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(217, 191, 115, 0.45);
+  border: 2px solid #130202;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(217, 191, 115, 0.7);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

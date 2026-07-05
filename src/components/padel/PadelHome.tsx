@@ -427,6 +427,35 @@ function FilmGrain() {
   return <div className="film-grain" aria-hidden />;
 }
 
+const marqueeItems = [
+  'El Padel Tournament',
+  'Tbilisi Summer Open',
+  'Every Point Is Honor',
+  'Only One Becomes El Matador',
+];
+
+function MarqueeBand({ reverse = false }: { reverse?: boolean }) {
+  // Content is repeated so the loop never shows a gap at any viewport width.
+  const sequence = [...marqueeItems, ...marqueeItems];
+
+  return (
+    <div className="marquee-band" aria-hidden>
+      <div className={`marquee-band__track ${reverse ? 'marquee-band__track--reverse' : ''}`}>
+        {[0, 1].map((copy) => (
+          <div key={copy} className="marquee-band__group">
+            {sequence.map((item, index) => (
+              <span key={`${copy}-${index}`} className="marquee-band__item font-display">
+                {item}
+                <span className="marquee-band__star">✦</span>
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Parallax({
   children,
   className = '',
@@ -747,7 +776,7 @@ function SectionIntro({
         {kicker}
         <span className="section-kicker__rule" aria-hidden />
       </p>
-      <h2 className="font-display text-5xl font-semibold leading-[0.95] text-[var(--padel-ivory)] md:text-7xl">
+      <h2 className="font-display text-4xl font-semibold leading-[0.98] text-[var(--padel-ivory)] sm:text-5xl sm:leading-[0.95] md:text-6xl lg:text-7xl">
         <WordReveal text={title} />
         {accent ? (
           <>
@@ -758,7 +787,7 @@ function SectionIntro({
       </h2>
       {copy ? (
         <p
-          className={`mt-7 max-w-2xl text-base leading-8 text-[var(--padel-muted)] md:text-lg ${
+          className={`mt-6 max-w-2xl text-base leading-8 text-[var(--padel-muted)] md:mt-7 md:text-lg ${
             align === 'center' ? 'mx-auto' : ''
           }`}
         >
@@ -775,7 +804,7 @@ function PageProgress() {
   return (
     <motion.div
       aria-hidden
-      className="fixed left-0 top-0 z-[90] h-px w-full origin-left bg-[var(--padel-gold)]"
+      className="fixed left-0 top-0 z-[90] h-[2px] w-full origin-left bg-gradient-to-r from-[var(--padel-gold)] via-[#efe1b8] to-[var(--padel-gold)]"
       style={{ scaleX: scrollYProgress }}
     />
   );
@@ -854,6 +883,29 @@ function MobileMenu({
             Request entry
             <ArrowRight className="h-5 w-5" />
           </motion.a>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.62 }}
+            className="mt-6 flex items-center justify-between gap-4 border-t border-[var(--padel-line)] pt-5 text-sm font-medium text-[var(--padel-muted)]"
+          >
+            <a
+              href="tel:+995555000000"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+            >
+              <Phone className="h-4 w-4 text-[var(--padel-gold)]" />
+              +995 555 000 000
+            </a>
+            <a
+              href="https://www.instagram.com/"
+              aria-label="El Padel on Instagram"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+            >
+              <Instagram className="h-4 w-4 text-[var(--padel-gold)]" />
+              Instagram
+            </a>
+          </motion.div>
         </motion.div>
       ) : null}
     </AnimatePresence>
@@ -956,6 +1008,8 @@ function PadelNav() {
   );
 }
 
+const heroTitleLines = ['Take part', 'in the padel', 'tournament!'];
+
 function Hero() {
   const reduceMotion = useReducedMotion();
   const { scrollYProgress } = useScroll();
@@ -1001,11 +1055,22 @@ function Hero() {
         <PadelBall3D className="poster-ball-canvas" />
         <div className="poster-ball-copy pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-center">
           <h1 className="font-display max-w-[15ch] text-3xl font-bold uppercase leading-[1.22] text-[var(--padel-red)] sm:text-4xl md:text-5xl">
-            Take part
-            <br />
-            in the padel
-            <br />
-            tournament!
+            {heroTitleLines.map((line, index) => (
+              <span key={line} className="hero-title-line">
+                <motion.span
+                  className="hero-title-line__inner"
+                  initial={reduceMotion ? false : { y: '112%' }}
+                  animate={reduceMotion ? undefined : { y: '0%' }}
+                  transition={{
+                    duration: 0.85,
+                    delay: 0.34 + index * 0.09,
+                    ease: [0.16, 1, 0.3, 1],
+                  }}
+                >
+                  {line}
+                </motion.span>
+              </span>
+            ))}
           </h1>
         </div>
       </motion.div>
@@ -1185,8 +1250,10 @@ function EventSection() {
           {stats.map((stat, index) => (
             <Reveal key={stat.label} delay={index * 0.06}>
               <Parallax speed={index === 1 ? 0.34 : 0.14}>
-              <div className="stat-card border border-[var(--padel-line)] px-6 py-8 text-center">
-                <p className="font-display text-6xl font-semibold text-[var(--padel-ivory)] md:text-7xl">
+              <div className="stat-card relative border border-[var(--padel-line)] px-6 py-8 text-center">
+                <span className="stat-card__tick stat-card__tick--tl" aria-hidden />
+                <span className="stat-card__tick stat-card__tick--br" aria-hidden />
+                <p className="stat-card__value font-display text-6xl font-semibold text-[var(--padel-ivory)] transition-colors duration-300 md:text-7xl">
                   <Counter to={stat.value} suffix={stat.suffix} />
                 </p>
                 <p className="mt-3 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--padel-gold)]">
@@ -1338,11 +1405,23 @@ function FlowSection() {
 }
 
 function RegistrationSection() {
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'sending' | 'submitted'>('idle');
+  const submitted = status === 'submitted';
+  const sending = status === 'sending';
+  const sendTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (sendTimeout.current) clearTimeout(sendTimeout.current);
+    };
+  }, []);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitted(true);
+    if (sending) return;
+    setStatus('sending');
+    // Brief confirmation beat so the submit feels acknowledged, not instant.
+    sendTimeout.current = setTimeout(() => setStatus('submitted'), 900);
   };
 
   return (
@@ -1425,7 +1504,7 @@ function RegistrationSection() {
               </p>
               <button
                 type="button"
-                onClick={() => setSubmitted(false)}
+                onClick={() => setStatus('idle')}
                 className="mt-10 inline-flex min-h-11 items-center gap-2 rounded-full border border-[var(--padel-ink)]/25 px-6 py-2.5 text-sm font-semibold text-[var(--padel-ink)] transition-colors duration-200 hover:border-[var(--padel-red)] hover:text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-red)]"
               >
                 Register another team
@@ -1480,10 +1559,20 @@ function RegistrationSection() {
 
             <button
               type="submit"
-              className="group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-6 py-3.5 text-base font-semibold text-[var(--padel-ivory)] transition duration-200 hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
+              disabled={sending}
+              className="group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-6 py-3.5 text-base font-semibold text-[var(--padel-ivory)] transition duration-200 hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)] disabled:cursor-wait disabled:opacity-80"
             >
-              Send registration
-              <Send className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+              {sending ? (
+                <>
+                  Sending entry
+                  <span className="submit-spinner" aria-hidden />
+                </>
+              ) : (
+                <>
+                  Send registration
+                  <Send className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </>
+              )}
             </button>
           </motion.form>
           )}
@@ -1772,10 +1861,12 @@ export function PadelHome() {
       <SnapScrollController />
       <main>
         <Hero />
+        <MarqueeBand />
         <AboutSection />
         <EventSection />
         <FlowSection />
         <RegistrationSection />
+        <MarqueeBand reverse />
         <AtmosphereSection />
         <ContactSection />
         <FinalCta />
@@ -2500,6 +2591,147 @@ export function PadelHome() {
           color: var(--padel-red);
         }
 
+        /* ---- Hero title line mask ---- */
+        .hero-title-line {
+          display: block;
+          overflow: hidden;
+          padding-bottom: 0.06em;
+        }
+
+        .hero-title-line__inner {
+          display: inline-block;
+          will-change: transform;
+        }
+
+        /* ---- Marquee band ---- */
+        .marquee-band {
+          overflow: hidden;
+          border-block: 1px solid var(--padel-line);
+          background: var(--padel-ink);
+          padding-block: 1.15rem;
+        }
+
+        .marquee-band__track {
+          display: flex;
+          width: max-content;
+          animation: marquee-scroll 46s linear infinite;
+        }
+
+        .marquee-band__track--reverse {
+          animation-direction: reverse;
+        }
+
+        .marquee-band__group {
+          display: flex;
+          align-items: center;
+          flex-shrink: 0;
+        }
+
+        .marquee-band__item {
+          display: inline-flex;
+          align-items: center;
+          gap: 2.2rem;
+          padding-right: 2.2rem;
+          font-size: 1.05rem;
+          font-weight: 600;
+          font-style: italic;
+          letter-spacing: 0.22em;
+          text-transform: uppercase;
+          white-space: nowrap;
+          color: rgba(246, 239, 225, 0.4);
+        }
+
+        .marquee-band__item:nth-child(odd) {
+          color: rgba(217, 191, 115, 0.6);
+        }
+
+        .marquee-band__star {
+          font-size: 0.7rem;
+          font-style: normal;
+          color: var(--padel-gold);
+          opacity: 0.7;
+        }
+
+        @keyframes marquee-scroll {
+          from {
+            transform: translateX(0);
+          }
+          to {
+            transform: translateX(-50%);
+          }
+        }
+
+        /* ---- Submit spinner ---- */
+        .submit-spinner {
+          display: inline-block;
+          height: 1.1rem;
+          width: 1.1rem;
+          border-radius: 999px;
+          border: 2px solid rgba(246, 239, 225, 0.35);
+          border-top-color: var(--padel-ivory);
+          animation: spinner-turn 0.7s linear infinite;
+        }
+
+        @keyframes spinner-turn {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        /* ---- Stat card corner ticks ---- */
+        .stat-card__tick {
+          position: absolute;
+          height: 0.7rem;
+          width: 0.7rem;
+          border: 0 solid var(--padel-gold);
+          opacity: 0;
+          transition: opacity 0.35s ease;
+        }
+
+        .stat-card__tick--tl {
+          top: -1px;
+          left: -1px;
+          border-top-width: 1px;
+          border-left-width: 1px;
+        }
+
+        .stat-card__tick--br {
+          bottom: -1px;
+          right: -1px;
+          border-bottom-width: 1px;
+          border-right-width: 1px;
+        }
+
+        .stat-card:hover .stat-card__tick {
+          opacity: 1;
+        }
+
+        .stat-card:hover .stat-card__value {
+          color: var(--padel-gold);
+        }
+
+        /* ---- Touch devices: keep hover-only affordances visible ---- */
+        @media (hover: none) {
+          .flow-card__arrow,
+          .contact-link__arrow {
+            opacity: 0.75;
+            transform: none;
+          }
+
+          .principle-row__check {
+            opacity: 0.7;
+            transform: scale(1);
+          }
+
+          .stat-card__tick {
+            opacity: 0.55;
+          }
+
+          .flow-card__score {
+            -webkit-text-stroke-color: rgba(217, 191, 115, 0.32);
+          }
+        }
+
         .entry-meter,
         .premium-form,
         .court-card {
@@ -2743,6 +2975,45 @@ export function PadelHome() {
           .poster-meta span {
             font-size: 1.35rem;
           }
+
+          .marquee-band__item {
+            font-size: 0.85rem;
+            gap: 1.5rem;
+            padding-right: 1.5rem;
+          }
+        }
+
+        /* ---- Short viewports (landscape phones, small laptops) ---- */
+        @media (max-height: 720px) and (min-width: 768px) {
+          .poster-hero {
+            padding-top: 5.5rem;
+            padding-bottom: 7.5rem;
+          }
+
+          .poster-ball-wrap {
+            width: min(480px, 42dvh, 70vw);
+          }
+
+          .poster-footer {
+            bottom: 0.85rem;
+          }
+
+          .poster-meta p,
+          .poster-meta span {
+            font-size: 1.4rem;
+          }
+
+          .hero-crest {
+            width: 150px;
+          }
+        }
+
+        @media (max-height: 560px) {
+          .poster-hero {
+            height: auto;
+            min-height: 100dvh;
+            padding-bottom: 9rem;
+          }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -2762,7 +3033,9 @@ export function PadelHome() {
 
           .hero-badge__svg,
           .live-badge__dot,
-          .section-orbit--center {
+          .section-orbit--center,
+          .marquee-band__track,
+          .submit-spinner {
             animation: none !important;
           }
         }
