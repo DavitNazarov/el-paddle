@@ -4,3 +4,4 @@ test-output/
 .env*
 !.env.example
 npm-debug.log*
+tsconfig.tsbuildinfo

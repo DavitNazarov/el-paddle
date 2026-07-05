@@ -14,7 +14,6 @@ import {
   animate,
   AnimatePresence,
   motion,
-  useAnimationFrame,
   useInView,
   useMotionValue,
   useMotionValueEvent,
@@ -22,7 +21,6 @@ import {
   useScroll,
   useSpring,
   useTransform,
-  useVelocity,
 } from 'framer-motion';
 import {
   ArrowRight,
@@ -99,10 +97,30 @@ const principles = [
 ];
 
 const flow = [
-  ['01', 'Apply', 'Send player details, category and partner status.'],
-  ['02', 'Confirm', 'Receive entry review, draw notes and schedule window.'],
-  ['03', 'Compete', 'Arrive with the rhythm, rules and court order already clear.'],
+  {
+    step: '01',
+    score: '15',
+    title: 'Serve your entry',
+    copy: 'Send player details, category and partner status. The form is two minutes, no account, no friction.',
+    tag: 'Two-minute form',
+  },
+  {
+    step: '02',
+    score: '30',
+    title: 'We return the ball',
+    copy: 'Entry review, draw notes and your schedule window come back within 48 hours by phone or email.',
+    tag: 'Confirmed within 48h',
+  },
+  {
+    step: '03',
+    score: '40',
+    title: 'Walk onto court',
+    copy: 'Rhythm, rules and court order are settled before the first warm-up ball. All you bring is your game.',
+    tag: 'Match days in July',
+  },
 ] as const;
+
+const scoreCalls = ['Love', '15', '30', '40', 'Game'] as const;
 
 const stats = [
   { value: 3, suffix: '', label: 'Player categories' },
@@ -137,12 +155,6 @@ const atmosphere: AtmosphereItem[] = [
 
 const sponsors = ['Aurum Sport', 'Courtline', 'Velvet Energy', 'Urban Padel'];
 
-const marqueeWords = [
-  'Every Match Is a Battle',
-  'Every Point Is Honor',
-  'Only One Becomes El Matador',
-];
-
 const snapStops = [
   { id: 'top', label: 'Opening' },
   { id: 'about', label: 'Brand' },
@@ -155,11 +167,6 @@ const snapStops = [
 ];
 
 const navSectionIds = navItems.map((item) => item.href.slice(1));
-
-function wrapValue(min: number, max: number, value: number) {
-  const range = max - min;
-  return ((((value - min) % range) + range) % range) + min;
-}
 
 /* ------------------------------------------------------------------ */
 /* Motion primitives                                                  */
@@ -265,13 +272,10 @@ function Counter({
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: '-15%' });
   const [value, setValue] = useState(0);
+  const displayValue = reduceMotion ? to : value;
 
   useEffect(() => {
-    if (!inView) return;
-    if (reduceMotion) {
-      setValue(to);
-      return;
-    }
+    if (!inView || reduceMotion) return;
     const controls = animate(0, to, {
       duration,
       ease: [0.16, 1, 0.3, 1],
@@ -282,52 +286,9 @@ function Counter({
 
   return (
     <span ref={ref}>
-      {value}
+      {displayValue}
       {suffix}
     </span>
-  );
-}
-
-function KineticMarquee() {
-  const reduceMotion = useReducedMotion();
-  const baseX = useMotionValue(0);
-  const { scrollY } = useScroll();
-  const scrollVelocity = useVelocity(scrollY);
-  const smoothVelocity = useSpring(scrollVelocity, {
-    damping: 50,
-    stiffness: 400,
-  });
-  const velocityFactor = useTransform(smoothVelocity, [0, 1000], [0, 4], {
-    clamp: false,
-  });
-  const x = useTransform(baseX, (value) => `${wrapValue(-25, 0, value)}%`);
-  const direction = useRef(1);
-
-  useAnimationFrame((_, delta) => {
-    if (reduceMotion) return;
-    let moveBy = direction.current * 2.4 * (delta / 1000);
-    const factor = velocityFactor.get();
-    if (factor < 0) direction.current = -1;
-    else if (factor > 0) direction.current = 1;
-    moveBy += direction.current * moveBy * factor;
-    baseX.set(baseX.get() + moveBy);
-  });
-
-  return (
-    <div className="marquee" aria-hidden>
-      <motion.div className="marquee__track" style={{ x }}>
-        {[0, 1, 2, 3].map((copy) => (
-          <span key={copy} className="marquee__group">
-            {marqueeWords.map((word) => (
-              <span key={`${copy}-${word}`} className="marquee__item">
-                {word}
-                <span className="marquee__star">✦</span>
-              </span>
-            ))}
-          </span>
-        ))}
-      </motion.div>
-    </div>
   );
 }
 
@@ -337,10 +298,7 @@ function Preloader() {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    if (reduceMotion) {
-      setDone(true);
-      return;
-    }
+    if (reduceMotion) return;
     const controls = animate(0, 100, {
       duration: 1.5,
       ease: [0.32, 0.72, 0.24, 1],
@@ -351,12 +309,14 @@ function Preloader() {
   }, [reduceMotion]);
 
   useEffect(() => {
-    if (done) return;
+    if (done || reduceMotion) return;
     document.documentElement.style.overflow = 'hidden';
     return () => {
       document.documentElement.style.overflow = '';
     };
-  }, [done]);
+  }, [done, reduceMotion]);
+
+  if (reduceMotion) return null;
 
   return (
     <AnimatePresence>
@@ -415,9 +375,10 @@ function CursorRing() {
     if (reduceMotion) return;
     const fine = window.matchMedia('(pointer: fine)');
     if (!fine.matches) return;
-    setEnabled(true);
+    document.documentElement.classList.add('padel-cursor-hidden');
 
     const move = (event: PointerEvent) => {
+      setEnabled(true);
       x.set(event.clientX);
       y.set(event.clientY);
       const target = event.target instanceof Element ? event.target : null;
@@ -430,6 +391,7 @@ function CursorRing() {
     window.addEventListener('pointerdown', down);
     window.addEventListener('pointerup', up);
     return () => {
+      document.documentElement.classList.remove('padel-cursor-hidden');
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerdown', down);
       window.removeEventListener('pointerup', up);
@@ -451,6 +413,11 @@ function CursorRing() {
           opacity: hoveringLink ? 0.9 : 0.55,
         }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+      />
+      <motion.span
+        className="cursor-ring__dot"
+        animate={{ scale: pressed ? 0.5 : hoveringLink ? 0 : 1 }}
+        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       />
     </motion.div>
   );
@@ -633,13 +600,16 @@ function SnapScrollController() {
         return;
       }
 
-      snapAnimation.current = animate(window.scrollY, targetTop, {
-        type: 'spring',
-        stiffness: 74,
-        damping: 21,
-        mass: 0.82,
-        restDelta: 0.5,
-        onUpdate: (latest) => window.scrollTo(0, latest),
+      const startY = window.scrollY;
+      const distance = Math.abs(targetTop - startY);
+      // Duration scales gently with distance, capped so far jumps stay snappy.
+      const duration = Math.min(1.1, 0.5 + (distance / window.innerHeight) * 0.11);
+
+      snapAnimation.current = animate(startY, targetTop, {
+        duration,
+        ease: [0.22, 1, 0.36, 1],
+        onUpdate: (latest) =>
+          window.scrollTo({ top: latest, behavior: 'instant' as ScrollBehavior }),
       });
     },
     [reduceMotion],
@@ -722,19 +692,10 @@ function ScrollSection({
   className?: string;
   id?: string;
 }) {
-  const reduceMotion = useReducedMotion();
-
   return (
-    <motion.section
-      id={id}
-      className={className}
-      initial={reduceMotion ? false : { opacity: 0, y: 72, scale: 0.985 }}
-      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
-      viewport={{ once: false, amount: 0.18, margin: '-8% 0px -14% 0px' }}
-      transition={{ duration: 0.95, ease: [0.16, 1, 0.3, 1] }}
-    >
+    <section id={id} className={className}>
       {children}
-    </motion.section>
+    </section>
   );
 }
 
@@ -1157,6 +1118,7 @@ function AboutSection() {
         </Reveal>
 
         <Reveal delay={0.08}>
+          <Parallax speed={0.18}>
           <div>
             <SectionIntro
               index="01"
@@ -1191,6 +1153,7 @@ function AboutSection() {
               Every point is honor.
             </p>
           </div>
+          </Parallax>
         </Reveal>
       </div>
     </ScrollSection>
@@ -1206,14 +1169,16 @@ function EventSection() {
       <div className="premium-noise absolute inset-0" aria-hidden />
       <div className="relative mx-auto max-w-7xl">
         <Reveal>
-          <SectionIntro
-            index="02"
-            kicker="Event structure"
-            title="The details arrive like"
-            accent="clean court lines."
-            copy="A tournament page should make the next step obvious. The information is direct, but the presentation stays cinematic and calm."
-            align="center"
-          />
+          <Parallax speed={0.22}>
+            <SectionIntro
+              index="02"
+              kicker="Event structure"
+              title="The details arrive like"
+              accent="clean court lines."
+              copy="A tournament page should make the next step obvious. The information is direct, but the presentation stays cinematic and calm."
+              align="center"
+            />
+          </Parallax>
         </Reveal>
 
         <div className="mt-20 grid gap-6 sm:grid-cols-3">
@@ -1233,7 +1198,8 @@ function EventSection() {
           ))}
         </div>
 
-        <div className="mt-16 divide-y divide-[var(--padel-line)] border-y border-[var(--padel-line)]">
+        <Parallax speed={0.1} className="mt-16">
+        <div className="divide-y divide-[var(--padel-line)] border-y border-[var(--padel-line)]">
           {details.map((item, index) => {
             const Icon = item.icon;
             return (
@@ -1257,12 +1223,32 @@ function EventSection() {
             );
           })}
         </div>
+        </Parallax>
       </div>
     </ScrollSection>
   );
 }
 
 function FlowSection() {
+  const reduceMotion = useReducedMotion();
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const { scrollYProgress } = useScroll({
+    target: gridRef,
+    offset: ['start 0.85', 'end 0.45'],
+  });
+  const ballX = useTransform(scrollYProgress, [0.05, 0.95], ['0%', '100%']);
+  const smoothBallX = useSpring(ballX, { stiffness: 90, damping: 22, mass: 0.6 });
+  const [scrollStep, setScrollStep] = useState(0);
+
+  useMotionValueEvent(scrollYProgress, 'change', (latest) => {
+    const next = Math.min(flow.length - 1, Math.floor(latest * flow.length));
+    setScrollStep((previous) => (previous === next ? previous : next));
+  });
+
+  // Score rail highlights the hovered card, otherwise follows scroll progress.
+  const activeCall = 1 + (hovered ?? scrollStep);
+
   return (
     <ScrollSection
       id="flow"
@@ -1271,35 +1257,78 @@ function FlowSection() {
       <ParallaxLayer className="section-orbit section-orbit--right" speed={-0.45} rotate={-18} />
       <div className="mx-auto grid max-w-7xl gap-16 lg:grid-cols-[0.8fr_1.2fr] lg:items-start lg:gap-24">
         <Reveal>
-          <SectionIntro
-            index="03"
-            kicker="Registration flow"
-            title="Fast to enter."
-            accent="Easy to trust."
-          />
+          <Parallax speed={0.24}>
+            <div>
+              <SectionIntro
+                index="03"
+                kicker="Registration flow"
+                title="Three points"
+                accent="win the entry."
+                copy="Entering reads like a rally: you serve the application, we return the confirmation, and the point closes on court."
+              />
+
+              <div className="score-rail mt-12" role="presentation">
+                {scoreCalls.map((call, index) => (
+                  <span key={call} className="score-rail__item">
+                    <span
+                      className={`score-rail__call font-display ${
+                        index === activeCall ? 'score-rail__call--active' : ''
+                      } ${index < activeCall ? 'score-rail__call--won' : ''}`}
+                    >
+                      {call}
+                    </span>
+                    {index < scoreCalls.length - 1 ? (
+                      <span className="score-rail__sep" aria-hidden />
+                    ) : null}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-4 text-[0.62rem] font-semibold uppercase tracking-[0.34em] text-[var(--padel-muted)]/60">
+                The scoreboard of your entry
+              </p>
+            </div>
+          </Parallax>
         </Reveal>
 
-        <div className="flow-grid relative grid gap-8 md:grid-cols-3">
-          <span className="flow-grid__line" aria-hidden />
-          {flow.map(([number, title, copy], index) => (
-            <Reveal key={title} delay={index * 0.06}>
+        <div ref={gridRef} className="flow-grid relative grid gap-8 md:grid-cols-3">
+          <div className="flow-grid__line" aria-hidden>
+            {!reduceMotion ? (
+              <motion.span className="flow-grid__ball" style={{ left: smoothBallX }} />
+            ) : null}
+          </div>
+          {flow.map((item, index) => (
+            <Reveal key={item.step} delay={index * 0.06}>
+              <Parallax speed={[0.1, 0.28, 0.16][index] ?? 0.14}>
               <Tilt max={4}>
-                <article className="flow-card relative min-h-72 overflow-hidden border border-[var(--padel-line)] bg-white/[0.025] p-8">
-                  <div className="flex items-baseline justify-between">
-                    <p className="font-display text-6xl font-semibold italic text-[var(--padel-gold)]/32">
-                      {number}
+                <article
+                  className="flow-card group relative flex min-h-80 flex-col overflow-hidden border border-[var(--padel-line)] bg-white/[0.025] p-8"
+                  onMouseEnter={() => setHovered(index)}
+                  onMouseLeave={() => setHovered(null)}
+                >
+                  <span className="flow-card__score font-display" aria-hidden>
+                    {item.score}
+                  </span>
+                  <div className="relative flex items-baseline justify-between">
+                    <p className="font-display text-lg font-semibold italic text-[var(--padel-gold)]/70">
+                      {item.step}
                     </p>
                     <span className="text-[0.62rem] font-semibold uppercase tracking-[0.34em] text-[var(--padel-muted)]/70">
-                      Step
+                      {index === flow.length - 1 ? 'Game point' : `Point ${index + 1}`}
                     </span>
                   </div>
-                  <h3 className="font-display mt-14 text-2xl font-semibold text-[var(--padel-ivory)]">
-                    {title}
+                  <h3 className="font-display relative mt-auto pt-24 text-2xl font-semibold text-[var(--padel-ivory)]">
+                    {item.title}
                   </h3>
-                  <p className="mt-4 text-base leading-8 text-[var(--padel-muted)]">{copy}</p>
-                  <ArrowUpRight className="flow-card__arrow absolute bottom-6 right-6 h-5 w-5 text-[var(--padel-gold)]" />
+                  <p className="relative mt-4 text-base leading-8 text-[var(--padel-muted)]">
+                    {item.copy}
+                  </p>
+                  <div className="relative mt-6 flex items-center justify-between gap-4">
+                    <span className="flow-card__tag">{item.tag}</span>
+                    <ArrowUpRight className="flow-card__arrow h-5 w-5 shrink-0 text-[var(--padel-gold)]" />
+                  </div>
                 </article>
               </Tilt>
+              </Parallax>
             </Reveal>
           ))}
         </div>
@@ -1365,6 +1394,7 @@ function RegistrationSection() {
         </Reveal>
 
         <Reveal delay={0.08}>
+          <Parallax speed={0.16}>
           <AnimatePresence mode="wait" initial={false}>
           {submitted ? (
             <motion.div
@@ -1458,6 +1488,7 @@ function RegistrationSection() {
           </motion.form>
           )}
           </AnimatePresence>
+          </Parallax>
         </Reveal>
       </div>
     </ScrollSection>
@@ -1488,6 +1519,7 @@ function AtmosphereSection() {
     <ScrollSection id="atmosphere" className="section-pad bg-[var(--padel-ink)] px-5 md:px-10">
       <div className="mx-auto max-w-7xl">
         <Reveal>
+          <Parallax speed={0.2}>
           <div className="grid gap-12 border-b border-[var(--padel-line)] pb-16 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
             <SectionIntro
               index="05"
@@ -1500,6 +1532,7 @@ function AtmosphereSection() {
               strict court lines, theatrical shadow and enough quiet space to feel premium.
             </p>
           </div>
+          </Parallax>
         </Reveal>
 
         <div className="atmosphere-grid mt-16 grid gap-8 md:grid-cols-3">
@@ -1551,6 +1584,7 @@ function ContactSection() {
       <div className="premium-noise absolute inset-0" aria-hidden />
       <div className="relative mx-auto grid max-w-7xl gap-16 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-24">
         <Reveal>
+          <Parallax speed={0.18}>
           <div>
             <SectionIntro
               index="06"
@@ -1586,6 +1620,7 @@ function ContactSection() {
               ))}
             </div>
           </div>
+          </Parallax>
         </Reveal>
 
         <Reveal delay={0.08}>
@@ -1631,6 +1666,7 @@ function FinalCta() {
     >
       <div className="section-orbit section-orbit--center" aria-hidden />
       <Reveal>
+        <Parallax speed={0.14}>
         <div className="relative mx-auto max-w-4xl">
           <Parallax speed={0.28}>
             <Image
@@ -1665,6 +1701,7 @@ function FinalCta() {
             Every Match Is a Battle · Every Point Is Honor
           </p>
         </div>
+        </Parallax>
       </Reveal>
     </ScrollSection>
   );
@@ -1735,7 +1772,6 @@ export function PadelHome() {
       <SnapScrollController />
       <main>
         <Hero />
-        <KineticMarquee />
         <AboutSection />
         <EventSection />
         <FlowSection />
@@ -1775,6 +1811,19 @@ export function PadelHome() {
         }
 
         /* ---- Custom cursor ring ---- */
+        @media (pointer: fine) {
+          html.padel-cursor-hidden,
+          html.padel-cursor-hidden body,
+          html.padel-cursor-hidden a,
+          html.padel-cursor-hidden button,
+          html.padel-cursor-hidden input,
+          html.padel-cursor-hidden textarea,
+          html.padel-cursor-hidden select,
+          html.padel-cursor-hidden [role='button'] {
+            cursor: none !important;
+          }
+        }
+
         .cursor-ring {
           height: 0;
           width: 0;
@@ -1790,6 +1839,19 @@ export function PadelHome() {
           transform: translate(-50%, -50%);
           border: 1.5px solid var(--padel-gold);
           border-radius: 999px;
+          mix-blend-mode: difference;
+        }
+
+        .cursor-ring__dot {
+          position: absolute;
+          left: 0;
+          top: 0;
+          display: block;
+          height: 0.32rem;
+          width: 0.32rem;
+          transform: translate(-50%, -50%);
+          border-radius: 999px;
+          background: var(--padel-gold);
           mix-blend-mode: difference;
         }
 
@@ -1944,7 +2006,7 @@ export function PadelHome() {
           }
         }
 
-        /* ---- Flow connector ---- */
+        /* ---- Flow connector + traveling ball ---- */
         .flow-grid__line {
           display: none;
         }
@@ -1955,10 +2017,117 @@ export function PadelHome() {
             position: absolute;
             left: 4%;
             right: 4%;
-            top: 4.6rem;
+            top: 2.4rem;
             border-top: 1px dashed var(--padel-line-strong);
             pointer-events: none;
+            z-index: 2;
           }
+        }
+
+        .flow-grid__ball {
+          position: absolute;
+          top: 0;
+          height: 0.85rem;
+          width: 0.85rem;
+          transform: translate(-50%, -50%);
+          border-radius: 999px;
+          background: radial-gradient(circle at 32% 30%, #efe1b8, var(--padel-gold) 62%, #a8893f);
+          box-shadow:
+            0 0 0 4px rgba(217, 191, 115, 0.14),
+            0 4px 14px rgba(0, 0, 0, 0.45);
+        }
+
+        .flow-grid__ball::after {
+          content: '';
+          position: absolute;
+          inset: 18%;
+          border-radius: 999px;
+          border-top: 1px solid rgba(19, 2, 2, 0.35);
+          transform: rotate(-24deg);
+        }
+
+        /* ---- Score rail ---- */
+        .score-rail {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 0.9rem;
+          border-block: 1px solid var(--padel-line);
+          padding-block: 1.1rem;
+        }
+
+        .score-rail__item {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.9rem;
+        }
+
+        .score-rail__call {
+          font-size: 1.5rem;
+          font-weight: 600;
+          font-style: italic;
+          line-height: 1;
+          color: rgba(246, 239, 225, 0.22);
+          transition:
+            color 0.4s ease,
+            text-shadow 0.4s ease;
+        }
+
+        .score-rail__call--won {
+          color: rgba(246, 239, 225, 0.55);
+        }
+
+        .score-rail__call--active {
+          color: var(--padel-gold);
+          text-shadow: 0 0 22px rgba(217, 191, 115, 0.4);
+        }
+
+        .score-rail__sep {
+          display: inline-block;
+          height: 1px;
+          width: 1.4rem;
+          background: var(--padel-line-strong);
+        }
+
+        /* ---- Flow card score watermark + tag ---- */
+        .flow-card__score {
+          position: absolute;
+          right: -0.6rem;
+          top: 0.4rem;
+          font-size: 8.5rem;
+          font-weight: 700;
+          font-style: italic;
+          line-height: 0.8;
+          color: transparent;
+          -webkit-text-stroke: 1px rgba(217, 191, 115, 0.22);
+          pointer-events: none;
+          transition:
+            -webkit-text-stroke-color 0.45s ease,
+            transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .flow-card:hover .flow-card__score {
+          -webkit-text-stroke-color: rgba(217, 191, 115, 0.55);
+          transform: translateY(-4px);
+        }
+
+        .flow-card__tag {
+          display: inline-flex;
+          align-items: center;
+          border: 1px solid var(--padel-line);
+          border-radius: 999px;
+          padding: 0.35rem 0.85rem;
+          font-size: 0.62rem;
+          font-weight: 600;
+          letter-spacing: 0.28em;
+          text-transform: uppercase;
+          color: var(--padel-gold);
+          transition: border-color 0.3s ease, background-color 0.3s ease;
+        }
+
+        .flow-card:hover .flow-card__tag {
+          border-color: rgba(217, 191, 115, 0.5);
+          background: rgba(217, 191, 115, 0.06);
         }
 
         /* ---- Entry meter + live badge ---- */
@@ -2067,54 +2236,6 @@ export function PadelHome() {
             radial-gradient(circle at 48% 56%, transparent 0 19rem, rgba(19, 2, 2, 0.08) 31rem, rgba(19, 2, 2, 0.36) 100%),
             linear-gradient(90deg, rgba(19, 2, 2, 0.2), transparent 22%, transparent 78%, rgba(19, 2, 2, 0.18));
           pointer-events: none;
-        }
-
-        /* ---- Kinetic marquee ---- */
-        .marquee {
-          position: relative;
-          overflow: hidden;
-          border-top: 1px solid var(--padel-line);
-          border-bottom: 1px solid var(--padel-line);
-          background: var(--padel-ink);
-          padding: 1.35rem 0;
-        }
-
-        .marquee__track {
-          display: flex;
-          flex-wrap: nowrap;
-          white-space: nowrap;
-          width: max-content;
-        }
-
-        .marquee__group {
-          display: flex;
-          align-items: center;
-        }
-
-        .marquee__item {
-          display: inline-flex;
-          align-items: center;
-          font-family: var(--font-display);
-          font-weight: 600;
-          font-size: clamp(1.5rem, 4vw, 2.9rem);
-          line-height: 1;
-          text-transform: uppercase;
-          letter-spacing: 0.02em;
-          color: transparent;
-          -webkit-text-stroke: 1px rgba(246, 239, 225, 0.55);
-          padding: 0 1.4rem;
-        }
-
-        .marquee__item:nth-child(3n + 2) {
-          color: var(--padel-gold);
-          -webkit-text-stroke: 0;
-        }
-
-        .marquee__star {
-          margin-left: 1.4rem;
-          font-size: 0.7em;
-          color: var(--padel-red);
-          -webkit-text-stroke: 0;
         }
 
         /* ---- Word reveal ---- */
@@ -2599,6 +2720,18 @@ export function PadelHome() {
           .visual-poster {
             min-height: 460px;
           }
+
+          .flow-card__score {
+            font-size: 6.5rem;
+          }
+
+          .score-rail__call {
+            font-size: 1.2rem;
+          }
+
+          .score-rail__sep {
+            width: 0.9rem;
+          }
         }
 
         @media (max-width: 460px) {
@@ -2617,6 +2750,9 @@ export function PadelHome() {
           .detail-row,
           .detail-row::before,
           .flow-card::before,
+          .flow-card__score,
+          .flow-card__tag,
+          .score-rail__call,
           .visual-poster__image,
           .principle-row__check,
           .premium-form label::after,
