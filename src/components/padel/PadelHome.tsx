@@ -379,10 +379,15 @@ function CursorRing() {
   const [enabled, setEnabled] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [hoveringLink, setHoveringLink] = useState(false);
+  const resetBallRef = useRef<number | null>(null);
   const x = useMotionValue(-100);
   const y = useMotionValue(-100);
+  const ballX = useMotionValue(0);
+  const ballY = useMotionValue(0);
   const springX = useSpring(x, { stiffness: 320, damping: 28, mass: 0.55 });
   const springY = useSpring(y, { stiffness: 320, damping: 28, mass: 0.55 });
+  const springBallX = useSpring(ballX, { stiffness: 520, damping: 24, mass: 0.24 });
+  const springBallY = useSpring(ballY, { stiffness: 520, damping: 24, mass: 0.24 });
 
   useEffect(() => {
     if (reduceMotion) return;
@@ -396,6 +401,19 @@ function CursorRing() {
       y.set(event.clientY);
       const target = event.target instanceof Element ? event.target : null;
       setHoveringLink(Boolean(target?.closest('a, button, input, textarea, select, [role="button"]')));
+
+      const maxTravel = target?.closest('a, button, input, textarea, select, [role="button"]') ? 9 : 7;
+      const moveBall = (value: number) => Math.max(-maxTravel, Math.min(maxTravel, value * 0.48));
+      ballX.set(moveBall(event.movementX));
+      ballY.set(moveBall(event.movementY));
+
+      if (resetBallRef.current !== null) {
+        window.clearTimeout(resetBallRef.current);
+      }
+      resetBallRef.current = window.setTimeout(() => {
+        ballX.set(0);
+        ballY.set(0);
+      }, 80);
     };
     const down = () => setPressed(true);
     const up = () => setPressed(false);
@@ -408,8 +426,11 @@ function CursorRing() {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerdown', down);
       window.removeEventListener('pointerup', up);
+      if (resetBallRef.current !== null) {
+        window.clearTimeout(resetBallRef.current);
+      }
     };
-  }, [reduceMotion, x, y]);
+  }, [ballX, ballY, reduceMotion, x, y]);
 
   if (!enabled) return null;
 
@@ -429,7 +450,8 @@ function CursorRing() {
       />
       <motion.span
         className="cursor-ring__dot"
-        animate={{ scale: pressed ? 0.5 : hoveringLink ? 0 : 1 }}
+        animate={{ scale: pressed ? 0.72 : hoveringLink ? 0.86 : 1 }}
+        style={{ x: springBallX, y: springBallY }}
         transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       />
     </motion.div>
@@ -2480,34 +2502,35 @@ export function PadelHome() {
         }
 
         .cursor-ring {
-          height: 0;
-          width: 0;
+          height: 1.9rem;
+          width: 1.9rem;
+          margin-left: -0.95rem;
+          margin-top: -0.95rem;
         }
 
         .cursor-ring__circle {
           position: absolute;
-          left: 0;
-          top: 0;
+          inset: 0;
           display: block;
-          height: 2.1rem;
-          width: 2.1rem;
-          transform: translate(-50%, -50%);
-          border: 1.5px solid var(--padel-gold);
+          border: 1px solid rgba(224, 196, 119, 0.92);
           border-radius: 999px;
           mix-blend-mode: difference;
+          transform-origin: center;
+          will-change: transform, opacity;
         }
 
         .cursor-ring__dot {
           position: absolute;
-          left: 0;
-          top: 0;
+          left: calc(50% - 0.13rem);
+          top: calc(50% - 0.13rem);
           display: block;
-          height: 0.32rem;
-          width: 0.32rem;
-          transform: translate(-50%, -50%);
+          height: 0.26rem;
+          width: 0.26rem;
           border-radius: 999px;
           background: var(--padel-gold);
           mix-blend-mode: difference;
+          transform-origin: center;
+          will-change: transform;
         }
 
         /* ---- Film grain ---- */
