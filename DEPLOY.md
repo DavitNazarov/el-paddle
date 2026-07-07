@@ -262,10 +262,19 @@ On Linux, containers do not always have `host.docker.internal` by default, so us
 
 ## 11. Vercel Frontend-Only Deploy
 
-The backend is not a Vercel serverless app; it is an Express API intended to run from the Docker/VPS setup above. The root `npm run build` intentionally builds both backend and frontend, so Vercel uses `vercel.json` to build only the frontend workspace:
+The backend is not a Vercel serverless app; it is an Express API intended to run from the Docker/VPS setup above.
+
+Set the Vercel project Root Directory to:
 
 ```bash
-npm run build --workspace frontend
+frontend
+```
+
+With that root directory, Vercel is already inside the frontend package. `vercel.json` uses frontend-local commands:
+
+```bash
+npm ci
+npm run build
 ```
 
 Set this Vercel environment variable:

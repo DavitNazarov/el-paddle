@@ -60,10 +60,17 @@ Mock login:
 
 ## Vercel Frontend Deploy
 
-This repository's root build checks both workspaces, including the backend Prisma build. Vercel is configured by `vercel.json` to build only the frontend workspace:
+Set the Vercel project Root Directory to:
 
 ```bash
-npm run build --workspace frontend
+frontend
+```
+
+With that root directory, Vercel is already inside the frontend package. `vercel.json` uses frontend-local commands:
+
+```bash
+npm ci
+npm run build
 ```
 
 Set `NEXT_PUBLIC_API_URL` in Vercel to the deployed backend API URL, for example `https://api.example.com`.
