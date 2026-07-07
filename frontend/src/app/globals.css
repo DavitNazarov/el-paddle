@@ -1,0 +1,251 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Offline-safe font stacks. These keep builds independent from Google Fonts. */
+  --font-display: Georgia, 'Times New Roman', serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-script: 'Snell Roundhand', 'Brush Script MT', cursive;
+
+  /* shadcn/ui semantic tokens tuned to the El Padel palette */
+  --background: 4 81% 4%;
+  --foreground: 42 47% 92%;
+  --card: 36 100% 95%;
+  --card-foreground: 4 81% 4%;
+  --primary: 2 72% 32%;
+  --primary-foreground: 42 47% 92%;
+  --secondary: 43 56% 67%;
+  --secondary-foreground: 4 81% 4%;
+  --muted: 29 28% 84%;
+  --muted-foreground: 20 20% 38%;
+  --accent: 43 56% 67%;
+  --accent-foreground: 4 81% 4%;
+  --destructive: 0 74% 42%;
+  --destructive-foreground: 42 47% 92%;
+  --border: 38 36% 78%;
+  --input: 37 27% 72%;
+  --ring: 43 56% 67%;
+  --radius: 0.5rem;
+
+  /* Shared brand tokens (mirrored in PadelHome inline vars) */
+  --padel-red: #8c1916;
+  --padel-red-2: #6f1210;
+  --padel-red-3: #3b0605;
+  --padel-ink: #130202;
+  --padel-ivory: #f6efe1;
+  --padel-parchment: #fff5e6;
+  --padel-muted: #decfbd;
+  --padel-line: rgba(246, 239, 225, 0.18);
+  --padel-line-strong: rgba(246, 239, 225, 0.36);
+  --padel-gold: #e0c477;
+  --padel-gold-2: #f2e3ad;
+  --padel-gold-deep: #a8863c;
+  --padel-ember: #e0342b;
+  --padel-glow: rgba(224, 196, 119, 0.5);
+  --padel-focus-ring: rgba(224, 196, 119, 0.45);
+  --padel-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --padel-ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  max-width: 100%;
+  overflow-x: clip;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  max-width: 100%;
+  overflow-x: clip;
+  background: var(--padel-red);
+  color: #ffffff;
+  font-family:
+    var(--font-sans), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+@supports not (overflow: clip) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
+::selection {
+  background: var(--padel-gold);
+  color: var(--padel-ink);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.account-field input,
+.dashboard-field input,
+.dashboard-field select,
+.admin-field input,
+.admin-field textarea {
+  min-height: 3rem;
+  width: 100%;
+  border: 1px solid rgba(19, 2, 2, 0.18);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 0.75rem 0.85rem;
+  color: var(--padel-ink);
+  outline: none;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.dashboard-field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238c1916' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 0.85rem center;
+  background-repeat: no-repeat;
+  padding-right: 2.4rem;
+}
+
+.account-field input:focus,
+.dashboard-field input:focus,
+.dashboard-field select:focus,
+.admin-field input:focus,
+.admin-field textarea:focus {
+  border-color: var(--padel-red);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(140, 25, 22, 0.12);
+}
+
+.account-field input::placeholder,
+.dashboard-field input::placeholder,
+.admin-field input::placeholder,
+.admin-field textarea::placeholder {
+  color: rgba(19, 2, 2, 0.42);
+}
+
+.dashboard-field span,
+.admin-field span {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.admin-field input,
+.admin-field textarea {
+  border-color: var(--padel-line);
+  background: rgba(246, 239, 225, 0.08);
+  color: var(--padel-ivory);
+}
+
+.admin-field input:focus,
+.admin-field textarea:focus {
+  border-color: var(--padel-gold);
+  background: rgba(246, 239, 225, 0.12);
+  box-shadow: 0 0 0 3px rgba(224, 196, 119, 0.14);
+}
+
+.admin-field input::placeholder,
+.admin-field textarea::placeholder {
+  color: rgba(246, 239, 225, 0.42);
+}
+
+.admin-field span {
+  color: var(--padel-gold);
+}
+
+a,
+button,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* Accessible focus for keyboard users outside component styles */
+:focus-visible {
+  outline: 2px solid var(--padel-gold);
+  outline-offset: 3px;
+}
+
+/* Branded scrollbar */
+@supports (scrollbar-width: thin) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(217, 191, 115, 0.55) var(--padel-ink);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--padel-ink);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(217, 191, 115, 0.45);
+  border: 2px solid var(--padel-ink);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(217, 191, 115, 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}

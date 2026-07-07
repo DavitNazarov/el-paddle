@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  FormEvent,
   ReactNode,
   useCallback,
   useEffect,
@@ -35,14 +34,13 @@ import {
   Menu,
   Navigation,
   Phone,
-  Send,
-  Sparkles,
   Trophy,
   Users,
   X,
   Zap,
 } from 'lucide-react';
 import { PadelBall3D } from './PadelBall3D';
+import { apiFetch } from '@/lib/api';
 
 const padelVars = {
   '--padel-red': '#8c1916',
@@ -66,36 +64,10 @@ const padelVars = {
 const navItems = [
   { label: 'About', href: '#about' },
   { label: 'Event', href: '#event' },
-  { label: 'Entry', href: '#registration' },
+  { label: 'Previous', href: '#previous-events' },
+  { label: 'Account', href: '#registration' },
   { label: 'Atmosphere', href: '#atmosphere' },
   { label: 'Contact', href: '#contact' },
-];
-
-const details = [
-  {
-    icon: CalendarDays,
-    label: 'Date',
-    value: '00 - 00 July',
-    note: 'Final match days are confirmed after category draw and player entry review.',
-  },
-  {
-    icon: MapPin,
-    label: 'Location',
-    value: 'KUS TBA Padel Courts',
-    note: 'A court setting shaped for warm-up, clear calls and a focused final-day atmosphere.',
-  },
-  {
-    icon: Trophy,
-    label: 'Format',
-    value: 'Groups into knockout',
-    note: 'Enough rhythm for every team to settle in before the bracket becomes decisive.',
-  },
-  {
-    icon: Users,
-    label: 'Categories',
-    value: 'Pro, amateur, mixed',
-    note: 'Competitive and welcoming, with partner-matching available for selected entries.',
-  },
 ];
 
 const principles = [
@@ -109,8 +81,8 @@ const flow = [
     step: '01',
     score: '15',
     title: 'Serve your entry',
-    copy: 'Send player details, category and partner status. The form is two minutes, no account, no friction.',
-    tag: 'Two-minute form',
+    copy: 'Create a verified profile, choose an event category and add your teammate by email.',
+    tag: 'Verified account',
   },
   {
     step: '02',
@@ -129,12 +101,6 @@ const flow = [
 ] as const;
 
 const scoreCalls = ['Love', '15', '30', '40', 'Game'] as const;
-
-const stats = [
-  { value: 3, suffix: '', label: 'Player categories' },
-  { value: 16, suffix: '', label: 'Teams in the draw' },
-  { value: 2, suffix: ' days', label: 'Of match play' },
-];
 
 type AtmosphereItem = {
   title: string;
@@ -167,8 +133,9 @@ const snapStops = [
   { id: 'top', label: 'Opening' },
   { id: 'about', label: 'Brand' },
   { id: 'event', label: 'Event' },
+  { id: 'previous-events', label: 'Past' },
   { id: 'flow', label: 'Flow' },
-  { id: 'registration', label: 'Entry' },
+  { id: 'registration', label: 'Account' },
   { id: 'atmosphere', label: 'Atmosphere' },
   { id: 'contact', label: 'Contact' },
   { id: 'final', label: 'Final' },
@@ -307,13 +274,23 @@ function Preloader() {
 
   useEffect(() => {
     if (reduceMotion) return;
+    const fallback = window.setTimeout(() => {
+      setProgress(100);
+      setDone(true);
+    }, 2400);
     const controls = animate(0, 100, {
       duration: 1.5,
       ease: [0.32, 0.72, 0.24, 1],
       onUpdate: (latest) => setProgress(Math.round(latest)),
-      onComplete: () => setDone(true),
+      onComplete: () => {
+        window.clearTimeout(fallback);
+        setDone(true);
+      },
     });
-    return () => controls.stop();
+    return () => {
+      window.clearTimeout(fallback);
+      controls.stop();
+    };
   }, [reduceMotion]);
 
   useEffect(() => {
@@ -905,10 +882,10 @@ function FloatingEntryBar() {
           </div>
           <Magnetic strength={0.18}>
             <a
-              href="#registration"
-              className="btn-premium inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-[var(--padel-ivory)] px-4 py-2 text-sm font-semibold text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+              href="/register"
+              className="btn-premium inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-[var(--padel-ivory)] px-4 py-2 text-sm font-semibold text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
             >
-              Enter
+              Create
               <ArrowRight className="h-4 w-4" />
             </a>
           </Magnetic>
@@ -964,15 +941,19 @@ function MobileMenu({
   open: boolean;
   onClose: () => void;
 }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
     document.documentElement.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     window.addEventListener('keydown', handleKey);
     return () => {
       document.documentElement.style.overflow = '';
+      window.cancelAnimationFrame(frame);
       window.removeEventListener('keydown', handleKey);
     };
   }, [open, onClose]);
@@ -981,14 +962,18 @@ function MobileMenu({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="mobile-menu fixed inset-0 z-[100] flex flex-col bg-[var(--padel-ink)] px-6 pb-10 pt-24"
+          className="mobile-menu fixed inset-0 z-[100] flex flex-col overflow-y-auto bg-[var(--padel-ink)] px-5 pb-10 pt-24 sm:px-6"
           initial={{ clipPath: 'inset(0 0 100% 0)' }}
           animate={{ clipPath: 'inset(0 0 0% 0)' }}
           exit={{ clipPath: 'inset(0 0 100% 0)' }}
           transition={{ duration: 0.55, ease: [0.76, 0, 0.24, 1] }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Site menu"
         >
           <div className="mobile-menu__lines" aria-hidden />
           <button
+            ref={closeButtonRef}
             type="button"
             aria-label="Close menu"
             onClick={onClose}
@@ -1021,14 +1006,14 @@ function MobileMenu({
           </nav>
 
           <motion.a
-            href="#registration"
+            href="/register"
             onClick={onClose}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="btn-premium mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-6 py-3.5 text-base font-semibold text-[var(--padel-red)]"
           >
-            Request entry
+            Create account
             <ArrowRight className="h-5 w-5" />
           </motion.a>
 
@@ -1074,7 +1059,7 @@ function PadelNav() {
   });
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[70] px-3 pt-3 md:px-6 md:pt-5">
+    <header className="padel-nav-header fixed inset-x-0 top-0 z-[70] px-3 pt-3 md:px-6 md:pt-5">
       <motion.div
         animate={{
           backgroundColor: scrolled ? 'rgba(19,2,2,0.62)' : 'rgba(19,2,2,0.28)',
@@ -1137,10 +1122,10 @@ function PadelNav() {
         <div className="flex items-center gap-2">
           <Magnetic strength={0.22}>
             <a
-              href="#registration"
+              href="/register"
               className="btn-premium group hidden min-h-11 items-center gap-2 rounded-full bg-[var(--padel-ivory)] px-4 py-2.5 text-sm font-semibold text-[var(--padel-red)] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] sm:inline-flex md:px-5"
             >
-              Request entry
+              Create account
               <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
             </a>
           </Magnetic>
@@ -1396,7 +1381,92 @@ function AboutSection() {
   );
 }
 
+type PublicCategory = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+type PublicEvent = {
+  id: string;
+  title: string;
+  date: string;
+  location: string;
+  description: string;
+  categories: PublicCategory[];
+};
+
+type PublicEventsPayload = {
+  upcoming: PublicEvent | null;
+  previous: PublicEvent[];
+};
+
+const fallbackUpcomingEvent: PublicEvent = {
+  id: 'fallback-upcoming',
+  title: 'Next El Padel Event',
+  date: new Date('2026-07-24T18:00:00').toISOString(),
+  location: 'KUS TBA Padel Courts',
+  description:
+    'The next public event appears here when the admin publishes it. Create your account now so registration is ready when categories open.',
+  categories: [
+    { id: 'pro', name: 'Pro', description: '' },
+    { id: 'amateur', name: 'Amateur', description: '' },
+    { id: 'mixed', name: 'Mixed', description: '' },
+  ],
+};
+
+function formatEventDate(date: string) {
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(date));
+}
+
+function usePublicEvents() {
+  const [payload, setPayload] = useState<PublicEventsPayload>({
+    upcoming: null,
+    previous: [],
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    apiFetch('/api/public/events', { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw new Error('Events unavailable');
+        return response.json();
+      })
+      .then((data: PublicEventsPayload) => {
+        if (mounted) {
+          setPayload({
+            upcoming: data.upcoming ?? null,
+            previous: Array.isArray(data.previous) ? data.previous : [],
+          });
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPayload({ upcoming: null, previous: [] });
+        }
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return { payload, loading };
+}
+
 function EventSection() {
+  const { payload, loading } = usePublicEvents();
+  const event = payload.upcoming ?? fallbackUpcomingEvent;
+
   return (
     <ScrollSection
       id="event"
@@ -1409,61 +1479,142 @@ function EventSection() {
           <Parallax speed={0.22}>
             <SectionIntro
               index="02"
-              kicker="Event structure"
-              title="The details arrive like"
-              accent="clean court lines."
-              copy="A tournament page should make the next step obvious. The information is direct, but the presentation stays cinematic and calm."
+              kicker="Upcoming event"
+              title="The next public"
+              accent="court call."
+              copy="The active event is pulled from the admin dashboard after publication. Players see only what is live and ready for team registration."
               align="center"
             />
           </Parallax>
         </Reveal>
 
-        <div className="mt-20 grid gap-6 sm:grid-cols-3">
-          {stats.map((stat, index) => (
-            <Reveal key={stat.label} delay={index * 0.06}>
-              <Parallax speed={index === 1 ? 0.34 : 0.14}>
-              <div className={`stat-card glass-card relative border border-[var(--padel-line)] px-6 py-8 text-center ${index === 1 ? 'stat-card--featured' : ''}`}>
-                <span className="stat-card__glow" aria-hidden />
-                <span className="stat-card__tick stat-card__tick--tl" aria-hidden />
-                <span className="stat-card__tick stat-card__tick--br" aria-hidden />
-                <p className="stat-card__value font-display text-6xl font-semibold text-[var(--padel-ivory)] transition-colors duration-300 md:text-7xl">
-                  <Counter to={stat.value} suffix={stat.suffix} />
+        <Reveal delay={0.08}>
+          <Parallax speed={0.16} className="mt-20">
+            <article className="upcoming-event-card grid overflow-hidden border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/32 shadow-[0_34px_120px_rgba(0,0,0,0.32)] lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="relative min-h-[440px] p-7 md:p-10 lg:p-12">
+                <div className="court-card__diagram opacity-45" aria-hidden>
+                  <span className="court-card__baseline court-card__baseline--top" />
+                  <span className="court-card__baseline court-card__baseline--bottom" />
+                  <span className="court-card__net" />
+                  <span className="court-card__service court-card__service--left" />
+                  <span className="court-card__service court-card__service--right" />
+                </div>
+                <span className="live-badge mb-8 inline-flex items-center gap-2 rounded-full border border-[var(--padel-line)] px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.3em] text-[var(--padel-ivory)]">
+                  <span className="live-badge__dot" aria-hidden />
+                  {loading ? 'Checking live event' : payload.upcoming ? 'Published' : 'Account-ready'}
+                </span>
+                <h3 className="font-display max-w-2xl text-5xl font-semibold leading-[0.95] text-[var(--padel-ivory)] md:text-7xl">
+                  {event.title}
+                </h3>
+                <p className="mt-8 max-w-xl text-base leading-8 text-[var(--padel-muted)]">
+                  {event.description}
                 </p>
-                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--padel-gold)]">
-                  {stat.label}
-                </p>
+                <div className="mt-10 flex flex-wrap gap-3">
+                  {event.categories.map((category) => (
+                    <span key={category.id} className="flow-card__tag">
+                      {category.name}
+                    </span>
+                  ))}
+                </div>
               </div>
-              </Parallax>
+
+              <div className="border-t border-[var(--padel-line)] bg-[var(--padel-parchment)] p-7 text-[var(--padel-ink)] md:p-10 lg:border-l lg:border-t-0 lg:p-12">
+                <div className="grid gap-6">
+                  {[
+                    { icon: CalendarDays, label: 'Date', value: formatEventDate(event.date) },
+                    { icon: MapPin, label: 'Location', value: event.location },
+                    { icon: Trophy, label: 'Review', value: 'Admin approves teams' },
+                    { icon: Users, label: 'Team', value: 'Two verified profiles' },
+                  ].map(({ icon: Icon, label, value }) => (
+                    <div key={label} className="border-b border-[#dacbb9] pb-5 last:border-b-0">
+                      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.26em] text-[var(--padel-red)]">
+                        <Icon className="h-4 w-4" />
+                        {label}
+                      </p>
+                      <p className="font-display mt-2 text-3xl font-semibold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:flex-col">
+                  <a
+                    href="/register"
+                    className="btn-premium inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-6 py-3 text-base font-semibold text-[var(--padel-ivory)] hover:bg-[var(--padel-red-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-red)]"
+                  >
+                    Create account
+                    <ArrowRight className="h-5 w-5" />
+                  </a>
+                  <a
+                    href="/login"
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[var(--padel-ink)]/20 px-6 py-3 text-base font-semibold text-[var(--padel-ink)] hover:border-[var(--padel-red)] hover:text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-red)]"
+                  >
+                    Log in
+                  </a>
+                </div>
+              </div>
+            </article>
+          </Parallax>
+        </Reveal>
+      </div>
+    </ScrollSection>
+  );
+}
+
+function PreviousEventsSection() {
+  const { payload, loading } = usePublicEvents();
+  const previous = payload.previous;
+
+  return (
+    <ScrollSection
+      id="previous-events"
+      className="section-tight relative overflow-hidden bg-[var(--padel-ink)] px-5 md:px-10"
+    >
+      <div className="mx-auto max-w-7xl">
+        <Reveal>
+          <div className="grid gap-10 border-b border-[var(--padel-line)] pb-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
+            <SectionIntro
+              index="03"
+              kicker="Previous events"
+              title="Past draws,"
+              accent="still visible."
+              copy="The archive gives players and clubs a public memory of published events without competing with the current registration call."
+            />
+            <p className="max-w-2xl text-base leading-8 text-[var(--padel-muted)] lg:justify-self-end">
+              Admin-published past events appear here after their date has passed. The layout stays compact so the next live event remains the focus.
+            </p>
+          </div>
+        </Reveal>
+
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
+          {previous.map((event, index) => (
+            <Reveal key={event.id} delay={index * 0.04}>
+              <article className="previous-event-card group flex min-h-72 flex-col border border-[var(--padel-line)] bg-[var(--padel-red)]/12 p-6 transition duration-300 hover:border-[var(--padel-gold)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[var(--padel-gold)]">
+                  {formatEventDate(event.date)}
+                </p>
+                <h3 className="font-display mt-6 text-3xl font-semibold text-[var(--padel-ivory)]">
+                  {event.title}
+                </h3>
+                <p className="mt-4 text-sm leading-6 text-[var(--padel-muted)]">
+                  {event.location}
+                </p>
+                <div className="mt-auto flex flex-wrap gap-2 pt-8">
+                  {event.categories.slice(0, 3).map((category) => (
+                    <span key={category.id} className="rounded-full border border-[var(--padel-line)] px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-muted)]">
+                      {category.name}
+                    </span>
+                  ))}
+                </div>
+              </article>
             </Reveal>
           ))}
+          {!loading && !previous.length ? (
+            <Reveal>
+              <article className="border border-[var(--padel-line)] bg-[var(--padel-red)]/12 p-8 text-[var(--padel-muted)] md:col-span-3">
+                Previous published events will appear here after their dates pass.
+              </article>
+            </Reveal>
+          ) : null}
         </div>
-
-        <Parallax speed={0.1} className="mt-16">
-        <div className="divide-y divide-[var(--padel-line)] border-y border-[var(--padel-line)]">
-          {details.map((item, index) => {
-            const Icon = item.icon;
-            return (
-              <Reveal key={item.label} delay={index * 0.04}>
-                <article className="detail-row relative grid gap-7 py-10 pl-4 md:grid-cols-[220px_1fr_1.05fr] md:items-center md:gap-10 md:pl-6">
-                  <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.24em] text-[var(--padel-gold)]">
-                    <span className="detail-row__icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--padel-line)] transition-colors duration-300">
-                      <Icon className="h-4 w-4 text-[var(--padel-ivory)]" />
-                    </span>
-                    {item.label}
-                  </div>
-                  <h3 className="font-display text-4xl font-semibold text-[var(--padel-ivory)] md:text-5xl">
-                    {item.value}
-                  </h3>
-                  <p className="text-base leading-7 text-[var(--padel-muted)]">{item.note}</p>
-                  <span className="detail-row__count font-display absolute right-2 top-6 text-sm italic text-[var(--padel-ivory)]/30 md:top-1/2 md:-translate-y-1/2">
-                    {`( 0${index + 1} )`}
-                  </span>
-                </article>
-              </Reveal>
-            );
-          })}
-        </div>
-        </Parallax>
       </div>
     </ScrollSection>
   );
@@ -1500,11 +1651,11 @@ function FlowSection() {
           <Parallax speed={0.24}>
             <div>
               <SectionIntro
-                index="03"
+                index="04"
                 kicker="Registration flow"
                 title="Three points"
                 accent="win the entry."
-                copy="Entering reads like a rally: you serve the application, we return the confirmation, and the point closes on court."
+                copy="Entering now starts with a verified account, then a two-player team request, then admin approval before the bracket closes."
               />
 
               <div className="score-rail mt-12" role="presentation">
@@ -1578,25 +1729,6 @@ function FlowSection() {
 }
 
 function RegistrationSection() {
-  const [status, setStatus] = useState<'idle' | 'sending' | 'submitted'>('idle');
-  const submitted = status === 'submitted';
-  const sending = status === 'sending';
-  const sendTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (sendTimeout.current) clearTimeout(sendTimeout.current);
-    };
-  }, []);
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (sending) return;
-    setStatus('sending');
-    // Brief confirmation beat so the submit feels acknowledged, not instant.
-    sendTimeout.current = setTimeout(() => setStatus('submitted'), 900);
-  };
-
   return (
     <ScrollSection
       id="registration"
@@ -1608,11 +1740,11 @@ function RegistrationSection() {
         <Reveal>
           <div className="lg:sticky lg:top-28">
             <SectionIntro
-              index="04"
-              kicker="Registration"
-              title="Request your place"
-              accent="in the draw."
-              copy="The form is short by design. Players can apply quickly, and the organizer can confirm category, partner status and schedule details."
+              index="05"
+              kicker="Account access"
+              title="Create account,"
+              accent="then enter as a team."
+              copy="Players register with verified email, name and surname. Team entries link both player profiles by email and stay pending until admin approval."
             />
 
             <div className="entry-meter glass-card mt-14 border border-[var(--padel-line)] p-7">
@@ -1648,145 +1780,61 @@ function RegistrationSection() {
 
         <Reveal delay={0.08}>
           <Parallax speed={0.16}>
-          <AnimatePresence mode="wait" initial={false}>
-          {submitted ? (
-            <motion.div
-              key="success"
-              initial={{ opacity: 0, y: 24, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="premium-form flex min-h-[560px] flex-col items-center justify-center bg-[var(--padel-parchment)] p-10 text-center text-[var(--padel-ink)] shadow-[0_34px_120px_rgba(0,0,0,0.3)] md:p-14"
-              role="status"
-            >
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.15 }}
-                className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--padel-red)] text-[var(--padel-ivory)]"
-              >
-                <Check className="h-8 w-8" />
-              </motion.span>
-              <h3 className="font-display mt-8 text-4xl font-semibold md:text-5xl">
-                Entry received.
-              </h3>
-              <p className="mt-5 max-w-md text-base leading-8 text-[var(--padel-ink)]/70">
-                Your request is in the draw review. We confirm category, partner status
-                and your schedule window by phone or email.
-              </p>
-              <p className="mt-8 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--padel-red)]">
-                El Padel Tournament Tbilisi
-              </p>
-              <button
-                type="button"
-                onClick={() => setStatus('idle')}
-                className="mt-10 inline-flex min-h-11 items-center gap-2 rounded-full border border-[var(--padel-ink)]/25 px-6 py-2.5 text-sm font-semibold text-[var(--padel-ink)] transition-colors duration-200 hover:border-[var(--padel-red)] hover:text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-red)]"
-              >
-                Register another team
-              </button>
-            </motion.div>
-          ) : (
-          <motion.form
-            key="form"
-            exit={{ opacity: 0, y: -18 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            onSubmit={handleSubmit}
-            className="premium-form bg-[var(--padel-parchment)] p-7 text-[var(--padel-ink)] shadow-[0_34px_120px_rgba(0,0,0,0.3)] md:p-10 lg:p-12"
-          >
+          <div className="premium-form bg-[var(--padel-parchment)] p-7 text-[var(--padel-ink)] shadow-[0_34px_120px_rgba(0,0,0,0.3)] md:p-10 lg:p-12">
             <div className="mb-10 flex items-start justify-between gap-8 border-b border-[#dacbb9] pb-8">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--padel-red)]">
-                  Player entry
+                  Create account
                 </p>
                 <p className="font-display mt-2 text-4xl font-semibold text-[var(--padel-ink)]">
-                  Summer Open
+                  Player dashboard
                 </p>
                 <div className="form-steps mt-4 flex items-center gap-2" aria-hidden>
                   {[1, 2, 3].map((step) => (
                     <span key={step} className={`form-steps__dot ${step === 1 ? 'form-steps__dot--active' : ''}`} />
                   ))}
                   <span className="ml-1 text-[0.62rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-ink)]/45">
-                    Step 1 of 1
+                    Verify · teammate · approval
                   </span>
                 </div>
               </div>
-              <Sparkles className="mt-1 h-6 w-6 text-[var(--padel-red)]" />
+              <Users className="mt-1 h-6 w-6 text-[var(--padel-red)]" />
             </div>
 
-            <div className="grid gap-7 md:grid-cols-2">
-              <Field label="Full name" hint="Required">
-                <input required name="name" autoComplete="name" placeholder="Nika Beridze" />
-              </Field>
-              <Field label="Phone" hint="Required">
-                <input required name="phone" type="tel" autoComplete="tel" placeholder="+995 555 000 000" />
-              </Field>
-              <Field label="Category" hint="Required">
-                <select required name="category" defaultValue="" className="field-select">
-                  <option value="" disabled>
-                    Select category
-                  </option>
-                  <option>Pro category</option>
-                  <option>Amateur category</option>
-                  <option>Mixed doubles</option>
-                  <option>Need partner matching</option>
-                </select>
-              </Field>
-              <Field label="Partner">
-                <input name="partner" placeholder="Partner name or need match" />
-              </Field>
+            <div className="grid gap-5">
+              {[
+                ['01', 'Verify email', 'Email signup sends a backend code. Gmail users are verified through Google.'],
+                ['02', 'Add teammate', 'Enter teammate email in the dashboard. Existing users are notified; new users get an invite.'],
+                ['03', 'Wait for admin', 'Admin approves, declines or returns a registration to pending. Status appears in dashboard and email.'],
+              ].map(([step, title, copy]) => (
+                <div key={step} className="border-b border-[#dacbb9] pb-5 last:border-b-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--padel-red)]">{step}</p>
+                  <h3 className="font-display mt-2 text-2xl font-semibold">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[var(--padel-ink)]/65">{copy}</p>
+                </div>
+              ))}
             </div>
 
-            <Field label="Message" className="mt-7">
-              <textarea name="message" rows={4} placeholder="Preferred time, player level or sponsor note" />
-            </Field>
-
-            <button
-              type="submit"
-              disabled={sending}
-              className="btn-premium btn-premium--dark group mt-8 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-6 py-3.5 text-base font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)] disabled:cursor-wait disabled:opacity-80"
-            >
-              {sending ? (
-                <>
-                  Sending entry
-                  <span className="submit-spinner" aria-hidden />
-                </>
-              ) : (
-                <>
-                  Send registration
-                  <Send className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-0.5" />
-                </>
-              )}
-            </button>
-          </motion.form>
-          )}
-          </AnimatePresence>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <a
+                href="/register"
+                className="btn-premium btn-premium--dark group inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-6 py-3.5 text-base font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
+              >
+                Create account
+                <ArrowRight className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </a>
+              <a
+                href="/login"
+                className="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--padel-ink)]/25 px-6 py-3.5 text-base font-semibold text-[var(--padel-ink)] transition-colors duration-200 hover:border-[var(--padel-red)] hover:text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-red)]"
+              >
+                Log in
+              </a>
+            </div>
+          </div>
           </Parallax>
         </Reveal>
       </div>
     </ScrollSection>
-  );
-}
-
-function Field({
-  label,
-  children,
-  className = '',
-  hint,
-}: {
-  label: string;
-  children: ReactNode;
-  className?: string;
-  hint?: string;
-}) {
-  return (
-    <label className={`field-shell block ${className}`}>
-      <span className="field-shell__label mb-1 flex items-center justify-between gap-3 text-[0.66rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-ink)]/60">
-        <span>{label}</span>
-        {hint ? <span className="normal-case tracking-normal text-[var(--padel-ink)]/40">{hint}</span> : null}
-      </span>
-      <span className="field-shell__control relative block">
-        {children}
-      </span>
-    </label>
   );
 }
 
@@ -1798,7 +1846,7 @@ function AtmosphereSection() {
           <Parallax speed={0.2}>
           <div className="grid gap-12 border-b border-[var(--padel-line)] pb-16 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
             <SectionIntro
-              index="05"
+              index="06"
               kicker="Visual atmosphere"
               title="Red, ivory and"
               accent="the calm before the hit."
@@ -1869,7 +1917,7 @@ function ContactSection() {
           <Parallax speed={0.18}>
           <div>
             <SectionIntro
-              index="06"
+              index="07"
               kicker="Contact"
               title="For players, partners"
               accent="and sponsors."
@@ -1979,10 +2027,10 @@ function FinalCta() {
           <Magnetic className="mt-12" strength={0.25}>
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <a
-                href="#registration"
+                href="/register"
                 className="btn-premium inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-7 py-3.5 text-base font-semibold text-[var(--padel-red)] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
               >
-                Request entry
+                Create account
                 <ArrowRight className="h-5 w-5" />
               </a>
               <a
@@ -2083,6 +2131,8 @@ export function PadelHome() {
         <SectionCourtDivider />
         <EventSection />
         <SectionCourtDivider />
+        <PreviousEventsSection />
+        <SectionCourtDivider />
         <FlowSection />
         <SectionCourtDivider />
         <RegistrationSection />
@@ -2128,6 +2178,24 @@ export function PadelHome() {
         /* ================================================================ */
 
         /* ---- Page progress + glow trail ---- */
+        .preloader {
+          animation: preloader-fallback-hide 2.8s var(--padel-ease-out) forwards;
+        }
+
+        @keyframes preloader-fallback-hide {
+          0%,
+          88% {
+            opacity: 1;
+            visibility: visible;
+          }
+
+          100% {
+            opacity: 0;
+            pointer-events: none;
+            visibility: hidden;
+          }
+        }
+
         .page-progress {
           background: linear-gradient(
             90deg,
@@ -2223,9 +2291,20 @@ export function PadelHome() {
 
         .back-to-top {
           box-shadow: 0 16px 50px rgba(0, 0, 0, 0.35);
+          bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 1rem));
         }
 
         /* ---- Navigation shell ---- */
+        .padel-nav-header {
+          padding-top: max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem));
+        }
+
+        @media (min-width: 768px) {
+          .padel-nav-header {
+            padding-top: max(1.25rem, calc(env(safe-area-inset-top) + 1rem));
+          }
+        }
+
         .nav-shell {
           box-shadow:
             inset 0 1px 0 rgba(246, 239, 225, 0.06),
@@ -2546,6 +2625,12 @@ export function PadelHome() {
         }
 
         /* ---- Mobile menu ---- */
+        .mobile-menu {
+          padding-top: max(5.75rem, calc(env(safe-area-inset-top) + 4.75rem));
+          padding-bottom: max(2rem, calc(env(safe-area-inset-bottom) + 1.5rem));
+          overscroll-behavior: contain;
+        }
+
         .mobile-menu__link {
           transition: color 0.25s ease, padding-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -2622,6 +2707,12 @@ export function PadelHome() {
 
         .snap-indicator__dot:focus-visible .snap-indicator__mark {
           box-shadow: 0 0 0 4px rgba(217, 191, 115, 0.24);
+        }
+
+        @media (max-width: 900px) {
+          .snap-indicator {
+            display: none;
+          }
         }
 
         .section-pad {
@@ -3613,6 +3704,11 @@ export function PadelHome() {
 
         .footer-link {
           position: relative;
+          display: inline-flex;
+          min-height: 2.75rem;
+          min-width: 2.75rem;
+          align-items: center;
+          justify-content: center;
         }
 
         .footer-link::after {
@@ -3630,6 +3726,10 @@ export function PadelHome() {
 
         .footer-link:hover::after {
           transform: scaleX(1);
+        }
+
+        .footer-social {
+          min-height: 2.75rem;
         }
 
         .visual-poster__grain {
@@ -3731,18 +3831,8 @@ export function PadelHome() {
         }
 
         @media (max-width: 768px) {
-          .snap-indicator {
-            right: 0.75rem;
-            gap: 0.55rem;
-          }
-
-          .snap-indicator__label {
-            display: none;
-          }
-
-          .snap-indicator__mark {
-            width: 0.72rem;
-            height: 0.3rem;
+          .el-padel-page main > section {
+            min-height: auto;
           }
 
           .section-pad {
@@ -3756,19 +3846,116 @@ export function PadelHome() {
           }
 
           .poster-hero {
-            padding-top: 6.75rem;
+            display: flex;
+            height: auto;
+            min-height: 100svh;
+            flex-direction: column;
+            padding-top: max(5.75rem, calc(env(safe-area-inset-top) + 4.75rem));
+            padding-bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 1.25rem));
+          }
+
+          .hero-crest {
+            width: 154px;
+          }
+
+          .hero-chips {
+            margin-top: 0.875rem;
+            gap: 0.4rem;
+          }
+
+          .hero-chip {
+            padding: 0.3rem 0.62rem;
+            font-size: 0.56rem;
+            letter-spacing: 0.18em;
           }
 
           .poster-ball-wrap {
-            width: min(430px, 48dvh, 92vw);
+            margin-top: 0.35rem;
+            width: min(360px, 39svh, 88vw);
+          }
+
+          .poster-ball-canvas {
+            min-height: 100%;
           }
 
           .poster-footer {
-            bottom: 1rem;
+            position: relative;
+            inset: auto;
+            bottom: auto;
+            left: auto;
+            right: auto;
+            width: 100%;
+            margin-top: auto;
+            gap: 0.75rem;
+          }
+
+          .poster-meta {
+            padding: 1rem;
+            backdrop-filter: blur(10px);
+          }
+
+          .poster-meta > p {
+            margin-bottom: 0.65rem;
+            letter-spacing: 0.24em;
+          }
+
+          .section-intro-frame {
+            padding-left: 0.85rem;
+          }
+
+          .section-kicker {
+            align-items: flex-start;
+            gap: 0.6rem;
+            letter-spacing: 0.18em;
+          }
+
+          .section-kicker__rule {
+            width: 2rem;
+          }
+
+          .principle-row {
+            align-items: flex-start;
+            gap: 1rem;
+            padding-block: 1.25rem;
+          }
+
+          .detail-row {
+            gap: 1rem;
+            padding: 1.65rem 1rem;
+          }
+
+          .detail-row:hover {
+            transform: none;
+          }
+
+          .detail-row__count {
+            top: 1.6rem;
+            right: 1rem;
+          }
+
+          .stat-card {
+            padding: 1.5rem;
+          }
+
+          .stat-card__value {
+            font-size: 3.5rem;
+          }
+
+          .flow-card {
+            min-height: auto;
+            padding: 1.5rem;
+          }
+
+          .flow-card h3 {
+            padding-top: 5rem;
+          }
+
+          .flow-card__tag {
+            letter-spacing: 0.18em;
           }
 
           .visual-poster {
-            min-height: 460px;
+            min-height: min(420px, 70svh);
           }
 
           .flow-card__score {
@@ -3782,6 +3969,43 @@ export function PadelHome() {
           .score-rail__sep {
             width: 0.9rem;
           }
+
+          .premium-form,
+          .entry-meter,
+          .court-card {
+            padding: 1.5rem;
+          }
+
+          .premium-form {
+            min-height: auto;
+          }
+
+          .premium-form input,
+          .premium-form textarea,
+          .premium-form select {
+            min-height: 3.35rem;
+            font-size: 1rem;
+          }
+
+          .contact-link {
+            gap: 1rem;
+          }
+
+          .contact-link__text {
+            overflow: visible;
+            text-overflow: clip;
+            white-space: normal;
+            overflow-wrap: anywhere;
+          }
+
+          .floating-entry {
+            bottom: max(0.85rem, calc(env(safe-area-inset-bottom) + 0.65rem));
+          }
+
+          .back-to-top {
+            bottom: max(5.9rem, calc(env(safe-area-inset-bottom) + 5.4rem));
+            right: 1rem;
+          }
         }
 
         @media (max-width: 460px) {
@@ -3791,13 +4015,84 @@ export function PadelHome() {
 
           .poster-meta p,
           .poster-meta span {
-            font-size: 1.35rem;
+            font-size: inherit;
+          }
+
+          .poster-meta > p {
+            font-size: 0.58rem;
+          }
+
+          .poster-meta .font-display {
+            font-size: 1.45rem;
+          }
+
+          .mobile-menu__link {
+            padding-block: 1rem;
+            font-size: 2rem;
+          }
+
+          .mobile-menu nav {
+            justify-content: flex-start;
+          }
+
+          .premium-form {
+            padding: 1.25rem;
+          }
+
+          .premium-form > div:first-child {
+            margin-bottom: 1.5rem;
+            gap: 1rem;
+            padding-bottom: 1.5rem;
+          }
+
+          .field-shell__label {
+            letter-spacing: 0.18em;
+          }
+
+          .form-steps {
+            flex-wrap: wrap;
+          }
+
+          .contact-link__text {
+            font-size: 1.45rem;
+          }
+
+          .court-card h3 {
+            font-size: 2.65rem;
+          }
+
+          .site-footer .font-script {
+            font-size: 4.4rem;
           }
 
           .marquee-band__item {
             font-size: 0.85rem;
             gap: 1.5rem;
             padding-right: 1.5rem;
+          }
+        }
+
+        @media (max-height: 680px) and (max-width: 900px) {
+          .mobile-menu nav {
+            justify-content: flex-start;
+          }
+
+          .mobile-menu__link {
+            padding-block: 0.95rem;
+            font-size: 1.9rem;
+          }
+
+          .poster-hero {
+            min-height: auto;
+            padding-bottom: max(2rem, calc(env(safe-area-inset-bottom) + 1.5rem));
+          }
+
+          .poster-ball-wrap {
+            width: min(300px, 48svh, 76vw);
+          }
+
+          .poster-footer {
+            margin-top: 1rem;
           }
         }
 

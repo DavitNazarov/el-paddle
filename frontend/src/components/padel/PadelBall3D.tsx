@@ -76,7 +76,8 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
       antialias: true,
       powerPreference: 'high-performance',
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, coarsePointer ? 1.5 : 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.setAttribute('aria-hidden', 'true');
     renderer.domElement.style.display = 'block';
@@ -125,7 +126,7 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     );
     group.add(halo);
 
-    const particleCount = 80;
+    const particleCount = coarsePointer ? 44 : 80;
     const positions = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i += 1) {
       const radius = 2.4 + Math.random() * 2.2;
@@ -206,8 +207,10 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
 
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(mount);
-    mount.addEventListener('pointermove', handlePointerMove, { passive: true });
-    mount.addEventListener('pointerleave', handlePointerLeave);
+    if (!coarsePointer) {
+      mount.addEventListener('pointermove', handlePointerMove, { passive: true });
+      mount.addEventListener('pointerleave', handlePointerLeave);
+    }
 
     resize();
     if (!reduceMotion) {
@@ -217,8 +220,10 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     return () => {
       disposed = true;
       resizeObserver.disconnect();
-      mount.removeEventListener('pointermove', handlePointerMove);
-      mount.removeEventListener('pointerleave', handlePointerLeave);
+      if (!coarsePointer) {
+        mount.removeEventListener('pointermove', handlePointerMove);
+        mount.removeEventListener('pointerleave', handlePointerLeave);
+      }
       if (frame) {
         window.cancelAnimationFrame(frame);
       }
@@ -233,7 +238,7 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
       ref={mountRef}
       role="img"
       aria-label="Animated white padel tournament ball"
-      className={`h-full min-h-[320px] w-full ${className}`}
+      className={`h-full min-h-[240px] w-full sm:min-h-[320px] ${className}`}
     />
   );
 }

@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  INVITED
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+enum AccountProvider {
+  GOOGLE
+}
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  name            String?
+  surname         String?
+  passwordHash    String?
+  role            UserRole   @default(USER)
+  status          UserStatus @default(PENDING_VERIFICATION)
+  emailVerifiedAt DateTime?
+  matchesPlayed   Int        @default(0)
+  wins            Int        @default(0)
+  losses          Int        @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  accounts              OAuthAccount[]
+  verificationCodes     EmailVerificationCode[]
+  inviteTokens          InviteToken[]
+  ownedRegistrations    EventRegistration[]      @relation("RegistrationOwner")
+  teammateRegistrations EventRegistration[]      @relation("RegistrationTeammate")
+  reviewedRegistrations EventRegistration[]      @relation("RegistrationReviewer")
+  createdCategories     Category[]               @relation("CategoryCreator")
+  createdEvents         Event[]                  @relation("EventCreator")
+  clubMemberships       ClubMember[]
+}
+
+model OAuthAccount {
+  id                String          @id @default(cuid())
+  userId            String
+  provider          AccountProvider
+  providerAccountId String
+  createdAt         DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model EmailVerificationCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InviteToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy     User                @relation("CategoryCreator", fields: [createdById], references: [id])
+  eventLinks    EventCategory[]
+  registrations EventRegistration[]
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  date        DateTime
+  location    String
+  description String?
+  isPublished Boolean  @default(false)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy     User                @relation("EventCreator", fields: [createdById], references: [id])
+  categories    EventCategory[]
+  registrations EventRegistration[]
+
+  @@index([date, isPublished])
+}
+
+model EventCategory {
+  eventId    String
+  categoryId String
+
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, categoryId])
+}
+
+model EventRegistration {
+  id             String             @id @default(cuid())
+  eventId        String
+  categoryId     String
+  ownerId        String
+  teammateId     String
+  teammateEmail  String
+  ownerPhone     String
+  teammatePhone  String?
+  status         RegistrationStatus @default(PENDING)
+  declineReason  String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id])
+  owner      User     @relation("RegistrationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  teammate   User     @relation("RegistrationTeammate", fields: [teammateId], references: [id], onDelete: Cascade)
+  reviewedBy User?    @relation("RegistrationReviewer", fields: [reviewedById], references: [id])
+
+  @@unique([eventId, categoryId, ownerId])
+  @@index([eventId, status])
+  @@index([teammateEmail])
+}
+
+model Club {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members ClubMember[]
+}
+
+model ClubMember {
+  id        String   @id @default(cuid())
+  clubId    String
+  userId    String
+  roleTitle String?
+  createdAt DateTime @default(now())
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+}

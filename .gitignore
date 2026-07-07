@@ -1,7 +1,9 @@
-.next/
-node_modules/
+**/.next/
+**/node_modules/
+**/dist/
+backend/src/generated/
 test-output/
-.env*
-!.env.example
+**/.env*
+!**/.env.example
 npm-debug.log*
-tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
