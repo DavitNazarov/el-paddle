@@ -57,3 +57,13 @@ Mock login:
 - Admin: `admin@example.com`
 - Player: `nika.beridze@example.com`
 - Password: `Password123!`
+
+## Vercel Frontend Deploy
+
+This repository's root build checks both workspaces, including the backend Prisma build. Vercel is configured by `vercel.json` to build only the frontend workspace:
+
+```bash
+npm run build --workspace frontend
+```
+
+Set `NEXT_PUBLIC_API_URL` in Vercel to the deployed backend API URL, for example `https://api.example.com`.

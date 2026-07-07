@@ -259,3 +259,19 @@ On Linux, containers do not always have `host.docker.internal` by default, so us
 - Resend is optional in code, but production email delivery requires `RESEND_API_KEY`.
 - Gmail login is disabled unless `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` are configured.
 - Keep `.env` out of Git.
+
+## 11. Vercel Frontend-Only Deploy
+
+The backend is not a Vercel serverless app; it is an Express API intended to run from the Docker/VPS setup above. The root `npm run build` intentionally builds both backend and frontend, so Vercel uses `vercel.json` to build only the frontend workspace:
+
+```bash
+npm run build --workspace frontend
+```
+
+Set this Vercel environment variable:
+
+```dotenv
+NEXT_PUBLIC_API_URL=https://api.example.com
+```
+
+For auth cookies, prefer deploying the frontend and API on sibling subdomains of the same parent domain, for example `app.example.com` and `api.example.com`. If the frontend remains on a `*.vercel.app` domain while the API is on another domain, browser cookie rules can block session cookies on API requests.
