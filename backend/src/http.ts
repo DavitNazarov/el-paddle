@@ -42,7 +42,9 @@ export function isUniqueConstraintError(error: unknown) {
 
 export function isDatabaseConnectionError(error: unknown) {
   const code = errorCode(error);
-  if (code === 'P1000' || code === 'P1001' || code === 'P1002') return true;
+  if (code === 'P1000' || code === 'P1001' || code === 'P1002' || code === 'ECONNREFUSED') {
+    return true;
+  }
   if (!(error instanceof Error)) return false;
   return (
     error.message.includes('Authentication failed against the database') ||

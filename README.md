@@ -27,15 +27,16 @@ npm run prisma:migrate
 npm run db:seed
 ```
 
-Run backend:
+Run the full app:
+
+```bash
+npm run dev
+```
+
+Or run each side in a separate terminal:
 
 ```bash
 npm run dev:backend
-```
-
-Run frontend:
-
-```bash
 npm run dev:frontend
 ```
 

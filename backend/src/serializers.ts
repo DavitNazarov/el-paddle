@@ -30,6 +30,7 @@ export function serializeEvent(event: EventWithCategoryLinks) {
     date: event.date.toISOString(),
     location: event.location,
     description: event.description ?? '',
+    arrivalTime: event.arrivalTime?.toISOString() ?? null,
     isPublished: event.isPublished,
     categories: event.categories.map((link) => serializeCategory(link.category)),
   };

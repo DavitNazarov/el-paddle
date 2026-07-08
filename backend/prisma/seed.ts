@@ -84,6 +84,7 @@ async function upsertEvent({
   date,
   location,
   description,
+  arrivalTime,
   isPublished,
   createdById,
   categoryIds,
@@ -93,6 +94,7 @@ async function upsertEvent({
   date: Date;
   location: string;
   description: string;
+  arrivalTime?: Date | null;
   isPublished: boolean;
   createdById: string;
   categoryIds: string[];
@@ -104,6 +106,7 @@ async function upsertEvent({
       date,
       location,
       description,
+      arrivalTime: arrivalTime ?? null,
       isPublished,
       createdById,
     },
@@ -113,6 +116,7 @@ async function upsertEvent({
       date,
       location,
       description,
+      arrivalTime: arrivalTime ?? null,
       isPublished,
       createdById,
     },
@@ -243,6 +247,7 @@ async function main() {
     title: 'Tbilisi Summer Open',
     date: daysFromNow(12, 19),
     location: 'KUS TBA Padel Courts',
+    arrivalTime: daysFromNow(12, 17),
     description:
       'The next public tournament with verified two-player entries, admin approval and categories for serious but welcoming match play.',
     isPublished: true,

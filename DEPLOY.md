@@ -54,6 +54,10 @@ Optional values:
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REDIRECT_URI`
 
+Bootstrap-only value:
+
+- `FIRST_ADMIN_BOOTSTRAP_TOKEN` - set temporarily to create the first production admin, then remove it after the admin exists.
+
 Example production domain setup:
 
 ```dotenv
@@ -65,6 +69,12 @@ DATABASE_URL=postgresql://elpadel:YOUR_DB_PASSWORD@postgres:5432/elpadel?schema=
 ```
 
 Generate a strong `JWT_SECRET`:
+
+```bash
+openssl rand -base64 48
+```
+
+Generate a one-time first-admin bootstrap token:
 
 ```bash
 openssl rand -base64 48
@@ -112,7 +122,29 @@ Migration strategy note:
 - The tradeoff is that deployers must remember to run `prisma:migrate:deploy` after pulling code that includes new Prisma migrations.
 - The production backend image does not include TypeScript dev tooling, so the local `db:seed` script is not intended to run inside the production container.
 
-## 5. Logs
+## 5. Create The First Admin
+
+Use this only while the production database has no admin users. The endpoint requires `FIRST_ADMIN_BOOTSTRAP_TOKEN` and returns `409` after the first admin exists.
+
+```bash
+curl -X POST "$BACKEND_URL/api/admin/bootstrap" \
+  -H "content-type: application/json" \
+  -d '{
+    "bootstrapToken": "YOUR_FIRST_ADMIN_BOOTSTRAP_TOKEN",
+    "email": "you@example.com",
+    "name": "Your",
+    "surname": "Name",
+    "password": "Use-a-long-password"
+  }'
+```
+
+After it succeeds, remove `FIRST_ADMIN_BOOTSTRAP_TOKEN` from `.env` and recreate the backend container:
+
+```bash
+docker compose up -d --force-recreate backend
+```
+
+## 6. Logs
 
 Tail all logs:
 
@@ -138,7 +170,7 @@ Tail Postgres logs:
 docker compose logs -f postgres
 ```
 
-## 6. Update After Git Pull
+## 7. Update After Git Pull
 
 From the project directory:
 
@@ -162,7 +194,7 @@ If `NEXT_PUBLIC_API_URL` changed, rebuild the frontend:
 docker compose up -d --build frontend
 ```
 
-## 7. Nginx Reverse Proxy
+## 8. Nginx Reverse Proxy
 
 The provided config is:
 
@@ -200,7 +232,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## 8. HTTPS With Certbot
+## 9. HTTPS With Certbot
 
 Point DNS records to the VPS first:
 
@@ -234,7 +266,7 @@ Renewal check:
 sudo certbot renew --dry-run
 ```
 
-## 9. Existing System PostgreSQL Alternative
+## 10. Existing System PostgreSQL Alternative
 
 The default production compose uses a PostgreSQL container with a named volume:
 

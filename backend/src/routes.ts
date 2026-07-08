@@ -70,6 +70,8 @@ const registrationInclude = {
   reviewedBy: true,
 } as const;
 
+const ADMIN_BOOTSTRAP_LOCK_ID = 730_127_001;
+
 function startOfToday() {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
@@ -90,6 +92,18 @@ function frontendRedirect(path: string) {
 
 function isRegistrationStatus(status: string): status is RegistrationStatus {
   return Object.values(RegistrationStatus).includes(status as RegistrationStatus);
+}
+
+function hashForTiming(value: string) {
+  return crypto.createHash('sha256').update(value).digest();
+}
+
+function isBootstrapTokenValid(token: string) {
+  if (!token || !config.firstAdminBootstrapToken) return false;
+  return crypto.timingSafeEqual(
+    hashForTiming(token),
+    hashForTiming(config.firstAdminBootstrapToken),
+  );
 }
 
 type GoogleTokenResponse = {
@@ -123,6 +137,65 @@ function splitGoogleName(profile: GoogleProfile) {
 router.get('/health', (_request, response) => {
   response.json({ ok: true });
 });
+
+router.post('/api/admin/bootstrap', asyncHandler(async (request, response) => {
+  const body = typeof request.body === 'object' && request.body !== null
+    ? (request.body as Record<string, unknown>)
+    : {};
+  const token = cleanString(request.get('x-bootstrap-token') ?? body.bootstrapToken);
+  const email = cleanEmail(body.email);
+  const name = cleanString(body.name);
+  const surname = cleanString(body.surname);
+  const password = cleanString(body.password);
+
+  if (!config.firstAdminBootstrapToken) {
+    jsonError('Admin bootstrap is not configured.', 503);
+  }
+  if (!isBootstrapTokenValid(token)) jsonError('Invalid bootstrap token.', 401);
+  if (!isValidEmail(email)) jsonError('Enter a valid email.');
+  if (!name || !surname) jsonError('Name and surname are required.');
+  if (password.length < 8) jsonError('Password must be at least 8 characters.');
+
+  const passwordHash = await hashSecret(password);
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${ADMIN_BOOTSTRAP_LOCK_ID})`;
+
+    const adminCount = await tx.user.count({ where: { role: UserRole.ADMIN } });
+    if (adminCount > 0) jsonError('Admin account already exists.', 409);
+
+    const existing = await tx.user.findUnique({ where: { email } });
+    const data = {
+      email,
+      name,
+      surname,
+      passwordHash,
+      role: UserRole.ADMIN,
+      status: UserStatus.ACTIVE,
+      emailVerifiedAt: existing?.emailVerifiedAt ?? new Date(),
+    };
+
+    if (existing) {
+      return {
+        created: false,
+        user: await tx.user.update({
+          where: { id: existing.id },
+          data,
+        }),
+      };
+    }
+
+    return {
+      created: true,
+      user: await tx.user.create({ data }),
+    };
+  });
+
+  setSessionCookie(response, result.user);
+  response.status(result.created ? 201 : 200).json({
+    created: result.created,
+    user: toPublicUser(result.user),
+  });
+}));
 
 router.post('/api/auth/register', asyncHandler(async (request, response) => {
   const email = cleanEmail(request.body.email);
@@ -469,6 +542,14 @@ router.get('/api/events', asyncHandler(async (request, response) => {
   response.json({ events: events.map(serializeEvent) });
 }));
 
+function parseOptionalDateTime(value: unknown) {
+  if (value === null || value === '') return null;
+  if (typeof value !== 'string') return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date;
+}
+
 router.post('/api/events', asyncHandler(async (request, response) => {
   const admin = await requireAdmin(request);
   const title = cleanString(request.body.title);
@@ -477,11 +558,15 @@ router.post('/api/events', asyncHandler(async (request, response) => {
   const description = cleanString(request.body.description);
   const categoryIds = [...new Set(cleanStringArray(request.body.categoryIds))];
   const date = new Date(dateText);
+  const arrivalTime = parseOptionalDateTime(request.body.arrivalTime);
 
   if (title.length < 3) jsonError('Event title is too short.');
   if (!dateText || Number.isNaN(date.getTime())) jsonError('Enter a valid event date.');
   if (!location) jsonError('Event location is required.');
   if (!categoryIds.length) jsonError('Create and select at least one category first.');
+  if (request.body.arrivalTime !== undefined && request.body.arrivalTime !== null && request.body.arrivalTime !== '' && arrivalTime === undefined) {
+    jsonError('Enter a valid arrival time.');
+  }
 
   const categories = await prisma.category.findMany({
     where: { id: { in: categoryIds } },
@@ -498,6 +583,7 @@ router.post('/api/events', asyncHandler(async (request, response) => {
       date,
       location,
       description: description || null,
+      arrivalTime,
       createdById: admin.id,
       categories: {
         create: categoryIds.map((categoryId) => ({
@@ -514,13 +600,27 @@ router.post('/api/events', asyncHandler(async (request, response) => {
 router.patch('/api/events/:id', asyncHandler(async (request, response) => {
   await requireAdmin(request);
 
-  if (typeof request.body.isPublished !== 'boolean') {
-    jsonError('Publish status is required.');
+  const data: { isPublished?: boolean; arrivalTime?: Date | null } = {};
+
+  if (typeof request.body.isPublished === 'boolean') {
+    data.isPublished = request.body.isPublished;
+  }
+
+  if ('arrivalTime' in request.body) {
+    const arrivalTime = parseOptionalDateTime(request.body.arrivalTime);
+    if (request.body.arrivalTime !== null && request.body.arrivalTime !== '' && arrivalTime === undefined) {
+      jsonError('Enter a valid arrival time.');
+    }
+    data.arrivalTime = arrivalTime ?? null;
+  }
+
+  if (!Object.keys(data).length) {
+    jsonError('No valid event fields to update.');
   }
 
   const event = await prisma.event.update({
     where: { id: request.params.id },
-    data: { isPublished: request.body.isPublished },
+    data,
     include: eventInclude,
   });
 

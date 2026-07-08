@@ -22,11 +22,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const nextPath = params.next?.startsWith('/') ? params.next : '/dashboard';
 
   return (
-    <AuthShell
-      kicker="Player access"
-      title="Log in to your tournament dashboard."
-      copy="See upcoming events, team entries, admin decisions, club membership and your match record."
-    >
+    <AuthShell variant="login">
       <LoginForm nextPath={nextPath} oauthError={params.error} />
     </AuthShell>
   );

@@ -13,11 +13,7 @@ export default async function RegisterPage() {
   if (user) redirect(user.role === 'ADMIN' ? '/admin' : '/dashboard');
 
   return (
-    <AuthShell
-      kicker="Player registration"
-      title="Create your El Padel account."
-      copy="Use your verified email, name and surname. Team registrations are linked by teammate email and reviewed by the admin."
-    >
+    <AuthShell variant="register">
       <RegisterForm />
     </AuthShell>
   );

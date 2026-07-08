@@ -235,6 +235,36 @@ p {
   background: rgba(217, 191, 115, 0.7);
 }
 
+.dashboard-dialog-overlay {
+  animation: dashboard-dialog-overlay-in 180ms var(--padel-ease-out);
+}
+
+.dashboard-dialog-content {
+  animation: dashboard-dialog-content-in 220ms var(--padel-ease-out);
+}
+
+@keyframes dashboard-dialog-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dashboard-dialog-content-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

@@ -102,12 +102,13 @@ model Category {
 }
 
 model Event {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
   date        DateTime
   location    String
   description String?
-  isPublished Boolean  @default(false)
+  arrivalTime DateTime?
+  isPublished Boolean   @default(false)
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
