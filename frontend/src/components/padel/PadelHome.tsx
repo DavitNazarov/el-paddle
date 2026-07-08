@@ -88,6 +88,8 @@ const snapStops = [
   { id: 'contact', key: 'contact' },
 ] as const;
 
+type SnapStopId = (typeof snapStops)[number]['id'];
+
 const navSectionIds = navItems.map((item) => item.href.slice(1));
 
 /* ------------------------------------------------------------------ */
@@ -528,14 +530,14 @@ function SnapScrollController() {
   const reduceMotion = useReducedMotion();
   const { dictionary } = useI18n();
   const { scrollY } = useScroll();
-  const [activeSection, setActiveSection] = useState(snapStops[0].id);
+  const [activeSection, setActiveSection] = useState<SnapStopId>(snapStops[0].id);
   const snapAnimation = useRef<{ stop: () => void } | null>(null);
 
-  const readActiveSection = useCallback(() => {
+  const readActiveSection = useCallback((): SnapStopId => {
     if (typeof window === 'undefined') return snapStops[0].id;
 
     const anchorPoint = window.scrollY + window.innerHeight * 0.44;
-    let current = snapStops[0].id;
+    let current: SnapStopId = snapStops[0].id;
 
     snapStops.forEach((stop) => {
       const section = document.getElementById(stop.id);
