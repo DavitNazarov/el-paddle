@@ -158,7 +158,7 @@ router.post('/api/admin/bootstrap', asyncHandler(async (request, response) => {
 
   const passwordHash = await hashSecret(password);
   const result = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${ADMIN_BOOTSTRAP_LOCK_ID})`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${ADMIN_BOOTSTRAP_LOCK_ID})`;
 
     const adminCount = await tx.user.count({ where: { role: UserRole.ADMIN } });
     if (adminCount > 0) jsonError('Admin account already exists.', 409);
