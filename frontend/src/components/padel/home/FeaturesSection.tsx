@@ -1,7 +1,7 @@
 'use client';
 
 import { useI18n } from '@/components/shared/I18nProvider';
-import { Parallax, ParallaxLayer, Reveal } from './motion';
+import { Parallax, ParallaxLayer, Reveal, Stagger, StaggerItem } from './motion';
 import { ScrollSection, SectionIntro } from './scroll';
 
 export function FeaturesSection() {
@@ -46,27 +46,28 @@ export function FeaturesSection() {
                 </p>
               </div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
+              <Stagger className="mt-5 grid gap-3 md:grid-cols-3" delay={0.12} stagger={0.09}>
                 {features.tiers.map((tier, index) => (
-                  <article
-                    key={tier.place}
-                    className={`prize-tier relative overflow-hidden border border-[var(--padel-line)] p-4 ${
-                      index === 0 ? 'prize-tier--featured' : ''
-                    }`}
-                  >
-                    <span className="prize-tier__shine" aria-hidden />
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-muted)]/85">
-                      {tier.place}
-                    </p>
-                    <p className="font-display mt-2 text-2xl font-semibold leading-none text-[var(--padel-ivory)] md:text-3xl">
-                      {tier.amount}
-                    </p>
-                    <p className="mt-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-gold)]/90">
-                      {tier.bonus}
-                    </p>
-                  </article>
+                  <StaggerItem key={tier.place}>
+                    <article
+                      className={`prize-tier relative overflow-hidden border border-[var(--padel-line)] p-4 ${
+                        index === 0 ? 'prize-tier--featured' : ''
+                      }`}
+                    >
+                      <span className="prize-tier__shine" aria-hidden />
+                      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-muted)]/85">
+                        {tier.place}
+                      </p>
+                      <p className="font-display mt-2 text-2xl font-semibold leading-none text-[var(--padel-ivory)] md:text-3xl">
+                        {tier.amount}
+                      </p>
+                      <p className="mt-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-gold)]/90">
+                        {tier.bonus}
+                      </p>
+                    </article>
+                  </StaggerItem>
                 ))}
-              </div>
+              </Stagger>
             </div>
           </Parallax>
         </Reveal>

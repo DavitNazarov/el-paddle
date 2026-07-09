@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { DashboardClient } from '@/components/dashboard/DashboardClient';
+import { PlayerOverviewClient } from '@/components/dashboard/PlayerOverviewClient';
 import { getCurrentUser } from '@/lib/auth';
 
 export const metadata: Metadata = {
@@ -11,6 +11,7 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login?next=/dashboard');
   if (user.role === 'ADMIN') redirect('/admin');
+  if (!user.club) redirect('/complete-club');
 
-  return <DashboardClient initialUser={user} />;
+  return <PlayerOverviewClient initialUser={user} />;
 }

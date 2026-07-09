@@ -1,7 +1,7 @@
 'use client';
 
 import { useI18n } from '@/components/shared/I18nProvider';
-import { Parallax, Reveal, Tilt } from './motion';
+import { Parallax, Reveal, Stagger, StaggerItem, Tilt } from './motion';
 import { ScrollSection, SectionIntro } from './scroll';
 
 export function SponsorsSection() {
@@ -33,12 +33,11 @@ export function SponsorsSection() {
           </Parallax>
         </Reveal>
 
-        <div className="mt-8 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Stagger className="mt-8 grid gap-3 md:grid-cols-2 xl:grid-cols-4" delay={0.08} stagger={0.07}>
           {sponsors.items.map((sponsor, index) => (
-            <Reveal key={sponsor.title} delay={index * 0.06}>
-              <Parallax speed={[0.12, 0.42, 0.26][index] ?? 0.2}>
+            <StaggerItem key={sponsor.title}>
               <Tilt max={5}>
-              <article className="group relative overflow-hidden rounded-xl border border-[var(--padel-line)]/80 bg-[var(--padel-ink)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--padel-line-strong)]">
+              <article className="group relative h-full overflow-hidden rounded-xl border border-[var(--padel-line)]/80 bg-[var(--padel-ink)]/45 p-4 backdrop-blur-sm transition-all duration-300 hover:border-[var(--padel-line-strong)]">
                 <div
                   className={`pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-r ${
                     accentGradients[index % accentGradients.length]
@@ -66,12 +65,11 @@ export function SponsorsSection() {
                 </p>
               </article>
               </Tilt>
-              </Parallax>
-            </Reveal>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
 
-        <Reveal>
+        <Reveal delay={0.1}>
           <div className="mt-5 rounded-xl border border-[var(--padel-line)] bg-[var(--padel-red)]/8 px-4 py-3 text-sm leading-6 text-[var(--padel-muted)]">
             {sponsors.note}
           </div>

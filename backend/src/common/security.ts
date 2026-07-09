@@ -22,15 +22,15 @@ export function hashToken(token: string) {
 }
 
 export function addHours(hours: number) {
-  const date = new Date();
-  date.setHours(date.getHours() + hours);
-  return date;
+  return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+
+export function addMinutes(minutes: number) {
+  return new Date(Date.now() + minutes * 60 * 1000);
 }
 
 export function addDays(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date;
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
 export function timingSafeEqualString(a: string, b: string) {

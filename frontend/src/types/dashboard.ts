@@ -13,6 +13,9 @@ export type EventDto = {
   location: string;
   description: string;
   arrivalTime?: string | null;
+  participationFee: number;
+  bankAccountIban: string;
+  bankAccountReceiver: string;
   categories: CategoryDto[];
 };
 
@@ -39,6 +42,8 @@ export type RegistrationFormState = {
   ownerPhone: string;
   teammateEmail: string;
   teammatePhone: string;
+  /** Empty = enter a new teammate by email; otherwise a past teammate user id. */
+  savedTeammateId: string;
 };
 
 export type StatusFilter = 'ALL' | RegistrationDto['status'];

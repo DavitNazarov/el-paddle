@@ -1,9 +1,10 @@
-import type { PublicUser } from '@/types/auth';
+import type { PublicUser, UserRole, UserStatus } from '@/types/auth';
 
 export type CategoryDto = {
   id: string;
   name: string;
   description: string;
+  eventCount?: number;
 };
 
 export type EventDto = {
@@ -13,6 +14,9 @@ export type EventDto = {
   location: string;
   description: string;
   arrivalTime: string | null;
+  participationFee: number;
+  bankAccountIban: string;
+  bankAccountReceiver: string;
   isPublished: boolean;
   categories: CategoryDto[];
 };
@@ -40,6 +44,19 @@ export type ClubDto = {
     user: PublicUser;
   }[];
 };
+
+export type ClubOptionDto = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type AdminUserDto = PublicUser & {
+  createdAt: string;
+};
+
+export type UserRoleFilter = 'ALL' | UserRole;
+export type UserStatusFilter = 'ALL' | UserStatus | 'DISQUALIFIED';
 
 export type RegistrationFilter = 'ALL' | RegistrationDto['status'];
 export type BusyKey = string | null;

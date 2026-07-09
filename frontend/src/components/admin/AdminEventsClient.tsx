@@ -8,11 +8,11 @@ import {
   Eye,
   EyeOff,
   MapPin,
+  Pencil,
   Plus,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -21,11 +21,13 @@ import {
   EmptyState,
   FeedbackBanner,
   FilterChip,
+  MetaRow,
   SectionHeading,
   SurfaceCard,
   formControlClassName,
   softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
+import { Reveal } from '@/components/padel/home/motion';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -36,14 +38,57 @@ import { toDatetimeLocalValue } from '@/lib/utils/dates';
 
 type EventFilter = 'ALL' | 'PUBLISHED' | 'DRAFT';
 
-const emptyEventForm = {
+type EventFormState = {
+  title: string;
+  date: string;
+  location: string;
+  description: string;
+  arrivalTime: string;
+  participationFee: string;
+  bankAccountIban: string;
+  bankAccountReceiver: string;
+  categoryIds: string[];
+};
+
+const emptyEventForm: EventFormState = {
   title: '',
   date: '',
   location: '',
   description: '',
   arrivalTime: '',
-  categoryIds: [] as string[],
+  participationFee: '',
+  bankAccountIban: '',
+  bankAccountReceiver: '',
+  categoryIds: [],
 };
+
+function formFromEvent(event: EventDto): EventFormState {
+  return {
+    title: event.title,
+    date: toDatetimeLocalValue(event.date),
+    location: event.location,
+    description: event.description ?? '',
+    arrivalTime: toDatetimeLocalValue(event.arrivalTime),
+    participationFee: String(event.participationFee),
+    bankAccountIban: event.bankAccountIban,
+    bankAccountReceiver: event.bankAccountReceiver,
+    categoryIds: event.categories.map((category) => category.id),
+  };
+}
+
+function isEventFormReady(form: EventFormState) {
+  const iban = form.bankAccountIban.replace(/\s+/g, '').toUpperCase();
+  return (
+    form.title.trim().length >= 3 &&
+    Boolean(form.date) &&
+    Boolean(form.location.trim()) &&
+    form.categoryIds.length > 0 &&
+    form.participationFee !== '' &&
+    Number(form.participationFee) >= 0 &&
+    form.bankAccountReceiver.trim().length >= 2 &&
+    /^GE\d{2}[A-Z]{2}\d{16}$/.test(iban)
+  );
+}
 
 export function AdminEventsClient() {
   const { dictionary, t, formatDate } = useI18n();
@@ -53,9 +98,8 @@ export function AdminEventsClient() {
   const [events, setEvents] = useState<EventDto[]>([]);
   const [filter, setFilter] = useState<EventFilter>('ALL');
   const [createOpen, setCreateOpen] = useState(false);
-  const [arrivalEvent, setArrivalEvent] = useState<EventDto | null>(null);
-  const [eventForm, setEventForm] = useState(emptyEventForm);
-  const [arrivalDraft, setArrivalDraft] = useState('');
+  const [editingEvent, setEditingEvent] = useState<EventDto | null>(null);
+  const [eventForm, setEventForm] = useState<EventFormState>(emptyEventForm);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -75,6 +119,9 @@ export function AdminEventsClient() {
     }),
     [events],
   );
+
+  const formOpen = createOpen || Boolean(editingEvent);
+  const formMode = editingEvent ? 'edit' : 'create';
 
   async function load() {
     setLoading(true);
@@ -105,35 +152,63 @@ export function AdminEventsClient() {
     });
   }
 
+  function closeForm() {
+    setCreateOpen(false);
+    setEditingEvent(null);
+    setEventForm(emptyEventForm);
+  }
+
   function openCreate() {
+    setEditingEvent(null);
     setEventForm(emptyEventForm);
     setCreateOpen(true);
   }
 
-  function openArrival(event: EventDto) {
-    setArrivalEvent(event);
-    setArrivalDraft(toDatetimeLocalValue(event.arrivalTime));
+  function openEdit(event: EventDto) {
+    setCreateOpen(false);
+    setEditingEvent(event);
+    setEventForm(formFromEvent(event));
   }
 
-  async function createEvent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitEventForm(formEvent: FormEvent<HTMLFormElement>) {
+    formEvent.preventDefault();
     setError('');
     setMessage('');
-    setBusy('create');
-    const response = await apiFetch('/api/events', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(eventForm),
-    });
+    setBusy(formMode);
+
+    const payload = {
+      title: eventForm.title,
+      date: eventForm.date,
+      location: eventForm.location,
+      description: eventForm.description,
+      arrivalTime: eventForm.arrivalTime || null,
+      participationFee: Number(eventForm.participationFee),
+      bankAccountIban: eventForm.bankAccountIban.replace(/\s+/g, '').toUpperCase(),
+      bankAccountReceiver: eventForm.bankAccountReceiver.trim(),
+      categoryIds: eventForm.categoryIds,
+    };
+
+    const response = editingEvent
+      ? await apiFetch(`/api/events/${editingEvent.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      : await apiFetch('/api/events', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
     const result = (await response.json()) as { error?: string };
     setBusy(null);
     if (!response.ok) {
-      setError(result.error ?? admin.messages.actionFailed);
+      setError(result.error ?? (editingEvent ? admin.messages.updateFailed : admin.messages.actionFailed));
       return;
     }
-    setMessage(admin.messages.draftCreated);
-    setEventForm(emptyEventForm);
-    setCreateOpen(false);
+
+    setMessage(editingEvent ? admin.messages.eventUpdated : admin.messages.draftCreated);
+    closeForm();
     await load();
   }
 
@@ -156,44 +231,22 @@ export function AdminEventsClient() {
     await load();
   }
 
-  async function saveArrivalTime(arrivalTime?: string | null) {
-    if (!arrivalEvent) return;
-    const draft = arrivalTime !== undefined ? arrivalTime : arrivalDraft;
-    setError('');
-    setMessage('');
-    setBusy(`arrival-${arrivalEvent.id}`);
-    const response = await apiFetch(`/api/events/${arrivalEvent.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ arrivalTime: draft || null }),
-    });
-    const result = (await response.json()) as { error?: string };
-    setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.updateFailed);
-      return;
-    }
-    setMessage(admin.events.arrivalTimeUpdated);
-    setArrivalEvent(null);
-    await load();
-  }
-
   return (
     <AdminShell title={copy.title} description={copy.description} eyebrow={copy.eyebrow}>
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
       {!categories.length && !loading ? (
-        <SurfaceCard className="mb-6 border-[var(--padel-gold)]/40 bg-[var(--padel-gold)]/10">
-          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <SurfaceCard featured className="mb-6">
+          <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="font-semibold text-[var(--padel-ink)]">{copy.needCategoriesTitle}</h3>
-              <p className="mt-1 text-sm text-[rgba(19,2,2,0.62)]">{copy.needCategoriesDescription}</p>
+              <h3 className="font-semibold text-[var(--padel-ivory)]">{copy.needCategoriesTitle}</h3>
+              <p className="mt-1 text-sm text-[rgba(246,239,225,0.55)]">{copy.needCategoriesDescription}</p>
             </div>
-            <Button asChild variant="red">
+            <Button asChild variant="red" className="rounded-md">
               <Link href="/admin/categories">{copy.goToCategories}</Link>
             </Button>
-          </CardContent>
+          </div>
         </SurfaceCard>
       ) : null}
 
@@ -209,7 +262,7 @@ export function AdminEventsClient() {
             {admin.events.draft}
           </FilterChip>
         </div>
-        <Button variant="red" onClick={openCreate} disabled={!categories.length}>
+        <Button variant="red" className="rounded-md" onClick={openCreate} disabled={!categories.length}>
           <Plus className="h-4 w-4" />
           {copy.showCreate}
         </Button>
@@ -225,11 +278,11 @@ export function AdminEventsClient() {
             icon={CalendarPlus}
             action={
               categories.length ? (
-                <Button variant="red" onClick={openCreate}>
+                <Button variant="red" className="rounded-md" onClick={openCreate}>
                   {copy.showCreate}
                 </Button>
               ) : (
-                <Button asChild variant="red">
+                <Button asChild variant="red" className="rounded-md">
                   <Link href="/admin/categories">{copy.goToCategories}</Link>
                 </Button>
               )
@@ -237,83 +290,128 @@ export function AdminEventsClient() {
           />
         ) : null}
 
-        {filteredEvents.map((event) => {
+        {filteredEvents.map((event, index) => {
           const publishBusy = busy === `publish-${event.id}`;
           return (
-            <SurfaceCard key={event.id}>
-              <CardContent className="p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={event.isPublished ? 'default' : 'gold'}>
-                        {event.isPublished ? admin.events.published : admin.events.draft}
-                      </Badge>
-                      {event.categories.map((category) => (
-                        <Badge key={category.id} variant="outline" className="border-[rgba(19,2,2,0.12)]">
-                          {category.name}
+            <Reveal key={event.id} delay={Math.min(index * 0.04, 0.2)}>
+              <SurfaceCard>
+                <div className="p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          className={
+                            event.isPublished
+                              ? 'border-transparent bg-emerald-600/90 text-white'
+                              : 'border-[var(--padel-gold)]/40 bg-[var(--padel-gold)]/20 text-[var(--padel-gold-2)]'
+                          }
+                        >
+                          {event.isPublished ? admin.events.published : admin.events.draft}
                         </Badge>
-                      ))}
-                    </div>
-                    <h3 className="mt-3 text-xl font-semibold text-[var(--padel-ink)]">{event.title}</h3>
-                    <div className="mt-3 grid gap-2 text-sm text-[rgba(19,2,2,0.62)] sm:grid-cols-2">
-                      <span className="inline-flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 text-[var(--padel-red)]" />
-                        {formatDate(event.date, { dateStyle: 'medium', timeStyle: 'short' })}
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-[var(--padel-red)]" />
-                        {event.location}
-                      </span>
-                    </div>
-                    {event.arrivalTime ? (
-                      <p className="mt-3 text-sm font-medium text-[var(--padel-red)]">
-                        {admin.events.arrivalTime}:{' '}
-                        {formatDate(event.arrivalTime, { dateStyle: 'medium', timeStyle: 'short' })}
+                        {event.categories.map((category) => (
+                          <Badge
+                            key={category.id}
+                            className="border-[rgba(246,239,225,0.18)] bg-transparent text-[rgba(246,239,225,0.7)]"
+                          >
+                            {category.name}
+                          </Badge>
+                        ))}
+                      </div>
+                      <h3 className="font-display mt-3 text-xl font-semibold text-[var(--padel-ivory)]">{event.title}</h3>
+                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+                        <MetaRow icon={CalendarDays}>
+                          {formatDate(event.date, { dateStyle: 'medium', timeStyle: 'short' })}
+                        </MetaRow>
+                        <MetaRow icon={MapPin}>{event.location}</MetaRow>
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-[var(--padel-gold)]">
+                        {admin.events.feeLabel}: {event.participationFee} GEL
                       </p>
-                    ) : null}
-                    {event.description ? (
-                      <p className="mt-3 text-sm leading-6 text-[rgba(19,2,2,0.58)]">{event.description}</p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
-                    <Button
-                      variant={event.isPublished ? 'outline' : 'red'}
-                      className={cn('shrink-0', event.isPublished && softButtonClassName)}
-                      disabled={publishBusy}
-                      onClick={() => togglePublish(event)}
-                    >
-                      {event.isPublished ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      {publishBusy ? admin.messages.saving : event.isPublished ? admin.events.unpublish : admin.events.publish}
-                    </Button>
-                    <Button variant="outline" className={softButtonClassName} onClick={() => openArrival(event)}>
-                      {copy.arrivalSettings}
-                    </Button>
+                      <p className="mt-1 text-sm text-[rgba(246,239,225,0.65)]">
+                        {admin.events.receiverLabel}:{' '}
+                        <span className="text-[var(--padel-ivory)]">{event.bankAccountReceiver}</span>
+                      </p>
+                      <p className="mt-1 text-sm text-[rgba(246,239,225,0.65)]">
+                        {admin.events.ibanLabel}:{' '}
+                        <span className="font-mono tracking-wide text-[var(--padel-ivory)]">
+                          {event.bankAccountIban}
+                        </span>
+                      </p>
+                      {event.arrivalTime ? (
+                        <p className="mt-2 text-sm font-medium text-[var(--padel-gold)]">
+                          {admin.events.arrivalTime}:{' '}
+                          {formatDate(event.arrivalTime, { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
+                      ) : null}
+                      {event.description ? (
+                        <p className="mt-3 text-sm leading-6 text-[rgba(246,239,225,0.55)]">{event.description}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+                      <Button
+                        variant="outline"
+                        className={cn(softButtonClassName, 'rounded-md')}
+                        onClick={() => openEdit(event)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        {copy.edit}
+                      </Button>
+                      {event.isPublished ? (
+                        <Button
+                          variant="outline"
+                          className={cn('shrink-0 rounded-md', softButtonClassName)}
+                          disabled={publishBusy}
+                          onClick={() => togglePublish(event)}
+                        >
+                          <EyeOff className="h-4 w-4" />
+                          {publishBusy ? admin.messages.saving : admin.events.unpublish}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="red"
+                          className="shrink-0 rounded-md"
+                          disabled={publishBusy}
+                          onClick={() => togglePublish(event)}
+                        >
+                          <Eye className="h-4 w-4" />
+                          {publishBusy ? admin.messages.saving : admin.events.publish}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </SurfaceCard>
+              </SurfaceCard>
+            </Reveal>
           );
         })}
       </div>
 
       <DashboardModal
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        title={admin.events.createEvent}
-        description={copy.createDescription}
+        open={formOpen}
+        onOpenChange={(open) => {
+          if (!open) closeForm();
+        }}
+        title={formMode === 'edit' ? copy.editTitle : admin.events.createEvent}
+        description={formMode === 'edit' ? copy.editDescription : copy.createDescription}
         size="xl"
         footer={
           <ModalFormFooter
-            formId="create-event-form"
-            onCancel={() => setCreateOpen(false)}
+            formId="event-form"
+            onCancel={closeForm}
             cancelLabel={t('common.cancel')}
-            busy={busy === 'create'}
-            disabled={!eventForm.categoryIds.length}
-            submitLabel={busy === 'create' ? admin.messages.saving : admin.events.createDraft}
+            busy={busy === formMode}
+            disabled={!isEventFormReady(eventForm)}
+            submitLabel={
+              busy === formMode
+                ? admin.messages.saving
+                : formMode === 'edit'
+                  ? copy.saveChanges
+                  : admin.events.createDraft
+            }
           />
         }
       >
-        <form id="create-event-form" onSubmit={createEvent} className="space-y-4">
+        <form id="event-form" onSubmit={submitEventForm} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <DashboardField label={admin.events.eventTitle} id="event-title">
               <Input
@@ -336,16 +434,74 @@ export function AdminEventsClient() {
               />
             </DashboardField>
           </div>
-          <DashboardField label={admin.events.location} id="event-location">
-            <Input
-              id="event-location"
-              required
-              value={eventForm.location}
-              onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
-              placeholder={admin.events.locationPlaceholder}
-              className={formControlClassName}
-            />
-          </DashboardField>
+          <div className="grid gap-4 md:grid-cols-2">
+            <DashboardField label={admin.events.location} id="event-location">
+              <Input
+                id="event-location"
+                required
+                value={eventForm.location}
+                onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
+                placeholder={admin.events.locationPlaceholder}
+                className={formControlClassName}
+              />
+            </DashboardField>
+            <DashboardField
+              label={admin.events.participationFee}
+              id="event-fee"
+              hint={admin.events.participationFeeHint}
+            >
+              <Input
+                id="event-fee"
+                required
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                value={eventForm.participationFee}
+                onChange={(event) =>
+                  setEventForm((current) => ({ ...current, participationFee: event.target.value }))
+                }
+                placeholder={admin.events.participationFeePlaceholder}
+                className={formControlClassName}
+              />
+            </DashboardField>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <DashboardField
+              label={admin.events.bankAccountReceiver}
+              id="event-receiver"
+              hint={admin.events.bankAccountReceiverHint}
+            >
+              <Input
+                id="event-receiver"
+                required
+                value={eventForm.bankAccountReceiver}
+                onChange={(event) =>
+                  setEventForm((current) => ({ ...current, bankAccountReceiver: event.target.value }))
+                }
+                placeholder={admin.events.bankAccountReceiverPlaceholder}
+                className={formControlClassName}
+              />
+            </DashboardField>
+            <DashboardField
+              label={admin.events.bankAccountIban}
+              id="event-iban"
+              hint={admin.events.bankAccountIbanHint}
+            >
+              <Input
+                id="event-iban"
+                required
+                value={eventForm.bankAccountIban}
+                onChange={(event) =>
+                  setEventForm((current) => ({ ...current, bankAccountIban: event.target.value }))
+                }
+                placeholder={admin.events.bankAccountIbanPlaceholder}
+                className={cn(formControlClassName, 'font-mono tracking-wide uppercase')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </DashboardField>
+          </div>
           <DashboardField label={admin.events.arrivalTime} id="event-arrival-time" hint={admin.events.arrivalTimeHint}>
             <Input
               id="event-arrival-time"
@@ -394,57 +550,6 @@ export function AdminEventsClient() {
             </div>
           </fieldset>
         </form>
-      </DashboardModal>
-
-      <DashboardModal
-        open={Boolean(arrivalEvent)}
-        onOpenChange={(open) => {
-          if (!open) setArrivalEvent(null);
-        }}
-        title={copy.editArrivalTitle}
-        description={copy.editArrivalDescription}
-        size="md"
-        footer={
-          <>
-            <Button type="button" variant="outline" className={softButtonClassName} onClick={() => setArrivalEvent(null)}>
-              {t('common.cancel')}
-            </Button>
-            {arrivalEvent?.arrivalTime ? (
-              <Button
-                type="button"
-                variant="outline"
-                className={softButtonClassName}
-                disabled={busy === `arrival-${arrivalEvent.id}`}
-                onClick={() => {
-                  setArrivalDraft('');
-                  void saveArrivalTime(null);
-                }}
-              >
-                {admin.events.clearArrivalTime}
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="red"
-              disabled={!arrivalEvent || busy === `arrival-${arrivalEvent.id}`}
-              onClick={() => saveArrivalTime()}
-            >
-              {busy?.startsWith('arrival-') ? admin.messages.saving : admin.events.saveArrivalTime}
-            </Button>
-          </>
-        }
-      >
-        {arrivalEvent ? (
-          <DashboardField label={admin.events.arrivalTime} id="modal-arrival-time">
-            <Input
-              id="modal-arrival-time"
-              type="datetime-local"
-              value={arrivalDraft}
-              onChange={(event) => setArrivalDraft(event.target.value)}
-              className={formControlClassName}
-            />
-          </DashboardField>
-        ) : null}
       </DashboardModal>
     </AdminShell>
   );

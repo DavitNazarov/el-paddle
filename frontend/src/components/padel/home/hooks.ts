@@ -16,6 +16,9 @@ export type PublicEvent = {
   location: string;
   description: string;
   arrivalTime: string | null;
+  participationFee: number;
+  bankAccountIban: string;
+  bankAccountReceiver: string;
   categories: PublicCategory[];
 };
 

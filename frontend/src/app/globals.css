@@ -240,7 +240,10 @@ p {
 }
 
 .dashboard-dialog-content {
-  animation: dashboard-dialog-content-in 220ms var(--padel-ease-out);
+  /* Animate only opacity/scale — never `transform`. Tailwind v4 centering uses
+     the separate `translate` property; a `transform` keyframe stacks on top and
+     snaps when the animation ends (modal "bounce"). */
+  animation: dashboard-dialog-content-in 200ms var(--padel-ease-out);
 }
 
 @keyframes dashboard-dialog-overlay-in {
@@ -256,12 +259,12 @@ p {
 @keyframes dashboard-dialog-content-in {
   from {
     opacity: 0;
-    transform: translate(-50%, calc(-50% + 10px)) scale(0.98);
+    scale: 0.985;
   }
 
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    scale: 1;
   }
 }
 

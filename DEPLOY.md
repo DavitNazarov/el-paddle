@@ -288,9 +288,16 @@ On Linux, containers do not always have `host.docker.internal` by default, so us
 - Frontend healthcheck hits `/`.
 - Docker images use Node 22 because this project uses Prisma 7.8, whose dependency tree expects Node 22+.
 - No Socket.IO/WebSocket server was detected in the codebase.
-- Resend is optional in code, but production email delivery requires `RESEND_API_KEY`.
+- `RESEND_API_KEY` is required in production (`NODE_ENV=production`). Without it, auth emails fail closed (no console fallback that could mark users verified without delivery).
+- After bootstrapping the first admin, remove `FIRST_ADMIN_BOOTSTRAP_TOKEN` from `.env` and recreate the backend container. In production the backend **refuses to start** if the token is still set while an admin already exists.
+- Logout bumps `User.sessionVersion`, which invalidates outstanding JWTs for that account (stolen cookies stop working after logout).
+- Security-relevant actions emit structured `[audit]` JSON lines to stdout (login success/failure, logout, bootstrap, disqualify, account delete).
 - Gmail login is disabled unless `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` are configured.
 - Keep `.env` out of Git.
+- Nginx config in `deploy/nginx.conf` rate-limits `/api/auth/login`, `/register`, `/verify`, and `/api/admin/bootstrap`. The Express app also applies in-process limits.
+- Postgres is not published on the host in `docker-compose.yml` (backend-only network access).
+- CI runs `npm audit --audit-level=high` on pull requests. Locally: `npm run audit`.
+- Known moderate advisories in transitive `next`/`postcss` and `prisma`/`@hono/node-server` currently require major downgrades or unreleased upgrades — do **not** run `npm audit fix --force`. Re-check after Next 16.3+ / Prisma 7.9+ land.
 
 ## 11. Vercel Frontend-Only Deploy
 

@@ -8,6 +8,7 @@ import {
   cleanStringArray,
   isDatabaseConnectionError,
   jsonError,
+  requireParamId,
 } from '../../common/http.js';
 import { serializeEvent } from '../../common/serializers.js';
 import {
@@ -19,6 +20,85 @@ import {
 
 export const eventsRouter = Router();
 
+function normalizeGeorgianIban(value: unknown) {
+  return cleanString(value).replace(/\s+/g, '').toUpperCase();
+}
+
+function isValidGeorgianIban(iban: string) {
+  // GE + 2 check digits + 2-letter bank code + 16 digits = 22 chars
+  return /^GE\d{2}[A-Z]{2}\d{16}$/.test(iban);
+}
+
+function parseEventDetails(body: Record<string, unknown>, { requireAll }: { requireAll: boolean }) {
+  const has = (key: string) => key in body;
+
+  const title = has('title') || requireAll ? cleanString(body.title) : undefined;
+  const dateText = has('date') || requireAll ? cleanString(body.date) : undefined;
+  const location = has('location') || requireAll ? cleanString(body.location) : undefined;
+  const description = has('description') || requireAll ? cleanString(body.description) : undefined;
+  const categoryIds =
+    has('categoryIds') || requireAll ? [...new Set(cleanStringArray(body.categoryIds))] : undefined;
+
+  let date: Date | undefined;
+  if (dateText !== undefined) {
+    date = new Date(dateText);
+    if (!dateText || Number.isNaN(date.getTime())) jsonError('Enter a valid event date.');
+  }
+
+  let arrivalTime: Date | null | undefined;
+  if (has('arrivalTime') || requireAll) {
+    arrivalTime = parseOptionalDateTime(body.arrivalTime);
+    if (body.arrivalTime !== undefined && body.arrivalTime !== null && body.arrivalTime !== '' && arrivalTime === undefined) {
+      jsonError('Enter a valid arrival time.');
+    }
+    if (!requireAll && (body.arrivalTime === null || body.arrivalTime === '')) {
+      arrivalTime = null;
+    }
+  }
+
+  let participationFee: number | undefined;
+  if (has('participationFee') || requireAll) {
+    participationFee = Number(body.participationFee);
+    if (!Number.isInteger(participationFee) || participationFee < 0) {
+      jsonError('Enter a valid participation fee (GEL).');
+    }
+  }
+
+  let bankAccountIban: string | undefined;
+  if (has('bankAccountIban') || requireAll) {
+    bankAccountIban = normalizeGeorgianIban(body.bankAccountIban);
+    if (!isValidGeorgianIban(bankAccountIban)) {
+      jsonError('Enter a valid Georgian IBAN (GE…).');
+    }
+  }
+
+  let bankAccountReceiver: string | undefined;
+  if (has('bankAccountReceiver') || requireAll) {
+    bankAccountReceiver = cleanString(body.bankAccountReceiver);
+    if (!bankAccountReceiver || bankAccountReceiver.length < 2) {
+      jsonError('Enter the money receiver name.');
+    }
+  }
+
+  if (title !== undefined && title.length < 3) jsonError('Event title is too short.');
+  if (location !== undefined && !location) jsonError('Event location is required.');
+  if (categoryIds !== undefined && !categoryIds.length) {
+    jsonError('Create and select at least one category first.');
+  }
+
+  return {
+    title,
+    date,
+    location,
+    description,
+    arrivalTime,
+    participationFee,
+    bankAccountIban,
+    bankAccountReceiver,
+    categoryIds,
+  };
+}
+
 eventsRouter.get('/api/events', asyncHandler(async (request, response) => {
   const user = await getCurrentUser(request);
   const adminScope = request.query.scope === 'admin' && user?.role === UserRole.ADMIN;
@@ -28,29 +108,18 @@ eventsRouter.get('/api/events', asyncHandler(async (request, response) => {
 
 eventsRouter.post('/api/events', asyncHandler(async (request, response) => {
   const admin = await requireAdmin(request);
-  const title = cleanString(request.body.title);
-  const dateText = cleanString(request.body.date);
-  const location = cleanString(request.body.location);
-  const description = cleanString(request.body.description);
-  const categoryIds = [...new Set(cleanStringArray(request.body.categoryIds))];
-  const date = new Date(dateText);
-  const arrivalTime = parseOptionalDateTime(request.body.arrivalTime);
-
-  if (title.length < 3) jsonError('Event title is too short.');
-  if (!dateText || Number.isNaN(date.getTime())) jsonError('Enter a valid event date.');
-  if (!location) jsonError('Event location is required.');
-  if (!categoryIds.length) jsonError('Create and select at least one category first.');
-  if (request.body.arrivalTime !== undefined && request.body.arrivalTime !== null && request.body.arrivalTime !== '' && arrivalTime === undefined) {
-    jsonError('Enter a valid arrival time.');
-  }
+  const details = parseEventDetails(request.body, { requireAll: true });
 
   const event = await createEvent({
-    title,
-    date,
-    location,
-    description,
-    arrivalTime,
-    categoryIds,
+    title: details.title!,
+    date: details.date!,
+    location: details.location!,
+    description: details.description ?? '',
+    arrivalTime: details.arrivalTime,
+    participationFee: details.participationFee!,
+    bankAccountIban: details.bankAccountIban!,
+    bankAccountReceiver: details.bankAccountReceiver!,
+    categoryIds: details.categoryIds!,
     createdById: admin.id,
   });
 
@@ -60,25 +129,28 @@ eventsRouter.post('/api/events', asyncHandler(async (request, response) => {
 eventsRouter.patch('/api/events/:id', asyncHandler(async (request, response) => {
   await requireAdmin(request);
 
-  const data: { isPublished?: boolean; arrivalTime?: Date | null } = {};
+  const details = parseEventDetails(request.body, { requireAll: false });
+  const data: Parameters<typeof updateEvent>[1] = {};
+
+  if (details.title !== undefined) data.title = details.title;
+  if (details.date !== undefined) data.date = details.date;
+  if (details.location !== undefined) data.location = details.location;
+  if (details.description !== undefined) data.description = details.description;
+  if (details.arrivalTime !== undefined) data.arrivalTime = details.arrivalTime ?? null;
+  if (details.participationFee !== undefined) data.participationFee = details.participationFee;
+  if (details.bankAccountIban !== undefined) data.bankAccountIban = details.bankAccountIban;
+  if (details.bankAccountReceiver !== undefined) data.bankAccountReceiver = details.bankAccountReceiver;
+  if (details.categoryIds !== undefined) data.categoryIds = details.categoryIds;
 
   if (typeof request.body.isPublished === 'boolean') {
     data.isPublished = request.body.isPublished;
-  }
-
-  if ('arrivalTime' in request.body) {
-    const arrivalTime = parseOptionalDateTime(request.body.arrivalTime);
-    if (request.body.arrivalTime !== null && request.body.arrivalTime !== '' && arrivalTime === undefined) {
-      jsonError('Enter a valid arrival time.');
-    }
-    data.arrivalTime = arrivalTime ?? null;
   }
 
   if (!Object.keys(data).length) {
     jsonError('No valid event fields to update.');
   }
 
-  const event = await updateEvent(request.params.id, data);
+  const event = await updateEvent(requireParamId(request.params.id), data);
   response.json({ event: serializeEvent(event) });
 }));
 

@@ -45,14 +45,20 @@ export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProp
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const data = await readApiJson<{ error?: string }>(response, {});
+      const data = await readApiJson<{ error?: string; user?: { role?: string; club?: unknown } }>(response, {});
 
       if (!response.ok) {
         setError(data.error ?? t('forms.login.loginError'));
         return;
       }
 
-      router.push(nextPath);
+      const destination =
+        data.user?.role === 'ADMIN'
+          ? '/admin'
+          : data.user?.club
+            ? nextPath
+            : '/complete-club';
+      router.push(destination);
       router.refresh();
     } catch {
       setError(t('forms.apiConnectionError', { url: API_BASE_URL }));

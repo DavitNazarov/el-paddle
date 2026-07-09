@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { softButtonClassName } from '@/components/shared/dashboard/DashboardUI';
+import { modalSoftButtonClassName } from '@/components/shared/dashboard/DashboardUI';
 
 type ModalFormFooterProps = {
   formId?: string;
@@ -31,7 +31,7 @@ export function ModalFormFooter({
 }: ModalFormFooterProps) {
   return (
     <>
-      <Button type="button" variant="outline" className={softButtonClassName} onClick={onCancel} disabled={busy}>
+      <Button type="button" variant="outline" className={modalSoftButtonClassName} onClick={onCancel} disabled={busy}>
         {cancelLabel}
       </Button>
       <Button

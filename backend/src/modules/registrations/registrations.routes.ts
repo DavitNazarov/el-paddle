@@ -7,7 +7,9 @@ import {
   cleanString,
   isValidEmail,
   jsonError,
+  requireParamId,
 } from '../../common/http.js';
+import { auditLog, requestIp } from '../../common/audit.js';
 import { serializeRegistration } from '../../common/serializers.js';
 import {
   createRegistration,
@@ -66,11 +68,19 @@ registrationsRouter.patch('/api/admin/registrations/:id', asyncHandler(async (re
   }
 
   const registration = await updateRegistrationStatus(
-    request.params.id,
+    requireParamId(request.params.id),
     status,
     declineReason,
     admin.id,
   );
+
+  auditLog({
+    event: 'admin.registration_status',
+    outcome: 'success',
+    userId: admin.id,
+    ip: requestIp(request),
+    detail: `${registration.id}:${status}`,
+  });
 
   response.json({ registration: serializeRegistration(registration) });
 }));

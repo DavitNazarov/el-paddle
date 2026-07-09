@@ -16,6 +16,8 @@ import { PadelBall3D } from '../PadelBall3D';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { ScrollSection } from './scroll';
 
+const easeOut = [0.16, 1, 0.3, 1] as const;
+
 export function Hero() {
   const reduceMotion = useReducedMotion();
   const { dictionary } = useI18n();
@@ -35,26 +37,37 @@ export function Hero() {
       <motion.div
         initial={reduceMotion ? false : { opacity: 0, y: 18 }}
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.8, ease: easeOut }}
         style={reduceMotion ? undefined : { y: brandY }}
         className="relative z-10 mx-auto flex max-w-5xl flex-col items-center text-center"
       >
-        <Image
-          src="/images/el-padel-logo.png"
-          alt="El Padel — gold matador crest"
-          width={360}
-          height={240}
-          priority
-          className="hero-crest h-auto w-[188px] object-contain md:w-[228px]"
-        />
+        <motion.div
+          animate={reduceMotion ? undefined : { y: [0, -5, 0] }}
+          transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Image
+            src="/images/el-padel-logo.png"
+            alt="El Padel — gold matador crest"
+            width={360}
+            height={240}
+            priority
+            className="hero-crest h-auto w-[188px] object-contain md:w-[228px]"
+          />
+        </motion.div>
         <p className="font-display -mt-1 text-[0.7rem] font-semibold uppercase tracking-[0.38em] text-[var(--padel-gold)] md:text-xs">
           {hero.subtitle}
         </p>
         <div className="hero-chips mt-3 flex flex-wrap items-center justify-center gap-1.5">
-          {hero.chips.slice(0, 3).map((chip) => (
-            <span key={chip} className="hero-chip">
+          {hero.chips.slice(0, 3).map((chip, index) => (
+            <motion.span
+              key={chip}
+              className="hero-chip"
+              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.42 + index * 0.08, ease: easeOut }}
+            >
               {chip}
-            </span>
+            </motion.span>
           ))}
         </div>
       </motion.div>
@@ -62,7 +75,7 @@ export function Hero() {
       <motion.div
         initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 24 }}
         animate={reduceMotion ? undefined : { opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.92, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.92, delay: 0.1, ease: easeOut }}
         style={reduceMotion ? undefined : { y: ballY }}
         className="poster-ball-wrap pointer-events-auto relative z-20 mx-auto mt-2 aspect-square w-full max-w-[480px] md:mt-3"
       >
@@ -78,7 +91,7 @@ export function Hero() {
                   transition={{
                     duration: 0.85,
                     delay: 0.34 + index * 0.09,
-                    ease: [0.16, 1, 0.3, 1],
+                    ease: easeOut,
                   }}
                 >
                   {line}
@@ -92,7 +105,7 @@ export function Hero() {
       <motion.div
         initial={reduceMotion ? false : { opacity: 0, scale: 0.8 }}
         animate={reduceMotion ? undefined : { opacity: 1, scale: 1 }}
-        transition={{ duration: 0.9, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.9, delay: 0.5, ease: easeOut }}
         className="hero-badge absolute right-[7%] top-[30%] z-10 hidden xl:block"
         aria-hidden
       >
@@ -115,11 +128,16 @@ export function Hero() {
       <motion.div
         initial={reduceMotion ? false : { opacity: 0, y: 18 }}
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-        transition={{ duration: 0.72, delay: 0.28, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.72, delay: 0.28, ease: easeOut }}
         style={reduceMotion ? undefined : { y: footerY }}
         className="poster-footer relative z-0 mx-auto mt-6 grid w-full max-w-7xl gap-4 md:absolute md:inset-x-10 md:bottom-4 md:mt-0 md:w-auto md:grid-cols-[minmax(0,1fr)_4.5rem_minmax(0,1fr)] md:items-end md:gap-0 lg:grid-cols-[minmax(0,1fr)_5.5rem_minmax(0,1fr)]"
       >
-        <div className="poster-meta glass-card min-w-0 w-full justify-self-start border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-sm">
+        <motion.div
+          className="poster-meta glass-card min-w-0 w-full justify-self-start border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-sm"
+          initial={reduceMotion ? false : { opacity: 0, x: -18 }}
+          animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
+          transition={{ duration: 0.7, delay: 0.48, ease: easeOut }}
+        >
           <p className="mb-2 flex items-center gap-2 text-[0.58rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-gold)]">
             <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span className="min-w-0 truncate">{hero.days}</span>
@@ -128,13 +146,28 @@ export function Hero() {
             <span className="font-display text-xl font-light leading-none md:text-2xl">TBA</span>
             <span className="font-display text-lg font-light lowercase leading-none md:text-xl">{hero.year}</span>
           </div>
-          <span className="poster-meta__bar mt-3 block h-px w-full" />
-        </div>
+          <motion.span
+            className="poster-meta__bar mt-3 block h-px w-full origin-left"
+            initial={reduceMotion ? false : { scaleX: 0 }}
+            animate={reduceMotion ? undefined : { scaleX: 1 }}
+            transition={{ duration: 0.9, delay: 0.72, ease: easeOut }}
+          />
+        </motion.div>
 
         <div className="hidden md:block" aria-hidden />
 
-        <div className="poster-meta glass-card min-w-0 w-full justify-self-end border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-md md:text-right">
-          <span className="poster-meta__bar mb-3 block h-px w-full" />
+        <motion.div
+          className="poster-meta glass-card min-w-0 w-full justify-self-end border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-md md:text-right"
+          initial={reduceMotion ? false : { opacity: 0, x: 18 }}
+          animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
+          transition={{ duration: 0.7, delay: 0.56, ease: easeOut }}
+        >
+          <motion.span
+            className="poster-meta__bar mb-3 block h-px w-full origin-right"
+            initial={reduceMotion ? false : { scaleX: 0 }}
+            animate={reduceMotion ? undefined : { scaleX: 1 }}
+            transition={{ duration: 0.9, delay: 0.8, ease: easeOut }}
+          />
           <p className="mb-2 flex items-center gap-2 text-[0.58rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-gold)] md:justify-end">
             <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span className="min-w-0 truncate">{hero.venue}</span>
@@ -142,7 +175,7 @@ export function Hero() {
           <p className="font-display text-base font-light uppercase leading-tight break-words sm:text-lg md:text-xl">
             <strong className="font-extrabold">KUS TBA Padel</strong> Courts
           </p>
-        </div>
+        </motion.div>
       </motion.div>
 
       <motion.div

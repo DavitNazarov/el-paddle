@@ -4,9 +4,15 @@ import {
   asyncHandler,
   cleanString,
   jsonError,
+  requireParamId,
 } from '../../common/http.js';
 import { serializeCategory } from '../../common/serializers.js';
-import { createCategory, listCategories } from './categories.service.js';
+import {
+  createCategory,
+  deleteCategory,
+  listCategories,
+  updateCategory,
+} from './categories.service.js';
 
 export const categoriesRouter = Router();
 
@@ -24,4 +30,21 @@ categoriesRouter.post('/api/categories', asyncHandler(async (request, response) 
 
   const category = await createCategory(name, description, admin.id);
   response.status(201).json({ category: serializeCategory(category) });
+}));
+
+categoriesRouter.patch('/api/categories/:id', asyncHandler(async (request, response) => {
+  await requireAdmin(request);
+  const name = cleanString(request.body.name);
+  const description = cleanString(request.body.description);
+
+  if (name.length < 2) jsonError('Category name is too short.');
+
+  const category = await updateCategory(requireParamId(request.params.id), name, description);
+  response.json({ category: serializeCategory(category) });
+}));
+
+categoriesRouter.delete('/api/categories/:id', asyncHandler(async (request, response) => {
+  await requireAdmin(request);
+  await deleteCategory(requireParamId(request.params.id));
+  response.json({ ok: true });
 }));

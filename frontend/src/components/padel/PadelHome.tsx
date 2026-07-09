@@ -24,6 +24,7 @@ import { SponsorsSection } from './home/SponsorsSection';
 import { RegistrationSection } from './home/RegistrationSection';
 import { WeatherRouteSection } from './home/WeatherRouteSection';
 import { ContactSection } from './home/ContactSection';
+import { MarqueeBand } from './home/motion';
 import { PadelHomeStyles } from './home/PadelHomeStyles';
 
 export function PadelHome() {
@@ -43,6 +44,7 @@ export function PadelHome() {
       <main className="page-canvas relative">
         <PageSurface />
         <Hero />
+        <MarqueeBand />
         <HistorySection />
         <CourtsSection />
         <CompetitionSection />

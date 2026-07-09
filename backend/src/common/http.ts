@@ -37,7 +37,13 @@ function errorCode(error: unknown) {
 }
 
 export function isUniqueConstraintError(error: unknown) {
-  return errorCode(error) === 'P2002' || (error instanceof Error && error.message.includes('Unique constraint'));
+  if (errorCode(error) === 'P2002') return true;
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes('Unique constraint') ||
+    error.message.includes('Player already registered for this event') ||
+    error.message.includes('duplicate key')
+  );
 }
 
 export function isNotFoundError(error: unknown) {
@@ -63,6 +69,9 @@ export function databaseUnavailableMessage() {
 }
 
 function safeServerMessage(error: unknown) {
+  if (process.env.NODE_ENV === 'production') {
+    return 'Unexpected server error.';
+  }
   if (!(error instanceof Error)) return 'Unexpected server error.';
   if (
     error.message.includes('Prisma') ||
@@ -73,6 +82,22 @@ function safeServerMessage(error: unknown) {
     return 'A server dependency is not ready. Check database and environment settings.';
   }
   return error.message;
+}
+
+export function requireParamId(value: unknown, label = 'id') {
+  const id = cleanString(value);
+  if (!id || id.length > 128) jsonError(`Invalid ${label}.`, 400);
+  return id;
+}
+
+export function isSafeHttpUrl(value: string) {
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 export function handleError(error: unknown, _request: Request, response: Response, _next: NextFunction) {

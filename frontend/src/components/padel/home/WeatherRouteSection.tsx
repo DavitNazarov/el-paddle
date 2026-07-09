@@ -2,7 +2,7 @@
 
 import { ArrowUpRight, Navigation } from 'lucide-react';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { Parallax, Reveal } from './motion';
+import { Magnetic, Parallax, Reveal, Stagger, StaggerItem } from './motion';
 import { ScrollSection, SectionIntro } from './scroll';
 import { usePublicEvents } from './hooks';
 
@@ -10,7 +10,9 @@ export function WeatherRouteSection() {
   const { dictionary, formatDate } = useI18n();
   const { payload } = usePublicEvents();
   const visit = dictionary.home.visit;
-  const arrivalTime = payload.upcoming?.arrivalTime ?? null;
+  const upcoming = payload.upcoming;
+  const venueName = upcoming?.location || 'KUS TBA Padel Courts';
+  const arrivalTime = upcoming?.arrivalTime ?? null;
   const arrivalDateLine = arrivalTime
     ? formatDate(arrivalTime, {
         weekday: 'long',
@@ -24,6 +26,7 @@ export function WeatherRouteSection() {
         minute: '2-digit',
       })
     : '';
+  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueName)}`;
 
   return (
     <ScrollSection
@@ -41,24 +44,23 @@ export function WeatherRouteSection() {
               accent={visit.accent}
               copy={visit.copy}
             />
-            <div className="mt-6 grid gap-2.5">
+            <Stagger className="mt-6 grid gap-2.5" delay={0.1} stagger={0.08}>
               {visit.cards.map((item) => (
-                <div
-                  key={item.day}
-                  className="glass-card border border-[var(--padel-line)] p-4"
-                >
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-gold)]">
-                    {item.day}
-                  </p>
-                  <h3 className="font-display mt-1 text-lg font-semibold text-[var(--padel-ivory)] md:text-xl">
-                    {item.status}
-                  </h3>
-                  <p className="mt-1 text-sm leading-6 text-[var(--padel-muted)]">
-                    {item.note}
-                  </p>
-                </div>
+                <StaggerItem key={item.day}>
+                  <div className="glass-card border border-[var(--padel-line)] p-4">
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-gold)]">
+                      {item.day}
+                    </p>
+                    <h3 className="font-display mt-1 text-lg font-semibold text-[var(--padel-ivory)] md:text-xl">
+                      {item.status}
+                    </h3>
+                    <p className="mt-1 text-sm leading-6 text-[var(--padel-muted)]">
+                      {item.note}
+                    </p>
+                  </div>
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
           </div>
           </Parallax>
         </Reveal>
@@ -78,7 +80,7 @@ export function WeatherRouteSection() {
               {visit.maps}
             </p>
             <h3 className="font-display mt-2 text-2xl font-semibold leading-tight md:text-3xl">
-              KUS TBA Padel Courts
+              {venueName}
             </h3>
             <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--padel-ink)]/70">
               {visit.routeCopy}
@@ -90,7 +92,9 @@ export function WeatherRouteSection() {
                   01
                 </p>
                 <p className="font-display mt-1 text-lg font-semibold">{visit.addressLabel}</p>
-                <p className="mt-1 text-sm leading-6 text-[var(--padel-ink)]/75">{visit.addressValue}</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--padel-ink)]/75">
+                  {upcoming?.location || visit.addressValue}
+                </p>
               </div>
 
               {arrivalTime ? (
@@ -109,15 +113,17 @@ export function WeatherRouteSection() {
               ) : null}
             </div>
 
-            <a
-              href="https://maps.app.goo.gl/KSbAscqLEAkEwNJx5"
-              target="_blank"
-              rel="noreferrer"
-              className="btn-premium btn-premium--dark mt-5 inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
-            >
-              {visit.routeOpen}
-              <ArrowUpRight className="h-4 w-4" />
-            </a>
+            <Magnetic className="mt-5" strength={0.16}>
+              <a
+                href={mapsHref}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-premium btn-premium--dark inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
+              >
+                {visit.routeOpen}
+                <ArrowUpRight className="h-4 w-4" />
+              </a>
+            </Magnetic>
           </div>
           </Parallax>
         </Reveal>

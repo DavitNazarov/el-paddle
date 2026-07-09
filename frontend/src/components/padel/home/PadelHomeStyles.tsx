@@ -975,6 +975,58 @@ export function PadelHomeStyles() {
           filter: drop-shadow(0 18px 40px rgba(19, 2, 2, 0.42));
         }
 
+        .hero-chip {
+          transition:
+            border-color 0.35s ease,
+            color 0.35s ease,
+            background-color 0.35s ease;
+        }
+
+        .hero-chip:hover {
+          border-color: rgba(224, 196, 119, 0.55);
+          color: var(--padel-ivory);
+          background: rgba(224, 196, 119, 0.08);
+        }
+
+        .upcoming-event-card {
+          transition:
+            border-color 0.45s ease,
+            box-shadow 0.45s ease,
+            transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .upcoming-event-card:hover {
+          border-color: rgba(224, 196, 119, 0.45);
+          box-shadow: 0 28px 80px -40px rgba(0, 0, 0, 0.55);
+        }
+
+        .prize-tier--featured .prize-tier__shine {
+          opacity: 0.55;
+          animation: prize-shine-drift 7s ease-in-out infinite;
+        }
+
+        @keyframes prize-shine-drift {
+          0%,
+          100% {
+            transform: translate(0, 0);
+          }
+          50% {
+            transform: translate(18%, 12%);
+          }
+        }
+
+        .marquee-band__track--static {
+          animation: none;
+          width: 100%;
+          justify-content: center;
+        }
+
+        .marquee-band__track--static .marquee-band__group {
+          flex-wrap: wrap;
+          justify-content: center;
+          row-gap: 0.35rem;
+        }
+
         .premium-noise {
           display: none;
         }
@@ -1263,6 +1315,15 @@ export function PadelHomeStyles() {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 0.75rem;
+        }
+
+        .courts-stage__rail > * {
+          min-height: 0;
+          height: 100%;
+        }
+
+        .courts-stage__rail .courts-stage__shot {
+          height: 100%;
         }
 
         @media (min-width: 1024px) {
@@ -2500,7 +2561,10 @@ export function PadelHomeStyles() {
           .contact-link .contact-link__text,
           .floating-entry,
           .floating-entry__pulse,
-          .section-kicker__index {
+          .section-kicker__index,
+          .hero-chip,
+          .upcoming-event-card,
+          .prize-tier {
             transition: none !important;
             animation: none !important;
           }
@@ -2509,11 +2573,14 @@ export function PadelHomeStyles() {
           .live-badge__dot,
           .section-orbit--center,
           .marquee-band__track,
+          .prize-tier--featured .prize-tier__shine,
           .submit-spinner {
             animation: none !important;
           }
 
-          .stat-card--featured {
+          .stat-card--featured,
+          .upcoming-event-card:hover,
+          .prize-tier:hover {
             transform: none;
           }
 

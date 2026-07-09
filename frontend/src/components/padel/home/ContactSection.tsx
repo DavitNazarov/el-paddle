@@ -9,7 +9,7 @@ import {
   Phone,
 } from 'lucide-react';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { Magnetic, WordReveal, Parallax, Reveal } from './motion';
+import { Magnetic, WordReveal, Parallax, Reveal, Stagger, StaggerItem } from './motion';
 import { ScrollSection } from './scroll';
 
 export function ContactSection() {
@@ -50,28 +50,29 @@ export function ContactSection() {
             <WordReveal text={contact.accent} delay={0.18} className="section-accent" />
           </h2>
 
-          <div className="mt-8 grid gap-3 text-left md:grid-cols-3">
+          <Stagger className="mt-8 grid gap-3 text-left md:grid-cols-3" delay={0.12} stagger={0.08}>
             {contactLinks.map(({ href, icon: LinkIcon, kicker, text }) => (
-              <a
-                key={href}
-                href={href}
-                className="contact-link group flex min-h-0 flex-col justify-between gap-4 rounded-sm border border-[var(--padel-line)] p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ivory)]"
-              >
-                <span className="contact-link__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--padel-line)] transition-colors duration-300">
-                  <LinkIcon className="h-3.5 w-3.5 text-[var(--padel-ivory)]" />
-                </span>
-                <span>
-                  <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-[var(--padel-gold)]/80">
-                    {kicker}
+              <StaggerItem key={href}>
+                <a
+                  href={href}
+                  className="contact-link group flex min-h-0 flex-col justify-between gap-4 rounded-sm border border-[var(--padel-line)] p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ivory)]"
+                >
+                  <span className="contact-link__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--padel-line)] transition-colors duration-300">
+                    <LinkIcon className="h-3.5 w-3.5 text-[var(--padel-ivory)]" />
                   </span>
-                  <span className="contact-link__text font-display mt-1 block text-lg font-semibold text-[var(--padel-ivory)]">
-                    {text}
+                  <span>
+                    <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-[var(--padel-gold)]/80">
+                      {kicker}
+                    </span>
+                    <span className="contact-link__text font-display mt-1 block text-lg font-semibold text-[var(--padel-ivory)]">
+                      {text}
+                    </span>
                   </span>
-                </span>
-                <ArrowUpRight className="contact-link__arrow h-4 w-4 shrink-0 text-[var(--padel-gold)]" />
-              </a>
+                  <ArrowUpRight className="contact-link__arrow h-4 w-4 shrink-0 text-[var(--padel-gold)]" />
+                </a>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
 
           <Magnetic className="mt-8" strength={0.25}>
             <a

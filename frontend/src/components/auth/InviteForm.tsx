@@ -11,7 +11,6 @@ import { API_BASE_URL, apiFetch, readApiJson } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { authInputClassName } from '@/constants/form-styles';
 
-
 export function InviteForm({ token }: { token: string }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -32,14 +31,14 @@ export function InviteForm({ token }: { token: string }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ token, name, surname, password }),
       });
-      const data = await readApiJson<{ error?: string }>(response, {});
+      const data = await readApiJson<{ error?: string; user?: { club?: unknown } }>(response, {});
 
       if (!response.ok) {
         setError(data.error ?? t('forms.invite.error'));
         return;
       }
 
-      router.push('/dashboard');
+      router.push(data.user?.club ? '/dashboard' : '/complete-club');
       router.refresh();
     } catch {
       setError(t('forms.apiConnectionError', { url: API_BASE_URL }));

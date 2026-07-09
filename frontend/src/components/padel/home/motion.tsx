@@ -16,6 +16,7 @@ import {
   useSpring,
   useTransform,
 } from 'framer-motion';
+import { useI18n } from '@/components/shared/I18nProvider';
 
 export function Magnetic({
   children,
@@ -240,6 +241,8 @@ export function Tilt({
   );
 }
 
+const easeOut = [0.16, 1, 0.3, 1] as const;
+
 export function Reveal({
   children,
   className = '',
@@ -254,10 +257,100 @@ export function Reveal({
       initial={{ opacity: 0, y: 26 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-90px' }}
-      transition={{ duration: 0.64, delay, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.64, delay, ease: easeOut }}
       className={className}
     >
       {children}
     </motion.div>
+  );
+}
+
+export function Stagger({
+  children,
+  className = '',
+  delay = 0,
+  stagger = 0.07,
+}: {
+  children: ReactNode;
+  className?: string;
+  delay?: number;
+  stagger?: number;
+}) {
+  return (
+    <motion.div
+      className={className}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: '-80px' }}
+      variants={{
+        hidden: {},
+        visible: {
+          transition: { staggerChildren: stagger, delayChildren: delay },
+        },
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+export function StaggerItem({
+  children,
+  className = '',
+  y = 22,
+}: {
+  children: ReactNode;
+  className?: string;
+  y?: number;
+}) {
+  return (
+    <motion.div
+      className={className}
+      variants={{
+        hidden: { opacity: 0, y },
+        visible: {
+          opacity: 1,
+          y: 0,
+          transition: { duration: 0.58, ease: easeOut },
+        },
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+export function MarqueeBand() {
+  const reduceMotion = useReducedMotion();
+  const { dictionary } = useI18n();
+  const items = dictionary.home.marquee;
+  // Duplicate within each group for density; two groups enable seamless -50% scroll.
+  const sequence = [...items, ...items];
+
+  return (
+    <div className="marquee-band" aria-hidden>
+      <div
+        className={`marquee-band__track${reduceMotion ? ' marquee-band__track--static' : ''}`}
+      >
+        <div className="marquee-band__group">
+          {sequence.map((item, index) => (
+            <span key={`${item}-${index}`} className="marquee-band__item">
+              {item}
+              <span className="marquee-band__star">✦</span>
+            </span>
+          ))}
+        </div>
+        {!reduceMotion ? (
+          <div className="marquee-band__group" aria-hidden>
+            {sequence.map((item, index) => (
+              <span key={`dup-${item}-${index}`} className="marquee-band__item">
+                {item}
+                <span className="marquee-band__star">✦</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

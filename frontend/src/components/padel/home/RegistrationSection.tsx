@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, Users } from 'lucide-react';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { Counter, Parallax, Reveal } from './motion';
+import { Counter, Magnetic, Parallax, Reveal, Stagger, StaggerItem } from './motion';
 import { ScrollSection, SectionIntro } from './scroll';
 
 export function RegistrationSection() {
@@ -80,24 +80,28 @@ export function RegistrationSection() {
               <Users className="mt-1 h-5 w-5 text-[var(--padel-red)]" />
             </div>
 
-            <div className="grid gap-3">
+            <Stagger className="grid gap-3" delay={0.1} stagger={0.08}>
               {registration.steps.map(([step, title, copy]) => (
-                <div key={step} className="border-b border-[#dacbb9] pb-3 last:border-b-0">
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-red)]">{step}</p>
-                  <h3 className="font-display mt-1 text-lg font-semibold md:text-xl">{title}</h3>
-                  <p className="mt-1 text-sm leading-6 text-[var(--padel-ink)]/65">{copy}</p>
-                </div>
+                <StaggerItem key={step} y={16}>
+                  <div className="border-b border-[#dacbb9] pb-3 last:border-b-0">
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-red)]">{step}</p>
+                    <h3 className="font-display mt-1 text-lg font-semibold md:text-xl">{title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-[var(--padel-ink)]/65">{copy}</p>
+                  </div>
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
 
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
-              <a
-                href="/register"
-                className="btn-premium btn-premium--dark group inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
-              >
-                {dictionary.common.register}
-                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-              </a>
+              <Magnetic strength={0.16}>
+                <a
+                  href="/register"
+                  className="btn-premium btn-premium--dark group inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
+                >
+                  {dictionary.common.register}
+                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </a>
+              </Magnetic>
               <a
                 href="/login"
                 className="inline-flex min-h-10 items-center justify-center rounded-full border border-[var(--padel-ink)]/25 px-5 py-2.5 text-sm font-semibold text-[var(--padel-ink)] transition-colors duration-200 hover:border-[var(--padel-red)] hover:text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-red)]"

@@ -91,9 +91,15 @@ export function HistorySection() {
               ))}
             </div>
 
-            <p className="font-script mt-8 text-2xl leading-tight text-[var(--padel-gold)] md:text-3xl">
+            <motion.p
+              className="font-script mt-8 text-2xl leading-tight text-[var(--padel-gold)] md:text-3xl"
+              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: '-40px' }}
+              transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            >
               {history.signoff}
-            </p>
+            </motion.p>
           </div>
           </Parallax>
         </Reveal>

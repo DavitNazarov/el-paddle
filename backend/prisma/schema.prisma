@@ -29,19 +29,24 @@ enum AccountProvider {
 }
 
 model User {
-  id              String     @id @default(cuid())
-  email           String     @unique
-  name            String?
-  surname         String?
-  passwordHash    String?
-  role            UserRole   @default(USER)
-  status          UserStatus @default(PENDING_VERIFICATION)
-  emailVerifiedAt DateTime?
-  matchesPlayed   Int        @default(0)
-  wins            Int        @default(0)
-  losses          Int        @default(0)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id                     String     @id @default(cuid())
+  email                  String     @unique
+  name                   String?
+  surname                String?
+  phone                  String?
+  passwordHash           String?
+  role                   UserRole   @default(USER)
+  status                 UserStatus @default(PENDING_VERIFICATION)
+  emailVerifiedAt        DateTime?
+  matchesPlayed          Int        @default(0)
+  wins                   Int        @default(0)
+  losses                 Int        @default(0)
+  disqualifiedUntil      DateTime?
+  disqualificationReason String?
+  /** Bumped on logout / password change to invalidate outstanding JWTs. */
+  sessionVersion         Int        @default(0)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
 
   accounts              OAuthAccount[]
   verificationCodes     EmailVerificationCode[]
@@ -92,28 +97,34 @@ model Category {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
-  createdById String
+  createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  createdBy     User                @relation("CategoryCreator", fields: [createdById], references: [id])
+  createdBy     User?               @relation("CategoryCreator", fields: [createdById], references: [id], onDelete: SetNull)
   eventLinks    EventCategory[]
   registrations EventRegistration[]
 }
 
 model Event {
-  id          String    @id @default(cuid())
-  title       String
-  date        DateTime
-  location    String
-  description String?
-  arrivalTime DateTime?
-  isPublished Boolean   @default(false)
-  createdById String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String    @id @default(cuid())
+  title            String
+  date             DateTime
+  location         String
+  description      String?
+  arrivalTime      DateTime?
+  /// Team participation fee in GEL (whole lari).
+  participationFee Int
+  /// Georgian IBAN for fee transfers (GE…).
+  bankAccountIban  String
+  /// Account holder / money receiver name shown to players.
+  bankAccountReceiver String
+  isPublished      Boolean   @default(false)
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  createdBy     User                @relation("EventCreator", fields: [createdById], references: [id])
+  createdBy     User?               @relation("EventCreator", fields: [createdById], references: [id], onDelete: SetNull)
   categories    EventCategory[]
   registrations EventRegistration[]
 
@@ -150,9 +161,10 @@ model EventRegistration {
   category   Category @relation(fields: [categoryId], references: [id])
   owner      User     @relation("RegistrationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   teammate   User     @relation("RegistrationTeammate", fields: [teammateId], references: [id], onDelete: Cascade)
-  reviewedBy User?    @relation("RegistrationReviewer", fields: [reviewedById], references: [id])
+  reviewedBy User?    @relation("RegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  @@unique([eventId, categoryId, ownerId])
+  @@unique([eventId, ownerId])
+  @@unique([eventId, teammateId])
   @@index([eventId, status])
   @@index([teammateEmail])
 }
@@ -172,12 +184,12 @@ model Club {
 model ClubMember {
   id        String   @id @default(cuid())
   clubId    String
-  userId    String
+  userId    String   @unique
   roleTitle String?
   createdAt DateTime @default(now())
 
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([clubId, userId])
+  @@index([clubId])
 }

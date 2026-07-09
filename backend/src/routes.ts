@@ -6,6 +6,7 @@ import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { eventsRouter } from './modules/events/events.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { registrationsRouter } from './modules/registrations/registrations.routes.js';
+import { usersRouter } from './modules/users/users.routes.js';
 
 export const router = Router();
 
@@ -16,3 +17,4 @@ router.use(eventsRouter);
 router.use(dashboardRouter);
 router.use(registrationsRouter);
 router.use(clubsRouter);
+router.use(usersRouter);

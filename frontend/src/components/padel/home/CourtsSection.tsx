@@ -19,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { Reveal } from './motion';
+import { Reveal, Stagger, StaggerItem } from './motion';
 import { ScrollSection, SectionIntro } from './scroll';
 
 export const COURT_STAGE = [
@@ -279,31 +279,33 @@ export function CourtsSection() {
               </button>
             </figure>
 
-            <div className="courts-stage__rail">
+            <Stagger className="courts-stage__rail" delay={0.12} stagger={0.09}>
               {shots.slice(1).map((shot, index) => (
-                <figure key={shot.src} className="courts-stage__shot">
-                  <button
-                    type="button"
-                    className="courts-stage__media courts-stage__shot-media courts-stage__trigger"
-                    aria-label={`${courts.openPhoto}: ${shot.label}`}
-                    onClick={() => setActiveIndex(index + 1)}
-                  >
-                    <Image
-                      src={shot.src}
-                      alt={shot.alt}
-                      fill
-                      sizes="(max-width: 1024px) 42vw, 22vw"
-                      className="courts-stage__img object-cover"
-                      style={{ objectPosition: shot.position }}
-                    />
-                    <div className="courts-stage__meta courts-stage__meta--compact">
-                      <span>{String(index + 2).padStart(2, '0')}</span>
-                      <span>{shot.label}</span>
-                    </div>
-                  </button>
-                </figure>
+                <StaggerItem key={shot.src}>
+                  <figure className="courts-stage__shot">
+                    <button
+                      type="button"
+                      className="courts-stage__media courts-stage__shot-media courts-stage__trigger"
+                      aria-label={`${courts.openPhoto}: ${shot.label}`}
+                      onClick={() => setActiveIndex(index + 1)}
+                    >
+                      <Image
+                        src={shot.src}
+                        alt={shot.alt}
+                        fill
+                        sizes="(max-width: 1024px) 42vw, 22vw"
+                        className="courts-stage__img object-cover"
+                        style={{ objectPosition: shot.position }}
+                      />
+                      <div className="courts-stage__meta courts-stage__meta--compact">
+                        <span>{String(index + 2).padStart(2, '0')}</span>
+                        <span>{shot.label}</span>
+                      </div>
+                    </button>
+                  </figure>
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
           </div>
         </Reveal>
       </div>

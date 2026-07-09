@@ -15,7 +15,6 @@ export type ClubClientDto = {
     id: string;
     roleTitle: string;
     user: {
-      email: string;
       fullName: string;
     };
   }[];
@@ -56,7 +55,6 @@ export function ClubClient({ club }: { club: ClubClientDto }) {
               <Card key={member.id} className="rounded-sm border-[var(--padel-line)] bg-[var(--padel-red)]/14 text-[var(--padel-ivory)]">
                 <CardContent className="p-5">
                   <p className="font-display text-2xl font-semibold">{member.user.fullName}</p>
-                  <p className="mt-2 text-sm text-[var(--padel-muted)]">{member.user.email}</p>
                   {member.roleTitle ? <Badge variant="gold" className="mt-4">{member.roleTitle}</Badge> : null}
                 </CardContent>
               </Card>

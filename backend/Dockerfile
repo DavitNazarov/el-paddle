@@ -10,7 +10,7 @@ RUN npm ci --workspace backend --include-workspace-root=false
 
 FROM deps AS builder
 
-ENV DATABASE_URL=postgresql://elpadel:elpadel@localhost:5432/elpadel?schema=public
+ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build?schema=public
 
 COPY backend ./backend
 WORKDIR /app/backend

@@ -85,6 +85,9 @@ async function upsertEvent({
   location,
   description,
   arrivalTime,
+  participationFee,
+  bankAccountIban,
+  bankAccountReceiver,
   isPublished,
   createdById,
   categoryIds,
@@ -95,6 +98,9 @@ async function upsertEvent({
   location: string;
   description: string;
   arrivalTime?: Date | null;
+  participationFee: number;
+  bankAccountIban: string;
+  bankAccountReceiver: string;
   isPublished: boolean;
   createdById: string;
   categoryIds: string[];
@@ -107,6 +113,9 @@ async function upsertEvent({
       location,
       description,
       arrivalTime: arrivalTime ?? null,
+      participationFee,
+      bankAccountIban,
+      bankAccountReceiver,
       isPublished,
       createdById,
     },
@@ -117,6 +126,9 @@ async function upsertEvent({
       location,
       description,
       arrivalTime: arrivalTime ?? null,
+      participationFee,
+      bankAccountIban,
+      bankAccountReceiver,
       isPublished,
       createdById,
     },
@@ -248,6 +260,9 @@ async function main() {
     date: daysFromNow(12, 19),
     location: 'KUS TBA Padel Courts',
     arrivalTime: daysFromNow(12, 17),
+    participationFee: 300,
+    bankAccountIban: 'GE29NB0000000101904917',
+    bankAccountReceiver: 'El Padel Georgia',
     description:
       'The next public tournament with verified two-player entries, admin approval and categories for serious but welcoming match play.',
     isPublished: true,
@@ -265,6 +280,9 @@ async function main() {
     title: 'El Padel Night Cup',
     date: daysFromNow(34, 21),
     location: 'Vake Padel Arena',
+    participationFee: 250,
+    bankAccountIban: 'GE33BG0000000101904928',
+    bankAccountReceiver: 'El Padel Night Cup',
     description:
       'A late-evening cup built for club teams, lights-on rallies and quick category brackets.',
     isPublished: true,
@@ -280,6 +298,9 @@ async function main() {
     title: 'Autumn Club Draft',
     date: daysFromNow(72, 18),
     location: 'Lisi Padel Club',
+    participationFee: 200,
+    bankAccountIban: 'GE45TB0000000101904939',
+    bankAccountReceiver: 'Lisi Padel Club',
     description: 'Draft event hidden from players until the admin publishes it.',
     isPublished: false,
     createdById: admin.id,
@@ -294,6 +315,9 @@ async function main() {
     title: 'Spring Classic',
     date: daysFromNow(-44, 17),
     location: 'Lisi Padel Club',
+    participationFee: 280,
+    bankAccountIban: 'GE67LB0000000101904940',
+    bankAccountReceiver: 'El Padel Georgia',
     description:
       'A past published event used by the landing-page previous-events archive.',
     isPublished: true,
@@ -309,6 +333,9 @@ async function main() {
     title: 'Winter Court Session',
     date: daysFromNow(-96, 16),
     location: 'Saburtalo Indoor Courts',
+    participationFee: 180,
+    bankAccountIban: 'GE11VT0000000101904951',
+    bankAccountReceiver: 'Saburtalo Indoor Courts',
     description:
       'A compact winter event for testing the previous events archive.',
     isPublished: true,
@@ -319,8 +346,11 @@ async function main() {
     ],
   });
 
+  // One category per event per player (owner or teammate). Each person appears
+  // in at most one registration row for a given eventId.
   const registrations = [
     {
+      // Summer Open · Mixed Doubles — Aurum club pair (nika + mariam)
       eventId: summerOpen.id,
       categoryId: byName.get('Mixed Doubles')!.id,
       ownerId: nika.id,
@@ -331,6 +361,7 @@ async function main() {
       status: RegistrationStatus.PENDING,
     },
     {
+      // Summer Open · Amateur Doubles — separate team (dato + giorgi)
       eventId: summerOpen.id,
       categoryId: byName.get('Amateur Doubles')!.id,
       ownerId: dato.id,
@@ -343,6 +374,7 @@ async function main() {
       reviewedAt: new Date(),
     },
     {
+      // Night Cup · Mixed Doubles — salome + invited teammate
       eventId: nightCup.id,
       categoryId: byName.get('Mixed Doubles')!.id,
       ownerId: salome.id,
@@ -353,6 +385,7 @@ async function main() {
       status: RegistrationStatus.PENDING,
     },
     {
+      // Spring Classic · Women Open — past declined entry (mariam + salome)
       eventId: springClassic.id,
       categoryId: byName.get('Women Open')!.id,
       ownerId: mariam.id,
@@ -365,20 +398,57 @@ async function main() {
       reviewedById: admin.id,
       reviewedAt: daysFromNow(-42, 12),
     },
+    {
+      // Winter Court · Pro Doubles — gives nika a second saved teammate (giorgi)
+      eventId: 'event_winter_court_2026',
+      categoryId: byName.get('Pro Doubles')!.id,
+      ownerId: nika.id,
+      teammateId: giorgi.id,
+      teammateEmail: giorgi.email,
+      ownerPhone: '+995 555 100 101',
+      teammatePhone: '+995 555 200 202',
+      status: RegistrationStatus.APPROVED,
+      reviewedById: admin.id,
+      reviewedAt: daysFromNow(-90, 12),
+    },
   ];
+
+  const playerIdsInSeed = [
+    nika.id,
+    mariam.id,
+    dato.id,
+    giorgi.id,
+    salome.id,
+    lukaInvited.id,
+  ];
+
+  // Drop prior mock entries so re-seeds cannot leave multi-category leftovers.
+  await prisma.eventRegistration.deleteMany({
+    where: {
+      OR: [
+        { ownerId: { in: playerIdsInSeed } },
+        { teammateId: { in: playerIdsInSeed } },
+      ],
+    },
+  });
+
+  const seenEventPlayers = new Set<string>();
+  for (const registration of registrations) {
+    for (const playerId of [registration.ownerId, registration.teammateId]) {
+      const key = `${registration.eventId}:${playerId}`;
+      if (seenEventPlayers.has(key)) {
+        throw new Error(
+          `Seed violates one-category-per-event: player ${playerId} appears twice in event ${registration.eventId}`,
+        );
+      }
+      seenEventPlayers.add(key);
+    }
+  }
 
   await Promise.all(
     registrations.map((registration) =>
-      prisma.eventRegistration.upsert({
-        where: {
-          eventId_categoryId_ownerId: {
-            eventId: registration.eventId,
-            categoryId: registration.categoryId,
-            ownerId: registration.ownerId,
-          },
-        },
-        update: registration,
-        create: registration,
+      prisma.eventRegistration.create({
+        data: registration,
       }),
     ),
   );
@@ -427,24 +497,34 @@ async function main() {
 
   await Promise.all([
     prisma.clubMember.upsert({
-      where: { clubId_userId: { clubId: clubs[0].id, userId: nika.id } },
-      update: { roleTitle: 'Captain' },
+      where: { userId: nika.id },
+      update: { clubId: clubs[0].id, roleTitle: 'Captain' },
       create: { clubId: clubs[0].id, userId: nika.id, roleTitle: 'Captain' },
     }),
     prisma.clubMember.upsert({
-      where: { clubId_userId: { clubId: clubs[0].id, userId: mariam.id } },
-      update: { roleTitle: 'Doubles player' },
+      where: { userId: mariam.id },
+      update: { clubId: clubs[0].id, roleTitle: 'Doubles player' },
       create: { clubId: clubs[0].id, userId: mariam.id, roleTitle: 'Doubles player' },
     }),
     prisma.clubMember.upsert({
-      where: { clubId_userId: { clubId: clubs[1].id, userId: salome.id } },
-      update: { roleTitle: 'Captain' },
+      where: { userId: salome.id },
+      update: { clubId: clubs[1].id, roleTitle: 'Captain' },
       create: { clubId: clubs[1].id, userId: salome.id, roleTitle: 'Captain' },
     }),
     prisma.clubMember.upsert({
-      where: { clubId_userId: { clubId: clubs[1].id, userId: dato.id } },
-      update: { roleTitle: 'Right-side player' },
+      where: { userId: dato.id },
+      update: { clubId: clubs[1].id, roleTitle: 'Right-side player' },
       create: { clubId: clubs[1].id, userId: dato.id, roleTitle: 'Right-side player' },
+    }),
+    prisma.clubMember.upsert({
+      where: { userId: giorgi.id },
+      update: { clubId: clubs[0].id, roleTitle: 'Left-side player' },
+      create: { clubId: clubs[0].id, userId: giorgi.id, roleTitle: 'Left-side player' },
+    }),
+    prisma.clubMember.upsert({
+      where: { userId: lukaInvited.id },
+      update: { clubId: clubs[1].id },
+      create: { clubId: clubs[1].id, userId: lukaInvited.id },
     }),
   ]);
 

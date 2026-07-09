@@ -5,7 +5,6 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Building2, ExternalLink, Plus, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -17,8 +16,11 @@ import {
   SurfaceCard,
   formControlClassName,
   softButtonClassName,
+  modalSoftButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
+import { Reveal } from '@/components/padel/home/motion';
 import { apiFetch } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { AdminShell } from './AdminShell';
@@ -106,6 +108,7 @@ export function AdminClubsClient() {
       <div className="mb-6 flex justify-end">
         <Button
           variant="red"
+          className="rounded-md"
           onClick={() => {
             setClubForm({ name: '', slug: '', description: '', logoUrl: '' });
             setCreateOpen(true);
@@ -125,57 +128,65 @@ export function AdminClubsClient() {
             description={admin.clubs.emptyDescription}
             icon={Building2}
             action={
-              <Button variant="red" onClick={() => setCreateOpen(true)}>
+              <Button variant="red" className="rounded-md" onClick={() => setCreateOpen(true)}>
                 {copy.showCreate}
               </Button>
             }
           />
         ) : null}
 
-        {clubs.map((club) => (
-          <SurfaceCard key={club.id}>
-            <CardContent className="p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <h3 className="text-xl font-semibold text-[var(--padel-ink)]">{club.name}</h3>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-[rgba(19,2,2,0.58)]">
-                    {club.description || admin.clubs.noDescription}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{t('common.members', { count: club.members.length })}</Badge>
-                  <Button asChild size="sm" variant="outline" className={softButtonClassName}>
-                    <Link href={`/clubs/${club.slug}`}>
-                      <ExternalLink className="h-4 w-4" />
-                      {admin.clubs.openPage}
-                    </Link>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="red"
-                    onClick={() => {
-                      setMemberForm({ email: '', roleTitle: '' });
-                      setMemberClub(club);
-                    }}
-                  >
-                    <Users className="h-4 w-4" />
-                    {admin.clubs.addMember}
-                  </Button>
-                </div>
-              </div>
-
-              {club.members.length ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {club.members.map((member) => (
-                    <Badge key={member.id} variant="outline" className="border-[rgba(19,2,2,0.12)] bg-white">
-                      {member.user.fullName}
-                      {member.roleTitle ? ` · ${member.roleTitle}` : ''}
+        {clubs.map((club, index) => (
+          <Reveal key={club.id} delay={Math.min(index * 0.04, 0.2)}>
+            <SurfaceCard>
+              <div className="p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <h3 className="font-display text-xl font-semibold text-[var(--padel-ivory)]">{club.name}</h3>
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-[rgba(246,239,225,0.55)]">
+                      {club.description || admin.clubs.noDescription}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="border-[var(--padel-gold)]/30 bg-[var(--padel-gold)]/15 text-[var(--padel-gold-2)]">
+                      {t('common.members', { count: club.members.length })}
                     </Badge>
-                  ))}
+                    <Button asChild size="sm" variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
+                      <Link href={`/clubs/${club.slug}`}>
+                        <ExternalLink className="h-4 w-4" />
+                        {admin.clubs.openPage}
+                      </Link>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="red"
+                      className="rounded-md"
+                      onClick={() => {
+                        setMemberForm({ email: '', roleTitle: '' });
+                        setMemberClub(club);
+                      }}
+                    >
+                      <Users className="h-4 w-4" />
+                      {admin.clubs.addMember}
+                    </Button>
+                  </div>
                 </div>
-              ) : null}
-            </CardContent>
-          </SurfaceCard>
+
+                {club.members.length ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {club.members.map((member) => (
+                      <Badge
+                        key={member.id}
+                        className="border-[rgba(246,239,225,0.18)] bg-[rgba(246,239,225,0.05)] text-[rgba(246,239,225,0.75)]"
+                      >
+                        {member.user.fullName}
+                        {member.roleTitle ? ` · ${member.roleTitle}` : ''}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </SurfaceCard>
+          </Reveal>
         ))}
       </div>
 
@@ -247,7 +258,7 @@ export function AdminClubsClient() {
         size="md"
         footer={
           <>
-            <Button type="button" variant="outline" className={softButtonClassName} onClick={() => setMemberClub(null)}>
+            <Button type="button" variant="outline" className={modalSoftButtonClassName} onClick={() => setMemberClub(null)}>
               {t('common.cancel')}
             </Button>
             <Button

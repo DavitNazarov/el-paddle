@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, UserCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import {
   DashboardField,
@@ -16,8 +15,11 @@ import {
   SurfaceCard,
   formControlClassName,
   softButtonClassName,
+  modalSoftButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
+import { Reveal } from '@/components/padel/home/motion';
 import { apiFetch } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { AdminShell } from './AdminShell';
 import type { RegistrationDto, RegistrationFilter } from '@/types/admin';
@@ -132,76 +134,82 @@ export function AdminRegistrationsClient() {
           description={admin.registrations.emptyFilterDescription}
           icon={ClipboardList}
           action={
-            <Button variant="outline" className={softButtonClassName} onClick={() => setFilter('ALL')}>
+            <Button variant="outline" className={cn(softButtonClassName, 'rounded-md')} onClick={() => setFilter('ALL')}>
               {admin.registrations.filterAll}
             </Button>
           }
         />
       ) : (
         <div className="grid gap-4">
-          {filtered.map((registration) => {
+          {filtered.map((registration, index) => {
             const actionBusy = busy === registration.id;
             return (
-              <SurfaceCard key={registration.id}>
-                <CardContent className="grid gap-4 p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <RegistrationStatusBadge status={registration.status} />
-                        <Badge variant="outline" className="border-[rgba(19,2,2,0.12)]">
-                          {registration.category.name}
-                        </Badge>
+              <Reveal key={registration.id} delay={Math.min(index * 0.04, 0.2)}>
+                <SurfaceCard>
+                  <div className="grid gap-4 p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <RegistrationStatusBadge status={registration.status} />
+                          <Badge className="border-[rgba(246,239,225,0.18)] bg-transparent text-[rgba(246,239,225,0.7)]">
+                            {registration.category.name}
+                          </Badge>
+                        </div>
+                        <h3 className="font-display mt-3 text-xl font-semibold text-[var(--padel-ivory)]">
+                          {registration.event.title}
+                        </h3>
+                        <p className="mt-1 text-sm text-[rgba(246,239,225,0.55)]">
+                          {formatDate(registration.event.date, { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
                       </div>
-                      <h3 className="mt-3 text-xl font-semibold text-[var(--padel-ink)]">{registration.event.title}</h3>
-                      <p className="mt-1 text-sm text-[rgba(19,2,2,0.58)]">
-                        {formatDate(registration.event.date, { dateStyle: 'medium', timeStyle: 'short' })}
+
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
+                        <Button
+                          variant="red"
+                          className="rounded-md"
+                          disabled={actionBusy || registration.status === 'APPROVED'}
+                          onClick={() => setRegistrationStatus(registration, 'APPROVED')}
+                        >
+                          <UserCheck className="h-4 w-4" />
+                          {admin.registrations.approve}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          className="rounded-md"
+                          disabled={actionBusy || registration.status === 'DECLINED'}
+                          onClick={() => setRegistrationStatus(registration, 'DECLINED')}
+                        >
+                          {admin.registrations.decline}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className={cn(softButtonClassName, 'rounded-md')}
+                          disabled={actionBusy || registration.status === 'PENDING'}
+                          onClick={() => setRegistrationStatus(registration, 'PENDING')}
+                        >
+                          {admin.registrations.pending}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 rounded-xl border border-[rgba(246,239,225,0.1)] bg-[rgba(246,239,225,0.04)] p-4 md:grid-cols-2">
+                      <TeamBlock title={copy.playerOne} name={registration.owner.fullName} email={registration.owner.email} phone={registration.ownerPhone} />
+                      <TeamBlock
+                        title={copy.playerTwo}
+                        name={registration.teammate.fullName}
+                        email={registration.teammate.email}
+                        phone={registration.teammatePhone || admin.registrations.noTeammatePhone}
+                      />
+                    </div>
+
+                    {registration.declineReason ? (
+                      <p className="rounded-xl border border-[var(--padel-ember)]/30 bg-[var(--padel-ember)]/10 px-3 py-2 text-sm text-[var(--padel-gold-2)]">
+                        {t('dashboard.admin.registrations.reason', { reason: registration.declineReason })}
                       </p>
-                    </div>
-
-                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
-                      <Button
-                        variant="red"
-                        disabled={actionBusy || registration.status === 'APPROVED'}
-                        onClick={() => setRegistrationStatus(registration, 'APPROVED')}
-                      >
-                        <UserCheck className="h-4 w-4" />
-                        {admin.registrations.approve}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        disabled={actionBusy || registration.status === 'DECLINED'}
-                        onClick={() => setRegistrationStatus(registration, 'DECLINED')}
-                      >
-                        {admin.registrations.decline}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className={softButtonClassName}
-                        disabled={actionBusy || registration.status === 'PENDING'}
-                        onClick={() => setRegistrationStatus(registration, 'PENDING')}
-                      >
-                        {admin.registrations.pending}
-                      </Button>
-                    </div>
+                    ) : null}
                   </div>
-
-                  <div className="grid gap-3 rounded-lg bg-[#faf6ee] p-4 md:grid-cols-2">
-                    <TeamBlock title={copy.playerOne} name={registration.owner.fullName} email={registration.owner.email} phone={registration.ownerPhone} />
-                    <TeamBlock
-                      title={copy.playerTwo}
-                      name={registration.teammate.fullName}
-                      email={registration.teammate.email}
-                      phone={registration.teammatePhone || admin.registrations.noTeammatePhone}
-                    />
-                  </div>
-
-                  {registration.declineReason ? (
-                    <p className="rounded-md bg-[var(--padel-red)]/8 px-3 py-2 text-sm text-[var(--padel-red)]">
-                      {t('dashboard.admin.registrations.reason', { reason: registration.declineReason })}
-                    </p>
-                  ) : null}
-                </CardContent>
-              </SurfaceCard>
+                </SurfaceCard>
+              </Reveal>
             );
           })}
         </div>
@@ -227,7 +235,7 @@ export function AdminRegistrationsClient() {
             <Button
               type="button"
               variant="outline"
-              className={softButtonClassName}
+              className={modalSoftButtonClassName}
               onClick={() => {
                 setDeclineTarget(null);
                 setDeclineReason('');
@@ -277,10 +285,10 @@ function TeamBlock({
 }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(19,2,2,0.5)]">{title}</p>
-      <p className="mt-2 font-semibold text-[var(--padel-ink)]">{name}</p>
-      <p className="mt-1 truncate text-sm text-[rgba(19,2,2,0.58)]">{email}</p>
-      <p className="mt-0.5 text-sm text-[rgba(19,2,2,0.58)]">{phone}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--padel-gold)]">{title}</p>
+      <p className="mt-2 font-semibold text-[var(--padel-ivory)]">{name}</p>
+      <p className="mt-1 truncate text-sm text-[rgba(246,239,225,0.55)]">{email}</p>
+      <p className="mt-0.5 text-sm text-[rgba(246,239,225,0.55)]">{phone}</p>
     </div>
   );
 }

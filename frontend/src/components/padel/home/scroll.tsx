@@ -200,6 +200,8 @@ export function SectionIntro({
   copy?: string;
   align?: 'left' | 'center';
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <div className={align === 'center' ? 'mx-auto max-w-3xl text-center' : 'max-w-3xl'}>
       <div
@@ -212,7 +214,15 @@ export function SectionIntro({
       >
         {index ? <span className="section-kicker__index">{index}</span> : null}
         {kicker}
-        <span className="section-kicker__rule" aria-hidden />
+        <motion.span
+          className="section-kicker__rule"
+          aria-hidden
+          initial={reduceMotion ? false : { scaleX: 0, opacity: 0 }}
+          whileInView={{ scaleX: 1, opacity: 0.55 }}
+          viewport={{ once: true, margin: '-40px' }}
+          transition={{ duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+          style={{ originX: 0 }}
+        />
       </p>
       <h2 className="font-display text-2xl font-semibold leading-[1.15] text-[var(--padel-ivory)] sm:text-3xl md:text-4xl">
         <WordReveal text={title} />
@@ -224,13 +234,17 @@ export function SectionIntro({
         ) : null}
       </h2>
       {copy ? (
-        <p
+        <motion.p
           className={`mt-3 max-w-xl text-sm leading-6 text-[var(--padel-muted)] md:text-[0.95rem] md:leading-7 ${
             align === 'center' ? 'mx-auto' : ''
           }`}
+          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.6, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
         >
           {copy}
-        </p>
+        </motion.p>
       ) : null}
       </div>
     </div>
