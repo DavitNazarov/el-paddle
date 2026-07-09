@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { DashboardClient } from '@/components/padel/DashboardClient';
+import { DashboardClient } from '@/components/dashboard/DashboardClient';
 import { getCurrentUser } from '@/lib/auth';
 
 export const metadata: Metadata = {

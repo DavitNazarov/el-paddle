@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { AuthShell } from '@/components/padel/AuthShell';
-import { InviteForm, MissingInviteToken } from '@/components/padel/InviteForm';
+import { AuthShell } from '@/components/auth/AuthShell';
+import { InviteForm, MissingInviteToken } from '@/components/auth/InviteForm';
 
 export const metadata: Metadata = {
   title: 'Teammate Invite — El Padel',

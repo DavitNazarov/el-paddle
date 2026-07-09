@@ -5,7 +5,7 @@ export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = 'ka';
 
 export const localeNames: Record<Locale, { label: string; short: string }> = {
-  ka: { label: 'ქართული', short: 'KA' },
+  ka: { label: 'ქართული', short: 'ქართ' },
   en: { label: 'English', short: 'EN' },
 };
 
@@ -168,27 +168,21 @@ export const dictionaries = {
         kicker: 'კორტების მიმოხილვა',
         title: 'ადგილი, სადაც',
         accent: 'თამაში იწყება.',
-        copy: 'ამ გვერდზე ჩაისმება კორტების ფოტოები, სივრცის მოკლე აღწერა და ის დეტალები, რაც მოთამაშეს ან სპონსორს წინასწარ უნდა ეცოდინებოდეს.',
-        sideCopy: 'ფოტოები შეგიძლია მოგვიანებით ჩაანაცვლო რეალური კადრებით. ახლა სექცია უკვე გაწყობილია როგორც ადგილის მიმოხილვა: მთავარი კორტი, ინფრასტრუქტურა და ვიზუალური ზონები.',
-        caption: 'კორტების ფოტო',
-        imageAlt: 'El Padel კორტების ფოტოს დროებითი ვიზუალი',
-        cards: [
-          {
-            title: 'კორტები',
-            meta: 'მთავარი სათამაშო სივრცე',
-            copy: 'აქ ჩაისმება კორტების რეალური ფოტოები და მოკლე აღწერა: საფარი, განათება, სერვისი და მოთამაშის ზონები.',
-          },
-          {
-            title: 'ინფრასტრუქტურა',
-            meta: 'ლაუნჯი, გათბობა, მაყურებელი',
-            copy: 'კომფორტული დასვენების ადგილი, წყალი, რეგისტრაციის მაგიდა და სპონსორების კედელი ერთ სივრცეში.',
-          },
-          {
-            title: 'ფოტო კუთხეები',
-            meta: 'კადრები ტურნირისთვის',
-            copy: 'ფოტო/ვიდეო მასალა დაემატება კორტების მიმოხილვას, რომ სტუმარმა წინასწარ იგრძნოს გარემო.',
-          },
+        copy: 'იისფერი კორტები ტყესა და ტბას შორის — აერო კადრები აჩვენებს მთავარ სათამაშო სივრცეს, ინფრასტრუქტურას და იმ გარემოს, სადაც ტურნირი იშლება.',
+        galleryLabel: 'კორტების აერო ფოტოები',
+        heroAlt: 'იისფერი პადელის კორტების ახლო აერო ხედი',
+        caption: 'მთავარი კორტები',
+        galleryAlts: [
+          'კორტების ზედა ხედი ტყისა და წყლის გვერდით',
+          'კორტების კომპლექსი ქალაქისა და მთების ფონზე',
+          'ექვსი პადელის კორტი ტბისა და ტყის გარემოში',
         ],
+        galleryLabels: ['ზედა ხედი', 'ქალაქის ხედი', 'ტბის ხედი'],
+        openPhoto: 'ფოტოს გახსნა',
+        previousPhoto: 'წინა ფოტო',
+        nextPhoto: 'შემდეგი ფოტო',
+        closePhoto: 'ფოტოს დახურვა',
+        photoOf: '{current} / {total}',
       },
       event: {
         fallbackTitle: 'El Padel ტურნირი',
@@ -771,27 +765,21 @@ export const dictionaries = {
         kicker: 'Court overview',
         title: 'The place where',
         accent: 'play begins.',
-        copy: 'This page will hold court photos, a short description of the venue, and the details every player or sponsor should know in advance.',
-        sideCopy: 'You can replace these placeholders with real shots later. The section is already structured as a venue overview: main court, infrastructure, and visual zones.',
-        caption: 'Court photo slot',
-        imageAlt: 'Temporary visual for El Padel courts',
-        cards: [
-          {
-            title: 'Courts',
-            meta: 'Main playing area',
-            copy: 'Real court photos and a short description will go here: surface, lighting, service, and player zones.',
-          },
-          {
-            title: 'Infrastructure',
-            meta: 'Lounge, warm-up, spectators',
-            copy: 'A comfortable rest area, water, registration desk, and sponsor wall in one connected space.',
-          },
-          {
-            title: 'Photo corners',
-            meta: 'Tournament content',
-            copy: 'Photo and video material will be added to the court overview so guests can feel the environment before arriving.',
-          },
+        copy: 'Purple courts between forest and lake — aerial frames show the main playing space, infrastructure, and the setting where the tournament unfolds.',
+        galleryLabel: 'Aerial court photos',
+        heroAlt: 'Close aerial view of purple padel courts',
+        caption: 'Main courts',
+        galleryAlts: [
+          'Top-down view of courts beside forest and water',
+          'Court complex overlooking the city and hills',
+          'Six padel courts set between lake and forest',
         ],
+        galleryLabels: ['Top view', 'City view', 'Lakeside'],
+        openPhoto: 'Open photo',
+        previousPhoto: 'Previous photo',
+        nextPhoto: 'Next photo',
+        closePhoto: 'Close photo',
+        photoOf: '{current} / {total}',
       },
       event: {
         fallbackTitle: 'El Padel Tournament',

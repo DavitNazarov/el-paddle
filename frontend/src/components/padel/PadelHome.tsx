@@ -8,6 +8,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import {
   animate,
@@ -28,6 +29,8 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Instagram,
   Mail,
   MapPin,
@@ -42,8 +45,8 @@ import {
 import { PadelBall3D } from './PadelBall3D';
 import { apiFetch } from '@/lib/api';
 import type { PublicUser } from '@/lib/auth';
-import { LanguageSwitcher } from './LanguageSwitcher';
-import { useI18n } from './I18nProvider';
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
+import { useI18n } from '@/components/shared/I18nProvider';
 
 const padelVars = {
   '--padel-red': '#801917',
@@ -304,6 +307,7 @@ function Preloader() {
 function CursorRing() {
   const reduceMotion = useReducedMotion();
   const [enabled, setEnabled] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [hoveringLink, setHoveringLink] = useState(false);
   const resetBallRef = useRef<number | null>(null);
@@ -317,12 +321,20 @@ function CursorRing() {
   const springBallY = useSpring(ballY, { stiffness: 520, damping: 24, mass: 0.24 });
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setMounted(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     if (reduceMotion) return;
-    const fine = window.matchMedia('(pointer: fine)');
-    if (!fine.matches) return;
+    // Require mouse + hover; (pointer: fine) alone can match on some phones/tablets
+    // and then a tap fires pointermove, leaving the ring stuck at the touch point.
+    const desktopPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+    if (!desktopPointer.matches) return;
     document.documentElement.classList.add('padel-cursor-hidden');
 
     const move = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
       setEnabled(true);
       x.set(event.clientX);
       y.set(event.clientY);
@@ -342,8 +354,14 @@ function CursorRing() {
         ballY.set(0);
       }, 80);
     };
-    const down = () => setPressed(true);
-    const up = () => setPressed(false);
+    const down = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      setPressed(true);
+    };
+    const up = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      setPressed(false);
+    };
 
     window.addEventListener('pointermove', move, { passive: true });
     window.addEventListener('pointerdown', down);
@@ -359,19 +377,19 @@ function CursorRing() {
     };
   }, [ballX, ballY, reduceMotion, x, y]);
 
-  if (!enabled) return null;
+  if (!mounted || !enabled) return null;
 
-  return (
+  return createPortal(
     <motion.div
       aria-hidden
-      className="cursor-ring pointer-events-none fixed left-0 top-0 z-[110]"
+      className="cursor-ring pointer-events-none fixed left-0 top-0 z-[140]"
       style={{ x: springX, y: springY }}
     >
       <motion.span
         className="cursor-ring__circle"
         animate={{
           scale: pressed ? 0.7 : hoveringLink ? 1.7 : 1,
-          opacity: hoveringLink ? 0.9 : 0.55,
+          opacity: hoveringLink ? 0.95 : 0.8,
         }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       />
@@ -381,7 +399,8 @@ function CursorRing() {
         style={{ x: springBallX, y: springBallY }}
         transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       />
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 
@@ -1177,7 +1196,7 @@ function Hero() {
           width={360}
           height={240}
           priority
-          className="hero-crest h-auto w-[140px] object-contain md:w-[168px]"
+          className="hero-crest h-auto w-[188px] object-contain md:w-[228px]"
         />
         <p className="font-display -mt-1 text-[0.7rem] font-semibold uppercase tracking-[0.38em] text-[var(--padel-gold)] md:text-xs">
           {hero.subtitle}
@@ -1249,27 +1268,29 @@ function Hero() {
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
         transition={{ duration: 0.72, delay: 0.28, ease: [0.16, 1, 0.3, 1] }}
         style={reduceMotion ? undefined : { y: footerY }}
-        className="poster-footer relative z-0 mx-auto mt-6 grid w-full max-w-7xl gap-6 md:absolute md:bottom-4 md:left-10 md:right-10 md:mt-0 md:grid-cols-2"
+        className="poster-footer relative z-0 mx-auto mt-6 grid w-full max-w-7xl gap-4 md:absolute md:inset-x-10 md:bottom-4 md:mt-0 md:w-auto md:grid-cols-[minmax(0,1fr)_4.5rem_minmax(0,1fr)] md:items-end md:gap-0 lg:grid-cols-[minmax(0,1fr)_5.5rem_minmax(0,1fr)]"
       >
-        <div className="poster-meta glass-card md:max-w-sm border border-[var(--padel-line)] p-4 backdrop-blur-sm">
+        <div className="poster-meta glass-card min-w-0 w-full justify-self-start border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-sm">
           <p className="mb-2 flex items-center gap-2 text-[0.58rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-gold)]">
-            <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-            {hero.days}
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="min-w-0 truncate">{hero.days}</span>
           </p>
-          <div className="flex items-end justify-between gap-4 pr-1">
+          <div className="flex items-end justify-between gap-3 pr-1">
             <span className="font-display text-xl font-light leading-none md:text-2xl">TBA</span>
             <span className="font-display text-lg font-light lowercase leading-none md:text-xl">{hero.year}</span>
           </div>
           <span className="poster-meta__bar mt-3 block h-px w-full" />
         </div>
 
-        <div className="poster-meta glass-card md:ml-auto md:max-w-md md:self-end md:text-right border border-[var(--padel-line)] p-4 backdrop-blur-sm">
+        <div className="hidden md:block" aria-hidden />
+
+        <div className="poster-meta glass-card min-w-0 w-full justify-self-end border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-md md:text-right">
           <span className="poster-meta__bar mb-3 block h-px w-full" />
           <p className="mb-2 flex items-center gap-2 text-[0.58rem] font-semibold uppercase tracking-[0.28em] text-[var(--padel-gold)] md:justify-end">
-            <MapPin className="h-3.5 w-3.5" aria-hidden />
-            {hero.venue}
+            <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="min-w-0 truncate">{hero.venue}</span>
           </p>
-          <p className="font-display text-lg font-light uppercase leading-tight md:text-xl">
+          <p className="font-display text-base font-light uppercase leading-tight break-words sm:text-lg md:text-xl">
             <strong className="font-extrabold">KUS TBA Padel</strong> Courts
           </p>
         </div>
@@ -1562,9 +1583,215 @@ function CompetitionSection() {
   );
 }
 
+const COURT_STAGE = [
+  {
+    src: '/images/el-padel-courts-aerial-close.jpg',
+    position: 'center 45%',
+  },
+  {
+    src: '/images/el-padel-courts-aerial-top.jpg',
+    position: 'center center',
+  },
+  {
+    src: '/images/el-padel-courts-aerial-city.png',
+    position: 'center 70%',
+  },
+  {
+    src: '/images/el-padel-courts-aerial-lake.png',
+    position: 'center 55%',
+  },
+] as const;
+
+function CourtsLightbox({
+  open,
+  index,
+  onClose,
+  onChange,
+  shots,
+}: {
+  open: boolean;
+  index: number;
+  onClose: () => void;
+  onChange: (index: number) => void;
+  shots: Array<{ src: string; alt: string; label: string; position: string }>;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const { dictionary, t } = useI18n();
+  const courts = dictionary.home.courts;
+  const reduceMotion = useReducedMotion();
+  const active = shots[index];
+  const total = shots.length;
+  const [mounted, setMounted] = useState(false);
+  const [direction, setDirection] = useState(1);
+  const slideEase = [0.22, 1, 0.36, 1] as const;
+
+  const goTo = useCallback(
+    (nextIndex: number, dir: number) => {
+      setDirection(dir);
+      onChange(nextIndex);
+    },
+    [onChange],
+  );
+
+  const showPrev = useCallback(() => {
+    goTo((index - 1 + total) % total, -1);
+  }, [goTo, index, total]);
+
+  const showNext = useCallback(() => {
+    goTo((index + 1) % total, 1);
+  }, [goTo, index, total]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setMounted(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+      if (event.key === 'ArrowLeft') showPrev();
+      if (event.key === 'ArrowRight') showNext();
+    };
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.documentElement.style.overflow = previousOverflow;
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [open, onClose, showNext, showPrev]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {open && active ? (
+        <motion.div
+          className="courts-lightbox fixed inset-0 z-[130] flex items-center justify-center p-4 md:p-8"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.28 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={active.label}
+        >
+          <button
+            type="button"
+            className="courts-lightbox__backdrop absolute inset-0"
+            aria-label={courts.closePhoto}
+            onClick={onClose}
+          />
+
+          <motion.div
+            className="courts-lightbox__panel relative z-10 flex w-full max-w-6xl flex-col"
+            initial={{ opacity: 0, scale: 0.96, y: 18 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98, y: 10 }}
+            transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div className="courts-lightbox__toolbar">
+              <p className="courts-lightbox__title">
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <span>{active.label}</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="courts-lightbox__count">
+                  {t('home.courts.photoOf', { current: index + 1, total })}
+                </span>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  aria-label={courts.closePhoto}
+                  onClick={onClose}
+                  className="courts-lightbox__icon-btn"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="courts-lightbox__stage">
+              <AnimatePresence initial={false} custom={direction} mode="popLayout">
+                <motion.div
+                  key={active.src}
+                  className="courts-lightbox__shot"
+                  custom={direction}
+                  variants={{
+                    enter: (dir: number) =>
+                      reduceMotion
+                        ? { opacity: 0, x: 0, scale: 1 }
+                        : { opacity: 0, x: dir * 72, scale: 1.02 },
+                    center: { opacity: 1, x: 0, scale: 1 },
+                    exit: (dir: number) =>
+                      reduceMotion
+                        ? { opacity: 0, x: 0, scale: 1 }
+                        : { opacity: 0, x: dir * -56, scale: 0.985 },
+                  }}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.48, ease: slideEase }}
+                >
+                  <Image
+                    src={active.src}
+                    alt={active.alt}
+                    fill
+                    sizes="(max-width: 1024px) 94vw, 72vw"
+                    className="object-contain"
+                    style={{ objectPosition: active.position }}
+                    priority
+                  />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            <div className="courts-lightbox__nav">
+              <button
+                type="button"
+                aria-label={courts.previousPhoto}
+                onClick={showPrev}
+                className="courts-lightbox__icon-btn"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                aria-label={courts.nextPhoto}
+                onClick={showNext}
+                className="courts-lightbox__icon-btn"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
 function CourtsSection() {
   const { dictionary } = useI18n();
   const courts = dictionary.home.courts;
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const shots = [
+    {
+      ...COURT_STAGE[0],
+      alt: courts.heroAlt,
+      label: courts.caption,
+    },
+    ...COURT_STAGE.slice(1).map((shot, index) => ({
+      ...shot,
+      alt: courts.galleryAlts[index],
+      label: courts.galleryLabels[index],
+    })),
+  ];
 
   return (
     <ScrollSection
@@ -1573,7 +1800,7 @@ function CourtsSection() {
     >
       <div className="mx-auto max-w-7xl">
         <Reveal>
-          <div className="grid gap-6 border-b border-[var(--padel-line)] pb-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
+          <div className="max-w-3xl">
             <SectionIntro
               index={courts.index}
               kicker={courts.kicker}
@@ -1581,51 +1808,74 @@ function CourtsSection() {
               accent={courts.accent}
               copy={courts.copy}
             />
-            <p className="max-w-xl text-sm leading-6 text-[var(--padel-muted)] lg:justify-self-end">
-              {courts.sideCopy}
-            </p>
           </div>
         </Reveal>
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-          <Reveal>
-            <figure className="poster-frame h-full">
-              <span className="poster-frame__tick poster-frame__tick--tl" aria-hidden />
-              <span className="poster-frame__tick poster-frame__tick--tr" aria-hidden />
-              <span className="poster-frame__tick poster-frame__tick--bl" aria-hidden />
-              <span className="poster-frame__tick poster-frame__tick--br" aria-hidden />
-              <div className="poster-frame__media min-h-[280px] md:min-h-[320px]">
+        <Reveal delay={0.08}>
+          <div
+            className="courts-stage mt-8"
+            role="group"
+            aria-label={courts.galleryLabel}
+          >
+            <figure className="courts-stage__hero">
+              <button
+                type="button"
+                className="courts-stage__media courts-stage__hero-media courts-stage__trigger"
+                aria-label={`${courts.openPhoto}: ${courts.caption}`}
+                onClick={() => setActiveIndex(0)}
+              >
                 <Image
-                  src="/images/el-padel-style-board.jpeg"
-                  alt={courts.imageAlt}
+                  src={shots[0].src}
+                  alt={shots[0].alt}
                   fill
-                  sizes="(max-width: 1024px) 90vw, 52vw"
-                  className="object-cover"
+                  sizes="(max-width: 1024px) 100vw, 68vw"
+                  className="courts-stage__img object-cover"
+                  style={{ objectPosition: shots[0].position }}
+                  priority
                 />
-              </div>
-              <figcaption className="poster-frame__caption">{courts.caption}</figcaption>
+                <div className="courts-stage__meta">
+                  <span>01</span>
+                  <span>{courts.caption}</span>
+                </div>
+              </button>
             </figure>
-          </Reveal>
 
-          <div className="grid gap-3">
-            {courts.cards.map((card, index) => (
-              <Reveal key={card.title} delay={index * 0.04}>
-                <article className="previous-event-card group flex min-h-0 flex-col border border-[var(--padel-line)] bg-[var(--padel-red)]/12 p-4 transition duration-300 hover:border-[var(--padel-gold)]">
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-gold)]">
-                    {card.meta}
-                  </p>
-                  <h3 className="font-display mt-2 text-xl font-semibold text-[var(--padel-ivory)] md:text-2xl">
-                    {card.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-[var(--padel-muted)]">
-                    {card.copy}
-                  </p>
-                </article>
-              </Reveal>
-            ))}
+            <div className="courts-stage__rail">
+              {shots.slice(1).map((shot, index) => (
+                <figure key={shot.src} className="courts-stage__shot">
+                  <button
+                    type="button"
+                    className="courts-stage__media courts-stage__shot-media courts-stage__trigger"
+                    aria-label={`${courts.openPhoto}: ${shot.label}`}
+                    onClick={() => setActiveIndex(index + 1)}
+                  >
+                    <Image
+                      src={shot.src}
+                      alt={shot.alt}
+                      fill
+                      sizes="(max-width: 1024px) 42vw, 22vw"
+                      className="courts-stage__img object-cover"
+                      style={{ objectPosition: shot.position }}
+                    />
+                    <div className="courts-stage__meta courts-stage__meta--compact">
+                      <span>{String(index + 2).padStart(2, '0')}</span>
+                      <span>{shot.label}</span>
+                    </div>
+                  </button>
+                </figure>
+              ))}
+            </div>
           </div>
-        </div>
+        </Reveal>
       </div>
+
+      <CourtsLightbox
+        open={activeIndex !== null}
+        index={activeIndex ?? 0}
+        onClose={() => setActiveIndex(null)}
+        onChange={setActiveIndex}
+        shots={shots}
+      />
     </ScrollSection>
   );
 }
@@ -2727,7 +2977,7 @@ export function PadelHome() {
         }
 
         /* ---- Custom cursor ring ---- */
-        @media (pointer: fine) {
+        @media (hover: hover) and (pointer: fine) {
           html.padel-cursor-hidden,
           html.padel-cursor-hidden body,
           html.padel-cursor-hidden a,
@@ -2737,6 +2987,12 @@ export function PadelHome() {
           html.padel-cursor-hidden select,
           html.padel-cursor-hidden [role='button'] {
             cursor: none !important;
+          }
+        }
+
+        @media (hover: none), (pointer: coarse) {
+          .cursor-ring {
+            display: none !important;
           }
         }
 
@@ -2751,9 +3007,9 @@ export function PadelHome() {
           position: absolute;
           inset: 0;
           display: block;
-          border: 1px solid rgba(224, 196, 119, 0.92);
+          border: 1.5px solid rgba(224, 196, 119, 0.95);
           border-radius: 999px;
-          mix-blend-mode: difference;
+          box-shadow: 0 0 0 1px rgba(10, 1, 2, 0.35);
           transform-origin: center;
           will-change: transform, opacity;
         }
@@ -2767,8 +3023,7 @@ export function PadelHome() {
           width: 0.26rem;
           border-radius: 999px;
           background: var(--padel-gold);
-          mix-blend-mode: difference;
-          transform-origin: center;
+          box-shadow: 0 0 0 1px rgba(10, 1, 2, 0.35);
           will-change: transform;
         }
 
@@ -3256,6 +3511,238 @@ export function PadelHome() {
           aspect-ratio: 4 / 5;
           background: var(--padel-red-3);
           box-shadow: 0 34px 110px rgba(0, 0, 0, 0.4);
+        }
+
+        .courts-stage {
+          display: grid;
+          gap: 0.75rem;
+          align-items: stretch;
+        }
+
+        @media (min-width: 1024px) {
+          .courts-stage {
+            grid-template-columns: minmax(0, 1.7fr) minmax(13.5rem, 0.62fr);
+            gap: 0.75rem;
+            min-height: 30rem;
+          }
+        }
+
+        .courts-stage__media {
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+          width: 100%;
+          border: 0;
+          padding: 0;
+          text-align: left;
+          cursor: zoom-in;
+          background: #1a0508;
+          box-shadow:
+            0 1px 0 rgba(246, 239, 225, 0.08) inset,
+            0 24px 60px rgba(0, 0, 0, 0.38);
+        }
+
+        .courts-stage__trigger:focus-visible {
+          outline: 2px solid var(--padel-gold);
+          outline-offset: 3px;
+        }
+
+        .courts-stage__media::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            linear-gradient(180deg, transparent 58%, rgba(12, 1, 2, 0.78) 100%);
+          z-index: 1;
+        }
+
+        .courts-stage__img {
+          filter: saturate(1.18) contrast(1.08) brightness(1.03);
+          transition:
+            transform 0.75s cubic-bezier(0.16, 1, 0.3, 1),
+            filter 0.45s ease;
+        }
+
+        .courts-stage__media:hover .courts-stage__img {
+          transform: scale(1.04);
+          filter: saturate(1.28) contrast(1.12) brightness(1.06);
+        }
+
+        .courts-lightbox__backdrop {
+          border: 0;
+          background: rgba(10, 1, 2, 0.88);
+          backdrop-filter: blur(10px);
+          cursor: zoom-out;
+        }
+
+        .courts-lightbox__panel {
+          gap: 0.85rem;
+        }
+
+        .courts-lightbox__toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+        }
+
+        .courts-lightbox__title {
+          display: flex;
+          align-items: center;
+          gap: 0.7rem;
+          margin: 0;
+          font-size: 0.72rem;
+          font-weight: 600;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: rgba(246, 239, 225, 0.92);
+        }
+
+        .courts-lightbox__title span:first-child {
+          color: var(--padel-gold);
+        }
+
+        .courts-lightbox__count {
+          font-size: 0.68rem;
+          font-weight: 600;
+          letter-spacing: 0.16em;
+          color: var(--padel-muted);
+        }
+
+        .courts-lightbox__stage {
+          position: relative;
+          width: 100%;
+          height: min(72dvh, 42rem);
+          overflow: hidden;
+          background: rgba(19, 2, 2, 0.55);
+          box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+        }
+
+        .courts-lightbox__shot {
+          position: absolute;
+          inset: 0;
+          will-change: transform, opacity;
+        }
+
+        .courts-lightbox__stage img {
+          filter: saturate(1.16) contrast(1.06) brightness(1.02);
+        }
+
+        .courts-lightbox__nav {
+          display: flex;
+          justify-content: center;
+          gap: 0.65rem;
+        }
+
+        .courts-lightbox__icon-btn {
+          display: inline-flex;
+          height: 2.75rem;
+          width: 2.75rem;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid var(--padel-line);
+          background: rgba(19, 2, 2, 0.45);
+          color: var(--padel-ivory);
+          transition:
+            border-color 0.25s ease,
+            background 0.25s ease,
+            color 0.25s ease;
+        }
+
+        .courts-lightbox__icon-btn:hover {
+          border-color: color-mix(in srgb, var(--padel-gold) 55%, var(--padel-line));
+          background: rgba(19, 2, 2, 0.7);
+          color: var(--padel-gold);
+        }
+
+        .courts-lightbox__icon-btn:focus-visible {
+          outline: 2px solid var(--padel-gold);
+          outline-offset: 2px;
+        }
+
+        .courts-stage__hero,
+        .courts-stage__shot {
+          margin: 0;
+          min-height: 0;
+        }
+
+        .courts-stage__hero-media {
+          aspect-ratio: 16 / 10;
+          min-height: 17rem;
+        }
+
+        @media (min-width: 1024px) {
+          .courts-stage__hero-media {
+            aspect-ratio: auto;
+            height: 100%;
+            min-height: 30rem;
+          }
+        }
+
+        .courts-stage__rail {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0.75rem;
+        }
+
+        @media (min-width: 1024px) {
+          .courts-stage__rail {
+            grid-template-columns: 1fr;
+            grid-template-rows: repeat(3, minmax(0, 1fr));
+            height: 100%;
+          }
+        }
+
+        .courts-stage__shot-media {
+          aspect-ratio: 5 / 4;
+          height: 100%;
+        }
+
+        @media (min-width: 1024px) {
+          .courts-stage__shot-media {
+            aspect-ratio: auto;
+          }
+        }
+
+        .courts-stage__meta {
+          position: absolute;
+          left: 0.9rem;
+          right: 0.9rem;
+          bottom: 0.85rem;
+          z-index: 2;
+          display: flex;
+          align-items: center;
+          gap: 0.65rem;
+          font-size: 0.68rem;
+          font-weight: 600;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: rgba(246, 239, 225, 0.92);
+          text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
+        }
+
+        .courts-stage__meta span:first-child {
+          color: var(--padel-gold);
+          letter-spacing: 0.14em;
+        }
+
+        .courts-stage__meta--compact {
+          left: 0.7rem;
+          right: 0.7rem;
+          bottom: 0.65rem;
+          font-size: 0.58rem;
+          letter-spacing: 0.16em;
+        }
+
+        @media (max-width: 767px) {
+          .courts-stage__rail {
+            grid-template-columns: 1fr;
+          }
+
+          .courts-stage__shot-media {
+            aspect-ratio: 16 / 10;
+          }
         }
 
         .poster-frame__inner {
@@ -4112,7 +4599,7 @@ export function PadelHome() {
           }
 
           .hero-crest {
-            width: 154px;
+            width: 200px;
           }
 
           .hero-chips {
@@ -4402,13 +4889,12 @@ export function PadelHome() {
             bottom: 0.85rem;
           }
 
-          .poster-meta p,
-          .poster-meta span {
-            font-size: 1.4rem;
+          .poster-meta .font-display {
+            font-size: clamp(1rem, 2.2vw, 1.35rem);
           }
 
           .hero-crest {
-            width: 150px;
+            width: 176px;
           }
         }
 

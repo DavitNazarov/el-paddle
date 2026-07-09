@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
-import { I18nProvider } from '@/components/padel/I18nProvider';
+import { I18nProvider } from '@/components/shared/I18nProvider';
 import { normalizeLocale } from '@/lib/i18n';
 import './globals.css';
 

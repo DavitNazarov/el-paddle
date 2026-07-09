@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { AuthShell } from '@/components/padel/AuthShell';
-import { LoginForm } from '@/components/padel/LoginForm';
+import { AuthShell } from '@/components/auth/AuthShell';
+import { LoginForm } from '@/components/auth/LoginForm';
 import { getCurrentUser } from '@/lib/auth';
 
 export const metadata: Metadata = {

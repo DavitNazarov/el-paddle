@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { config } from './env.js';
-import { handleError } from './http.js';
+import { config } from './config/env.js';
+import { handleError } from './common/http.js';
 import { router } from './routes.js';
 
 const app = express();

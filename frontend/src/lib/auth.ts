@@ -1,24 +1,8 @@
 import { cookies } from 'next/headers';
 import { apiUrl } from '@/lib/api';
+import type { PublicUser } from '@/types/auth';
 
-export type UserRole = 'USER' | 'ADMIN';
-export type UserStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'INVITED';
-
-export type PublicUser = {
-  id: string;
-  email: string;
-  name: string;
-  surname: string;
-  fullName: string;
-  role: UserRole;
-  status: UserStatus;
-  isVerified: boolean;
-  stats: {
-    matchesPlayed: number;
-    wins: number;
-    losses: number;
-  };
-};
+export type { PublicUser, UserRole, UserStatus } from '@/types/auth';
 
 export async function getCurrentUser() {
   const cookieHeader = (await cookies()).toString();

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { ClubClient, type ClubClientDto } from '@/components/padel/ClubClient';
+import { ClubClient, type ClubClientDto } from '@/components/clubs/ClubClient';
 import { apiUrl } from '@/lib/api';
 
 type ClubPageProps = {

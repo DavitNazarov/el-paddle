@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { AdminClubsClient } from '@/components/padel/admin/AdminClubsClient';
+import { AdminClubsClient } from '@/components/admin/AdminClubsClient';
 
 export const metadata: Metadata = {
   title: 'Clubs — Admin — El Padel',
