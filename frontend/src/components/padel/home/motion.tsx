@@ -17,6 +17,7 @@ import {
   useTransform,
 } from 'framer-motion';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { useCoarsePointer, useScrollParallaxEnabled } from './device';
 
 export function Magnetic({
   children,
@@ -69,11 +70,14 @@ export function WordReveal({
   delay?: number;
 }) {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
   const words = text.split(' ');
 
   if (reduceMotion) {
     return <span className={className}>{text}</span>;
   }
+
+  const useSlide = !coarse;
 
   return (
     <motion.span
@@ -85,15 +89,20 @@ export function WordReveal({
       style={{ display: 'inline' }}
     >
       {words.map((word, index) => (
-        <span key={`${word}-${index}`} className="reveal-word">
+        <span key={`${word}-${index}`} className={useSlide ? 'reveal-word' : undefined}>
           <motion.span
-            className="reveal-word__inner"
+            className={useSlide ? 'reveal-word__inner' : undefined}
             variants={{
-              hidden: { y: '115%' },
-              visible: {
-                y: '0%',
-                transition: { duration: 0.72, ease: [0.16, 1, 0.3, 1] },
-              },
+              hidden: useSlide ? { y: '115%' } : { opacity: 0 },
+              visible: useSlide
+                ? {
+                    y: '0%',
+                    transition: { duration: 0.72, ease: [0.16, 1, 0.3, 1] },
+                  }
+                : {
+                    opacity: 1,
+                    transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+                  },
             }}
           >
             {word}
@@ -141,29 +150,15 @@ export function Counter({
 export function Parallax({
   children,
   className = '',
-  speed = 0.5,
+  // Call-site API kept; scroll-linked y disabled (Safari scroll/JS desync).
+  speed: _speed = 0.5,
 }: {
   children: ReactNode;
   className?: string;
   speed?: number;
 }) {
-  const reduceMotion = useReducedMotion();
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start end', 'end start'],
-  });
-  const y = useTransform(scrollYProgress, [0, 1], [speed * 70, speed * -70]);
-
-  return (
-    <motion.div
-      ref={ref}
-      className={`relative ${className}`}
-      style={reduceMotion ? undefined : { y }}
-    >
-      {children}
-    </motion.div>
-  );
+  void _speed;
+  return <div className={`relative ${className}`}>{children}</div>;
 }
 
 export function ParallaxLayer({
@@ -175,7 +170,7 @@ export function ParallaxLayer({
   speed?: number;
   rotate?: number;
 }) {
-  const reduceMotion = useReducedMotion();
+  const scrollParallax = useScrollParallaxEnabled();
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -187,7 +182,7 @@ export function ParallaxLayer({
     <motion.div
       ref={ref}
       className={className}
-      style={reduceMotion ? { rotate } : { y, rotate }}
+      style={scrollParallax ? { y, rotate } : { rotate }}
       aria-hidden
     />
   );
@@ -252,11 +247,13 @@ export function Reveal({
   className?: string;
   delay?: number;
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 26 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-90px' }}
+      initial={reduceMotion ? false : { opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.64, delay, ease: easeOut }}
       className={className}
     >
@@ -281,7 +278,7 @@ export function Stagger({
       className={className}
       initial="hidden"
       whileInView="visible"
-      viewport={{ once: true, margin: '-80px' }}
+      viewport={{ once: true, amount: 0.15 }}
       variants={{
         hidden: {},
         visible: {
@@ -297,20 +294,20 @@ export function Stagger({
 export function StaggerItem({
   children,
   className = '',
-  y = 22,
+  y: _y = 22,
 }: {
   children: ReactNode;
   className?: string;
   y?: number;
 }) {
+  void _y;
   return (
     <motion.div
       className={className}
       variants={{
-        hidden: { opacity: 0, y },
+        hidden: { opacity: 0 },
         visible: {
           opacity: 1,
-          y: 0,
           transition: { duration: 0.58, ease: easeOut },
         },
       }}
@@ -322,35 +319,39 @@ export function StaggerItem({
 
 export function MarqueeBand() {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
   const { dictionary } = useI18n();
   const items = dictionary.home.marquee;
-  // Duplicate within each group for density; two groups enable seamless -50% scroll.
   const sequence = [...items, ...items];
+  const staticTrack = reduceMotion || coarse;
+
+  const renderGroup = (keyPrefix: string) => (
+    <div className="marquee-band__group">
+      {sequence.map((item, index) => (
+        <span key={`${keyPrefix}-${item}-${index}`} className="marquee-band__item">
+          {item}
+          <span className="marquee-band__star">✦</span>
+        </span>
+      ))}
+    </div>
+  );
 
   return (
     <div className="marquee-band" aria-hidden>
-      <div
-        className={`marquee-band__track${reduceMotion ? ' marquee-band__track--static' : ''}`}
-      >
-        <div className="marquee-band__group">
-          {sequence.map((item, index) => (
-            <span key={`${item}-${index}`} className="marquee-band__item">
-              {item}
-              <span className="marquee-band__star">✦</span>
-            </span>
-          ))}
+      {staticTrack ? (
+        <div className="marquee-band__track marquee-band__track--static">
+          {renderGroup('static')}
         </div>
-        {!reduceMotion ? (
-          <div className="marquee-band__group" aria-hidden>
-            {sequence.map((item, index) => (
-              <span key={`dup-${item}-${index}`} className="marquee-band__item">
-                {item}
-                <span className="marquee-band__star">✦</span>
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      ) : (
+        <motion.div
+          className="marquee-band__track"
+          animate={{ x: ['0%', '-50%'] }}
+          transition={{ duration: 46, repeat: Infinity, ease: 'linear' }}
+        >
+          {renderGroup('a')}
+          {renderGroup('b')}
+        </motion.div>
+      )}
     </div>
   );
 }

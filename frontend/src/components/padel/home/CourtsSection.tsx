@@ -234,7 +234,6 @@ export function CourtsSection() {
 
   return (
     <ScrollSection
-      id="courts"
       className="section-tight relative overflow-hidden px-5 md:px-10"
     >
       <div className="mx-auto max-w-7xl">

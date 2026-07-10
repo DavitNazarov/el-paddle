@@ -12,7 +12,6 @@ export function RegistrationSection() {
 
   return (
     <ScrollSection
-      id="registration"
       className="section-pad relative overflow-hidden px-5 md:px-10"
     >
       <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.82fr_1.18fr] lg:items-start lg:gap-12">

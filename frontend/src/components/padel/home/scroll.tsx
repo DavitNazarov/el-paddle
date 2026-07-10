@@ -10,13 +10,63 @@ import {
 import {
   animate,
   motion,
+  useInView,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
 } from 'framer-motion';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { snapStops, type SnapStopId } from './constants';
+import { useCoarsePointer } from './device';
 import { WordReveal } from './motion';
+
+const LAZY_VIEW_MARGIN = '100% 0px 100% 0px';
+const forcedSectionIds = new Set<string>();
+const forceListeners = new Set<() => void>();
+
+/** Mount a lazy section immediately (anchor nav, hash links, snap dots). */
+export function ensureSectionVisible(id: string) {
+  if (!id || forcedSectionIds.has(id)) return;
+  forcedSectionIds.add(id);
+  forceListeners.forEach((listener) => listener());
+}
+
+function useForcedSection(id?: string) {
+  const [, tick] = useState(0);
+
+  useEffect(() => {
+    const listener = () => tick((value) => value + 1);
+    forceListeners.add(listener);
+    return () => {
+      forceListeners.delete(listener);
+    };
+  }, []);
+
+  return id ? forcedSectionIds.has(id) : false;
+}
+
+function waitForSectionReady(id: string): Promise<HTMLElement | null> {
+  return new Promise((resolve) => {
+    ensureSectionVisible(id);
+    let attempts = 0;
+
+    const poll = () => {
+      const section = document.getElementById(id);
+      if (section?.dataset.lazyReady === 'true' && section.scrollHeight > 96) {
+        resolve(section);
+        return;
+      }
+      if (attempts >= 120) {
+        resolve(section);
+        return;
+      }
+      attempts += 1;
+      requestAnimationFrame(poll);
+    };
+
+    poll();
+  });
+}
 
 export function useActiveSection(ids: string[]) {
   const [active, setActive] = useState(ids[0] ?? '');
@@ -50,6 +100,7 @@ export function useActiveSection(ids: string[]) {
 
 export function SnapScrollController() {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
   const { dictionary } = useI18n();
   const { scrollY } = useScroll();
   const [activeSection, setActiveSection] = useState<SnapStopId>(snapStops[0].id);
@@ -74,30 +125,32 @@ export function SnapScrollController() {
 
   const snapToSection = useCallback(
     (id: string) => {
-      const section = document.getElementById(id);
-      if (!section) return;
+      const run = (section: HTMLElement) => {
+        snapAnimation.current?.stop();
+        const targetTop = section.offsetTop;
 
-      snapAnimation.current?.stop();
-      const targetTop = section.offsetTop;
+        if (reduceMotion || coarse) {
+          window.scrollTo({ top: targetTop, behavior: 'smooth' });
+          return;
+        }
 
-      if (reduceMotion) {
-        window.scrollTo({ top: targetTop, behavior: 'auto' });
-        return;
-      }
+        const startY = window.scrollY;
+        const distance = Math.abs(targetTop - startY);
+        const duration = Math.min(1.1, 0.5 + (distance / window.innerHeight) * 0.11);
 
-      const startY = window.scrollY;
-      const distance = Math.abs(targetTop - startY);
-      // Duration scales gently with distance, capped so far jumps stay snappy.
-      const duration = Math.min(1.1, 0.5 + (distance / window.innerHeight) * 0.11);
+        snapAnimation.current = animate(startY, targetTop, {
+          duration,
+          ease: [0.22, 1, 0.36, 1],
+          onUpdate: (latest) =>
+            window.scrollTo({ top: latest, behavior: 'instant' as ScrollBehavior }),
+        });
+      };
 
-      snapAnimation.current = animate(startY, targetTop, {
-        duration,
-        ease: [0.22, 1, 0.36, 1],
-        onUpdate: (latest) =>
-          window.scrollTo({ top: latest, behavior: 'instant' as ScrollBehavior }),
+      void waitForSectionReady(id).then((section) => {
+        if (section) run(section);
       });
     },
-    [reduceMotion],
+    [coarse, reduceMotion],
   );
 
   useMotionValueEvent(scrollY, 'change', () => {
@@ -116,6 +169,11 @@ export function SnapScrollController() {
   }, [readActiveSection]);
 
   useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (hash) ensureSectionVisible(hash);
+  }, []);
+
+  useEffect(() => {
     const handleAnchorClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
       const anchor = target?.closest('a[href^="#"]');
@@ -125,7 +183,7 @@ export function SnapScrollController() {
       if (!href || href === '#') return;
 
       const id = decodeURIComponent(href.slice(1));
-      if (!document.getElementById(id)) return;
+      if (!id) return;
 
       event.preventDefault();
       window.history.pushState(null, '', href);
@@ -178,10 +236,74 @@ export function ScrollSection({
   className?: string;
   id?: string;
 }) {
+  const Tag = id ? 'section' : 'div';
+  const sectionClass = id
+    ? `scroll-section ${className}`.trim()
+    : className.trim();
   return (
-    <section id={id} className={`scroll-section ${className}`}>
+    <Tag id={id} className={sectionClass || undefined}>
+      {children}
+    </Tag>
+  );
+}
+
+/** Viewport gate + code-split slot; keeps anchor id on a shell until content mounts. */
+export function ViewportDeferredSection({
+  id,
+  children,
+}: {
+  id: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  const forced = useForcedSection(id);
+  const inView = useInView(ref, {
+    once: true,
+    margin: LAZY_VIEW_MARGIN,
+    amount: 0,
+  });
+  const shouldRender = forced || inView;
+
+  if (!shouldRender) {
+    return (
+      <section
+        ref={ref}
+        id={id}
+        className="scroll-section scroll-section--placeholder"
+        aria-busy
+      />
+    );
+  }
+
+  return (
+    <section ref={ref} id={id} className="scroll-section" data-lazy-ready="true">
       {children}
     </section>
+  );
+}
+
+/** Lazy-mount non-section blocks (marquee, footer). */
+export function LazyMount({
+  children,
+  className = '',
+  eager = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** Preload closer to the viewport (footer). */
+  eager?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, {
+    once: true,
+    margin: eager ? '40% 0px' : '80% 0px',
+    amount: 0,
+  });
+
+  return (
+    <div ref={ref} className={className}>
+      {inView ? children : null}
+    </div>
   );
 }
 
@@ -238,9 +360,9 @@ export function SectionIntro({
           className={`mt-3 max-w-xl text-sm leading-6 text-[var(--padel-muted)] md:text-[0.95rem] md:leading-7 ${
             align === 'center' ? 'mx-auto' : ''
           }`}
-          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-60px' }}
+          initial={reduceMotion ? false : { opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true, amount: 0.4 }}
           transition={{ duration: 0.6, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
         >
           {copy}

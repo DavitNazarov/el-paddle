@@ -79,7 +79,6 @@ export function CompetitionSection() {
 
   return (
     <ScrollSection
-      id="competition"
       className="section-pad relative overflow-hidden px-5 md:px-10"
     >
       <div className="relative mx-auto max-w-7xl">

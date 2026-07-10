@@ -23,7 +23,6 @@ export function ContactSection() {
 
   return (
     <ScrollSection
-      id="contact"
       className="section-pad relative overflow-hidden px-5 text-center md:px-10"
     >
       <div className="section-orbit section-orbit--center" aria-hidden />

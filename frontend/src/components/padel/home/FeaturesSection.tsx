@@ -10,7 +10,6 @@ export function FeaturesSection() {
 
   return (
     <ScrollSection
-      id="features"
       className="section-tight relative overflow-hidden px-5 md:px-10"
     >
       <ParallaxLayer className="section-orbit section-orbit--right" speed={-0.45} rotate={-18} />

@@ -10,11 +10,13 @@ import {
 } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { useScrollParallaxEnabled } from './device';
 import { Parallax, ParallaxLayer, Reveal } from './motion';
 import { ScrollSection, SectionIntro } from './scroll';
 
 export function HistorySection() {
   const reduceMotion = useReducedMotion();
+  const scrollParallax = useScrollParallaxEnabled();
   const { dictionary } = useI18n();
   const history = dictionary.home.history;
   const principles = dictionary.home.principles;
@@ -25,10 +27,11 @@ export function HistorySection() {
   });
   const imageY = useTransform(scrollYProgress, [0, 1], ['-6%', '6%']);
   const imageScale = useTransform(scrollYProgress, [0, 0.5, 1], [1.08, 1.02, 1.08]);
+  const imageMotionStyle =
+    scrollParallax && !reduceMotion ? { y: imageY, scale: imageScale } : undefined;
 
   return (
     <ScrollSection
-      id="history"
       className="section-pad relative overflow-hidden px-5 md:px-10"
     >
       <ParallaxLayer className="section-orbit section-orbit--left" speed={0.55} rotate={18} />
@@ -42,7 +45,7 @@ export function HistorySection() {
             <div className="poster-frame__media">
               <motion.div
                 className="poster-frame__inner"
-                style={reduceMotion ? undefined : { y: imageY, scale: imageScale }}
+                style={imageMotionStyle}
               >
                 <Image
                   src="/images/el-padel-player-poster.jpeg"
@@ -72,9 +75,9 @@ export function HistorySection() {
               {principles.map((item, index) => (
                 <motion.div
                   key={item}
-                  initial={{ opacity: 0, x: 22 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true, margin: '-80px' }}
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true, amount: 0.35 }}
                   transition={{ duration: 0.5, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
                   className="principle-row group relative flex min-h-0 items-center gap-3 overflow-hidden rounded-xl border border-[var(--padel-line)] px-4 py-3"
                 >
@@ -93,9 +96,9 @@ export function HistorySection() {
 
             <motion.p
               className="font-script mt-8 text-2xl leading-tight text-[var(--padel-gold)] md:text-3xl"
-              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-40px' }}
+              initial={reduceMotion ? false : { opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true, amount: 0.4 }}
               transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
             >
               {history.signoff}

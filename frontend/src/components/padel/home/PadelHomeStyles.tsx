@@ -66,6 +66,17 @@ export function PadelHomeStyles() {
           background: transparent;
         }
 
+        .scroll-section--placeholder {
+          min-height: min(100dvh, 920px);
+          contain: layout style paint;
+        }
+
+        @media (max-width: 768px) {
+          .scroll-section--placeholder {
+            min-height: min(88svh, 760px);
+          }
+        }
+
         .scroll-section::before {
           content: '';
           position: absolute;
@@ -141,7 +152,7 @@ export function PadelHomeStyles() {
 
         .el-padel-page main > section {
           min-height: 100dvh;
-          will-change: transform, opacity;
+          overflow-anchor: none;
         }
 
         .el-padel-page section[id] {
@@ -386,15 +397,17 @@ export function PadelHomeStyles() {
 
         .aurora::before,
         .aurora::after {
-          content: '';
+          content: none;
+        }
+
+        .aurora-orb {
           position: absolute;
           border-radius: 999px;
-          filter: blur(70px);
-          opacity: 0.55;
+          pointer-events: none;
           will-change: transform;
         }
 
-        .page-surface__aurora::before {
+        .page-surface__aurora-a {
           top: -10%;
           left: -6%;
           height: 44rem;
@@ -402,7 +415,7 @@ export function PadelHomeStyles() {
           background: radial-gradient(circle, rgba(150, 38, 34, 0.28), transparent 62%);
         }
 
-        .page-surface__aurora::after {
+        .page-surface__aurora-b {
           right: -10%;
           bottom: -16%;
           height: 40rem;
@@ -410,39 +423,55 @@ export function PadelHomeStyles() {
           background: radial-gradient(circle, rgba(90, 18, 16, 0.32), transparent 60%);
         }
 
-        .aurora::before {
+        .aurora-orb--a {
           top: -12%;
           left: -8%;
           height: 46rem;
           width: 46rem;
           background: radial-gradient(circle, rgba(150, 38, 34, 0.24), transparent 62%);
-          animation: aurora-drift-a 24s ease-in-out infinite alternate;
+          filter: blur(70px);
+          opacity: 0.55;
         }
 
-        .aurora::after {
+        .aurora-orb--b {
           right: -12%;
           bottom: -18%;
           height: 42rem;
           width: 42rem;
           background: radial-gradient(circle, rgba(107, 26, 24, 0.28), transparent 60%);
-          animation: aurora-drift-b 30s ease-in-out infinite alternate;
+          filter: blur(70px);
+          opacity: 0.55;
         }
 
-        @keyframes aurora-drift-a {
-          from {
-            transform: translate3d(0, 0, 0) scale(1);
+        @media (pointer: coarse) {
+          .aurora-orb--a,
+          .aurora-orb--b {
+            filter: none;
+            opacity: 0.42;
           }
-          to {
-            transform: translate3d(6rem, 4rem, 0) scale(1.14);
-          }
-        }
 
-        @keyframes aurora-drift-b {
-          from {
-            transform: translate3d(0, 0, 0) scale(1.05);
+          .page-surface__aurora::before,
+          .page-surface__aurora::after {
+            content: '';
+            position: absolute;
+            border-radius: 999px;
+            opacity: 0.42;
           }
-          to {
-            transform: translate3d(-5rem, -3rem, 0) scale(0.9);
+
+          .page-surface__aurora::before {
+            top: -10%;
+            left: -6%;
+            height: 44rem;
+            width: 44rem;
+            background: radial-gradient(circle, rgba(150, 38, 34, 0.28), transparent 62%);
+          }
+
+          .page-surface__aurora::after {
+            right: -10%;
+            bottom: -16%;
+            height: 40rem;
+            width: 40rem;
+            background: radial-gradient(circle, rgba(90, 18, 16, 0.32), transparent 60%);
           }
         }
 
@@ -1049,7 +1078,8 @@ export function PadelHomeStyles() {
 
         .reveal-word__inner {
           display: inline-block;
-          will-change: transform;
+          /* Pre-hydrate offset so Safari doesn't flash final glyphs then jump. */
+          transform: translateY(115%);
         }
 
         .poster-ball-wrap {
@@ -1759,7 +1789,6 @@ export function PadelHomeStyles() {
         .marquee-band__track {
           display: flex;
           width: max-content;
-          animation: marquee-scroll 46s linear infinite;
         }
 
         .marquee-band__track--reverse {
@@ -1803,6 +1832,39 @@ export function PadelHomeStyles() {
           }
           to {
             transform: translateX(-50%);
+          }
+        }
+
+        @media (pointer: coarse) {
+          .gold-ink,
+          .floating-entry__pulse,
+          .section-kicker__index,
+          .live-badge__dot,
+          .hero-badge__svg,
+          .section-orbit--center,
+          .prize-tier--featured .prize-tier__shine {
+            animation: none !important;
+          }
+
+          .glass-card,
+          .poster-meta {
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+          }
+
+          .nav-shell {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+          }
+
+          .floating-entry,
+          .back-to-top {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+          }
+
+          .poster-frame__inner {
+            will-change: auto;
           }
         }
 
@@ -2574,7 +2636,10 @@ export function PadelHomeStyles() {
           .section-orbit--center,
           .marquee-band__track,
           .prize-tier--featured .prize-tier__shine,
-          .submit-spinner {
+          .submit-spinner,
+          .gold-ink,
+          .floating-entry__pulse,
+          .section-kicker__index {
             animation: none !important;
           }
 
@@ -2586,6 +2651,10 @@ export function PadelHomeStyles() {
 
           .visual-poster__overlay {
             opacity: 1;
+          }
+
+          .reveal-word__inner {
+            transform: none;
           }
         }
       `}</style>

@@ -18,6 +18,7 @@ import {
   useTransform,
 } from 'framer-motion';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { useCoarsePointer, useScrollParallaxEnabled } from './device';
 
 export function Preloader() {
   const reduceMotion = useReducedMotion();
@@ -209,16 +210,46 @@ export function FilmGrain() {
 }
 
 export function PageSurface() {
+  const coarse = useCoarsePointer();
+  const reduceMotion = useReducedMotion();
+  const animateAurora = !coarse && !reduceMotion;
+
   return (
     <div className="page-surface" aria-hidden>
       <div className="page-surface__gradient" />
-      <div className="page-surface__aurora aurora" />
+      <div className="page-surface__aurora aurora">
+        {animateAurora ? (
+          <>
+            <motion.div
+              className="aurora-orb aurora-orb--a page-surface__aurora-a"
+              aria-hidden
+              animate={{
+                x: ['0rem', '6rem', '0rem'],
+                y: ['0rem', '4rem', '0rem'],
+                scale: [1, 1.14, 1],
+              }}
+              transition={{ duration: 24, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+              className="aurora-orb aurora-orb--b page-surface__aurora-b"
+              aria-hidden
+              animate={{
+                x: ['0rem', '-5rem', '0rem'],
+                y: ['0rem', '-3rem', '0rem'],
+                scale: [1.05, 0.9, 1.05],
+              }}
+              transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          </>
+        ) : null}
+      </div>
       <div className="page-surface__sheen" />
     </div>
   );
 }
 
 export function PageProgress() {
+  const scrollParallax = useScrollParallaxEnabled();
   const { scrollYProgress } = useScroll();
   const glowOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.35, 0.7, 1]);
 
@@ -229,11 +260,13 @@ export function PageProgress() {
         className="page-progress fixed left-0 top-0 z-[90] h-[3px] w-full origin-left"
         style={{ scaleX: scrollYProgress }}
       />
-      <motion.div
-        aria-hidden
-        className="page-progress__glow pointer-events-none fixed left-0 top-0 z-[89] h-8 w-full origin-left"
-        style={{ scaleX: scrollYProgress, opacity: glowOpacity }}
-      />
+      {scrollParallax ? (
+        <motion.div
+          aria-hidden
+          className="page-progress__glow pointer-events-none fixed left-0 top-0 z-[89] h-8 w-full origin-left"
+          style={{ scaleX: scrollYProgress, opacity: glowOpacity }}
+        />
+      ) : null}
     </>
   );
 }

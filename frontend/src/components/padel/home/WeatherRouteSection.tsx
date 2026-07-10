@@ -30,7 +30,6 @@ export function WeatherRouteSection() {
 
   return (
     <ScrollSection
-      id="visit"
       className="section-pad relative overflow-hidden px-5 md:px-10"
     >
       <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-12">

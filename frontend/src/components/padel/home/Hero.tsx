@@ -14,12 +14,15 @@ import {
 } from 'lucide-react';
 import { PadelBall3D } from '../PadelBall3D';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { useCoarsePointer, useScrollParallaxEnabled } from './device';
 import { ScrollSection } from './scroll';
 
 const easeOut = [0.16, 1, 0.3, 1] as const;
 
 export function Hero() {
   const reduceMotion = useReducedMotion();
+  const scrollParallax = useScrollParallaxEnabled();
+  const coarse = useCoarsePointer();
   const { dictionary } = useI18n();
   const hero = dictionary.home.hero;
   const { scrollYProgress } = useScroll();
@@ -35,14 +38,16 @@ export function Hero() {
       <div className="poster-vignette absolute inset-0 -z-10" aria-hidden />
 
       <motion.div
-        initial={reduceMotion ? false : { opacity: 0, y: 18 }}
-        animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: easeOut }}
-        style={reduceMotion ? undefined : { y: brandY }}
+        style={scrollParallax ? { y: brandY } : undefined}
         className="relative z-10 mx-auto flex max-w-5xl flex-col items-center text-center"
       >
         <motion.div
-          animate={reduceMotion ? undefined : { y: [0, -5, 0] }}
+          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: easeOut }}
+        >
+        <motion.div
+          animate={reduceMotion || coarse ? undefined : { y: [0, -5, 0] }}
           transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}
         >
           <Image
@@ -53,6 +58,7 @@ export function Hero() {
             priority
             className="hero-crest h-auto w-[188px] object-contain md:w-[228px]"
           />
+        </motion.div>
         </motion.div>
         <p className="font-display -mt-1 text-[0.7rem] font-semibold uppercase tracking-[0.38em] text-[var(--padel-gold)] md:text-xs">
           {hero.subtitle}
@@ -73,12 +79,15 @@ export function Hero() {
       </motion.div>
 
       <motion.div
-        initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 24 }}
-        animate={reduceMotion ? undefined : { opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.92, delay: 0.1, ease: easeOut }}
-        style={reduceMotion ? undefined : { y: ballY }}
+        style={scrollParallax ? { y: ballY } : undefined}
         className="poster-ball-wrap pointer-events-auto relative z-20 mx-auto mt-2 aspect-square w-full max-w-[480px] md:mt-3"
       >
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 24 }}
+          animate={reduceMotion ? undefined : { opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.92, delay: 0.1, ease: easeOut }}
+          className="h-full w-full"
+        >
         <PadelBall3D className="poster-ball-canvas" />
         <div className="poster-ball-copy pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-center">
           <h1 className="font-display max-w-[15ch] text-2xl font-bold uppercase leading-[1.2] text-[var(--padel-red)] sm:text-3xl md:text-4xl">
@@ -86,10 +95,10 @@ export function Hero() {
               <span key={line} className="hero-title-line">
                 <motion.span
                   className="hero-title-line__inner"
-                  initial={reduceMotion ? false : { y: '112%' }}
-                  animate={reduceMotion ? undefined : { y: '0%' }}
+                  initial={reduceMotion ? false : coarse ? { opacity: 0 } : { y: '112%' }}
+                  animate={reduceMotion ? undefined : coarse ? { opacity: 1 } : { y: '0%' }}
                   transition={{
-                    duration: 0.85,
+                    duration: coarse ? 0.6 : 0.85,
                     delay: 0.34 + index * 0.09,
                     ease: easeOut,
                   }}
@@ -100,6 +109,7 @@ export function Hero() {
             ))}
           </h1>
         </div>
+        </motion.div>
       </motion.div>
 
       <motion.div
@@ -126,12 +136,15 @@ export function Hero() {
       </motion.div>
 
       <motion.div
-        initial={reduceMotion ? false : { opacity: 0, y: 18 }}
-        animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-        transition={{ duration: 0.72, delay: 0.28, ease: easeOut }}
-        style={reduceMotion ? undefined : { y: footerY }}
+        style={scrollParallax ? { y: footerY } : undefined}
         className="poster-footer relative z-0 mx-auto mt-6 grid w-full max-w-7xl gap-4 md:absolute md:inset-x-10 md:bottom-4 md:mt-0 md:w-auto md:grid-cols-[minmax(0,1fr)_4.5rem_minmax(0,1fr)] md:items-end md:gap-0 lg:grid-cols-[minmax(0,1fr)_5.5rem_minmax(0,1fr)]"
       >
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.72, delay: 0.28, ease: easeOut }}
+          className="contents"
+        >
         <motion.div
           className="poster-meta glass-card min-w-0 w-full justify-self-start border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-sm"
           initial={reduceMotion ? false : { opacity: 0, x: -18 }}
@@ -175,6 +188,7 @@ export function Hero() {
           <p className="font-display text-base font-light uppercase leading-tight break-words sm:text-lg md:text-xl">
             <strong className="font-extrabold">KUS TBA Padel</strong> Courts
           </p>
+        </motion.div>
         </motion.div>
       </motion.div>
 

@@ -67,17 +67,17 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     if (!mount) return;
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
     camera.position.set(0, 0.18, 6);
 
     const renderer = new THREE.WebGLRenderer({
       alpha: true,
-      antialias: true,
-      powerPreference: 'high-performance',
+      antialias: !coarsePointer,
+      powerPreference: coarsePointer ? 'default' : 'high-performance',
     });
-    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, coarsePointer ? 1.5 : 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, coarsePointer ? 1.25 : 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.setAttribute('aria-hidden', 'true');
     renderer.domElement.style.display = 'block';
@@ -116,7 +116,7 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     );
 
     const halo = new THREE.Mesh(
-      new THREE.SphereGeometry(2.15, 36, 36),
+      new THREE.SphereGeometry(2.15, coarsePointer ? 24 : 36, coarsePointer ? 24 : 36),
       new THREE.MeshBasicMaterial({
         color: 0xf6efe4,
         opacity: 0.075,
@@ -126,7 +126,7 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     );
     group.add(halo);
 
-    const particleCount = coarsePointer ? 44 : 80;
+    const particleCount = coarsePointer ? 24 : 80;
     const positions = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i += 1) {
       const radius = 2.4 + Math.random() * 2.2;
@@ -166,6 +166,26 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     const easedPointer = { x: 0, y: 0 };
     const startedAt = performance.now();
     let frame = 0;
+    let visible = true;
+    let scrolling = false;
+    let scrollEndTimer = 0;
+
+    const onScroll = () => {
+      if (!coarsePointer) return;
+      scrolling = true;
+      window.clearTimeout(scrollEndTimer);
+      scrollEndTimer = window.setTimeout(() => {
+        scrolling = false;
+      }, 120);
+    };
+
+    const visibilityObserver = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry?.isIntersecting ?? true;
+      },
+      { root: null, threshold: 0.08 },
+    );
+    visibilityObserver.observe(mount);
 
     const resize = () => {
       const width = Math.max(1, mount.clientWidth);
@@ -190,6 +210,9 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     };
 
     const render = () => {
+      frame = window.requestAnimationFrame(render);
+      if (!visible || (coarsePointer && scrolling)) return;
+
       const elapsed = (performance.now() - startedAt) / 1000;
       easedPointer.x += (pointer.x - easedPointer.x) * 0.045;
       easedPointer.y += (pointer.y - easedPointer.y) * 0.045;
@@ -202,7 +225,6 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
       particles.rotation.x = Math.sin(elapsed * 0.2) * 0.05;
 
       renderer.render(scene, camera);
-      frame = window.requestAnimationFrame(render);
     };
 
     const resizeObserver = new ResizeObserver(resize);
@@ -216,9 +238,13 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     if (!reduceMotion) {
       render();
     }
+    window.addEventListener('scroll', onScroll, { passive: true });
 
     return () => {
       disposed = true;
+      visibilityObserver.disconnect();
+      window.removeEventListener('scroll', onScroll);
+      window.clearTimeout(scrollEndTimer);
       resizeObserver.disconnect();
       if (!coarsePointer) {
         mount.removeEventListener('pointermove', handlePointerMove);

@@ -15,7 +15,7 @@ export function SponsorsSection() {
   ] as const;
 
   return (
-    <ScrollSection id="sponsors" className="section-pad relative overflow-hidden px-5 md:px-10">
+    <ScrollSection className="section-pad relative overflow-hidden px-5 md:px-10">
       <div className="mx-auto max-w-7xl">
         <Reveal>
           <Parallax speed={0.2}>
