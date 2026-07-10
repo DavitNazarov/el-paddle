@@ -563,7 +563,6 @@ export function PadelHomeStyles() {
             rgba(246, 239, 225, 0.055),
             rgba(246, 239, 225, 0.015)
           );
-          backdrop-filter: blur(6px);
           transition:
             transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
             border-color 0.4s ease,
@@ -582,6 +581,29 @@ export function PadelHomeStyles() {
           border-radius: inherit;
           border: 1px solid rgba(246, 239, 225, 0.04);
           pointer-events: none;
+        }
+
+        @media (min-width: 769px) and (hover: hover) and (pointer: fine) {
+          .glass-card {
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+          }
+
+          .nav-shell,
+          .floating-entry {
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+          }
+
+          .back-to-top {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+          }
+
+          .poster-meta {
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+          }
         }
 
         /* ---- Custom cursor ring ---- */
@@ -1852,15 +1874,11 @@ export function PadelHomeStyles() {
             -webkit-backdrop-filter: none;
           }
 
-          .nav-shell {
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-          }
-
+          .nav-shell,
           .floating-entry,
           .back-to-top {
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
           }
 
           .poster-frame__inner {
@@ -2337,7 +2355,8 @@ export function PadelHomeStyles() {
 
           .poster-meta {
             padding: 1rem;
-            backdrop-filter: blur(10px);
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
           }
 
           .poster-meta > p {
@@ -2605,6 +2624,24 @@ export function PadelHomeStyles() {
             height: auto;
             min-height: 100dvh;
             padding-bottom: 9rem;
+          }
+        }
+
+        @media (max-width: 768px), (pointer: coarse) {
+          .page-progress__glow {
+            display: none;
+          }
+
+          .nav-shell,
+          .floating-entry,
+          .back-to-top,
+          .poster-meta {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+          }
+
+          .mobile-menu {
+            will-change: transform, opacity;
           }
         }
 

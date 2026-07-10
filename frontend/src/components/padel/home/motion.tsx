@@ -29,6 +29,28 @@ export function Magnetic({
   strength?: number;
 }) {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
+
+  if (reduceMotion || coarse) {
+    return <div className={className} style={{ display: 'inline-flex' }}>{children}</div>;
+  }
+
+  return (
+    <MagneticMotion className={className} strength={strength}>
+      {children}
+    </MagneticMotion>
+  );
+}
+
+function MagneticMotion({
+  children,
+  className,
+  strength,
+}: {
+  children: ReactNode;
+  className: string;
+  strength: number;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -36,7 +58,7 @@ export function Magnetic({
   const springY = useSpring(y, { stiffness: 220, damping: 18, mass: 0.4 });
 
   const handleMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (reduceMotion || !ref.current) return;
+    if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     x.set((event.clientX - (rect.left + rect.width / 2)) * strength);
     y.set((event.clientY - (rect.top + rect.height / 2)) * strength);
@@ -73,11 +95,9 @@ export function WordReveal({
   const coarse = useCoarsePointer();
   const words = text.split(' ');
 
-  if (reduceMotion) {
+  if (reduceMotion || coarse) {
     return <span className={className}>{text}</span>;
   }
-
-  const useSlide = !coarse;
 
   return (
     <motion.span
@@ -89,20 +109,15 @@ export function WordReveal({
       style={{ display: 'inline' }}
     >
       {words.map((word, index) => (
-        <span key={`${word}-${index}`} className={useSlide ? 'reveal-word' : undefined}>
+        <span key={`${word}-${index}`} className="reveal-word">
           <motion.span
-            className={useSlide ? 'reveal-word__inner' : undefined}
+            className="reveal-word__inner"
             variants={{
-              hidden: useSlide ? { y: '115%' } : { opacity: 0 },
-              visible: useSlide
-                ? {
-                    y: '0%',
-                    transition: { duration: 0.72, ease: [0.16, 1, 0.3, 1] },
-                  }
-                : {
-                    opacity: 1,
-                    transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
-                  },
+              hidden: { y: '115%' },
+              visible: {
+                y: '0%',
+                transition: { duration: 0.72, ease: [0.16, 1, 0.3, 1] },
+              },
             }}
           >
             {word}
@@ -124,20 +139,22 @@ export function Counter({
   duration?: number;
 }) {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: '-15%' });
   const [value, setValue] = useState(0);
-  const displayValue = reduceMotion ? to : value;
+  const shouldSkipMotion = Boolean(reduceMotion || coarse);
+  const displayValue = shouldSkipMotion ? to : value;
 
   useEffect(() => {
-    if (!inView || reduceMotion) return;
+    if (!inView || shouldSkipMotion) return;
     const controls = animate(0, to, {
       duration,
       ease: [0.16, 1, 0.3, 1],
       onUpdate: (latest) => setValue(Math.round(latest)),
     });
     return () => controls.stop();
-  }, [inView, to, duration, reduceMotion]);
+  }, [duration, inView, shouldSkipMotion, to]);
 
   return (
     <span ref={ref}>
@@ -171,6 +188,29 @@ export function ParallaxLayer({
   rotate?: number;
 }) {
   const scrollParallax = useScrollParallaxEnabled();
+
+  if (!scrollParallax) {
+    return (
+      <div
+        className={className}
+        style={rotate ? { transform: `rotate(${rotate}deg)` } : undefined}
+        aria-hidden
+      />
+    );
+  }
+
+  return <ParallaxLayerMotion className={className} speed={speed} rotate={rotate} />;
+}
+
+function ParallaxLayerMotion({
+  className,
+  speed,
+  rotate,
+}: {
+  className: string;
+  speed: number;
+  rotate: number;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -182,7 +222,7 @@ export function ParallaxLayer({
     <motion.div
       ref={ref}
       className={className}
-      style={scrollParallax ? { y, rotate } : { rotate }}
+      style={{ y, rotate }}
       aria-hidden
     />
   );
@@ -198,6 +238,28 @@ export function Tilt({
   max?: number;
 }) {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
+
+  if (reduceMotion || coarse) {
+    return <div className={className}>{children}</div>;
+  }
+
+  return (
+    <TiltMotion className={className} max={max}>
+      {children}
+    </TiltMotion>
+  );
+}
+
+function TiltMotion({
+  children,
+  className,
+  max,
+}: {
+  children: ReactNode;
+  className: string;
+  max: number;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const rotateX = useMotionValue(0);
   const rotateY = useMotionValue(0);
@@ -205,7 +267,7 @@ export function Tilt({
   const springRotateY = useSpring(rotateY, { stiffness: 180, damping: 22 });
 
   const handleMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (reduceMotion || !ref.current) return;
+    if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
     const px = (event.clientX - rect.left) / rect.width - 0.5;
     const py = (event.clientY - rect.top) / rect.height - 0.5;
@@ -248,6 +310,11 @@ export function Reveal({
   delay?: number;
 }) {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
+
+  if (reduceMotion || coarse) {
+    return <div className={className}>{children}</div>;
+  }
 
   return (
     <motion.div
@@ -273,6 +340,13 @@ export function Stagger({
   delay?: number;
   stagger?: number;
 }) {
+  const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
+
+  if (reduceMotion || coarse) {
+    return <div className={className}>{children}</div>;
+  }
+
   return (
     <motion.div
       className={className}

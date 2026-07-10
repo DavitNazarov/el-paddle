@@ -146,7 +146,7 @@ export function Hero() {
           className="contents"
         >
         <motion.div
-          className="poster-meta glass-card min-w-0 w-full justify-self-start border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-sm"
+          className="poster-meta glass-card min-w-0 w-full justify-self-start border border-[var(--padel-line)] p-4 md:max-w-sm"
           initial={reduceMotion ? false : { opacity: 0, x: -18 }}
           animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
           transition={{ duration: 0.7, delay: 0.48, ease: easeOut }}
@@ -170,7 +170,7 @@ export function Hero() {
         <div className="hidden md:block" aria-hidden />
 
         <motion.div
-          className="poster-meta glass-card min-w-0 w-full justify-self-end border border-[var(--padel-line)] p-4 backdrop-blur-sm md:max-w-md md:text-right"
+          className="poster-meta glass-card min-w-0 w-full justify-self-end border border-[var(--padel-line)] p-4 md:max-w-md md:text-right"
           initial={reduceMotion ? false : { opacity: 0, x: 18 }}
           animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
           transition={{ duration: 0.7, delay: 0.56, ease: easeOut }}

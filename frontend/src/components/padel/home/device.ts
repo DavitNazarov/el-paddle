@@ -1,14 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from 'react';
 import { useReducedMotion } from 'framer-motion';
 
-/** True on real phones/tablets — DevTools device mode keeps pointer:fine. */
+const mobileMotionQuery = '(pointer: coarse), (hover: none), (max-width: 768px)';
+const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+/** True for touch/small-screen devices; DevTools device mode often keeps pointer:fine. */
 export function useCoarsePointer() {
   const [coarse, setCoarse] = useState(false);
 
-  useEffect(() => {
-    const media = window.matchMedia('(pointer: coarse)');
+  useBrowserLayoutEffect(() => {
+    const media = window.matchMedia(mobileMotionQuery);
     const sync = () => setCoarse(media.matches);
     sync();
     media.addEventListener('change', sync);

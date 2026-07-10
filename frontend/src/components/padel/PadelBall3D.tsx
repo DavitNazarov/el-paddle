@@ -75,7 +75,7 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     const renderer = new THREE.WebGLRenderer({
       alpha: true,
       antialias: !coarsePointer,
-      powerPreference: coarsePointer ? 'default' : 'high-performance',
+      powerPreference: coarsePointer ? 'low-power' : 'high-performance',
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, coarsePointer ? 1.25 : 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -126,7 +126,7 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     );
     group.add(halo);
 
-    const particleCount = coarsePointer ? 24 : 80;
+    const particleCount = coarsePointer ? 12 : 80;
     const positions = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i += 1) {
       const radius = 2.4 + Math.random() * 2.2;
@@ -169,6 +169,8 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
     let visible = true;
     let scrolling = false;
     let scrollEndTimer = 0;
+    let lastRenderAt = 0;
+    const frameInterval = coarsePointer ? 1000 / 24 : 1000 / 60;
 
     const onScroll = () => {
       if (!coarsePointer) return;
@@ -176,7 +178,7 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
       window.clearTimeout(scrollEndTimer);
       scrollEndTimer = window.setTimeout(() => {
         scrolling = false;
-      }, 120);
+      }, 180);
     };
 
     const visibilityObserver = new IntersectionObserver(
@@ -209,11 +211,13 @@ export function PadelBall3D({ className = '' }: PadelBall3DProps) {
       pointer.y = 0;
     };
 
-    const render = () => {
+    const render = (now = performance.now()) => {
       frame = window.requestAnimationFrame(render);
       if (!visible || (coarsePointer && scrolling)) return;
+      if (now - lastRenderAt < frameInterval) return;
+      lastRenderAt = now;
 
-      const elapsed = (performance.now() - startedAt) / 1000;
+      const elapsed = (now - startedAt) / 1000;
       easedPointer.x += (pointer.x - easedPointer.x) * 0.045;
       easedPointer.y += (pointer.y - easedPointer.y) * 0.045;
 

@@ -107,7 +107,7 @@ export function FloatingEntryBar() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16, scale: 0.98 }}
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="floating-entry fixed bottom-5 left-1/2 z-[80] flex w-[min(92vw,26rem)] -translate-x-1/2 items-center gap-3 rounded-full border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/88 px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl md:bottom-7"
+          className="floating-entry fixed bottom-5 left-1/2 z-[80] flex w-[min(92vw,26rem)] -translate-x-1/2 items-center gap-3 rounded-full border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/88 px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] md:bottom-7"
           aria-label={floating.cta}
         >
           <span className="floating-entry__pulse hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--padel-line)] sm:flex">
@@ -167,7 +167,7 @@ export function BackToTop() {
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           onClick={scrollUp}
           aria-label={dictionary.home.footer.backTop}
-          className="back-to-top fixed bottom-5 right-5 z-[75] flex h-12 w-12 items-center justify-center rounded-full border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/80 text-[var(--padel-ivory)] backdrop-blur-md transition-colors duration-200 hover:border-[var(--padel-gold)] hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] md:bottom-7 md:right-7"
+          className="back-to-top fixed bottom-5 right-5 z-[75] flex h-12 w-12 items-center justify-center rounded-full border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/80 text-[var(--padel-ivory)] transition-colors duration-200 hover:border-[var(--padel-gold)] hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] md:bottom-7 md:right-7"
         >
           <ArrowUp className="h-5 w-5" />
         </motion.button>
@@ -186,12 +186,16 @@ export function MobileMenu({
   onClose: () => void;
   user: PublicUser | null;
 }) {
+  const reduceMotion = useReducedMotion();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const { dictionary } = useI18n();
   const nav = dictionary.home.nav;
   const a11y = dictionary.home.a11y;
   const entryHref = authEntryHref(user);
   const entryLabel = user ? dictionary.common.dashboard : dictionary.common.register;
+  const menuTransition = reduceMotion
+    ? { duration: 0 }
+    : { duration: 0.26, ease: [0.16, 1, 0.3, 1] as const };
 
   useEffect(() => {
     if (!open) return;
@@ -213,10 +217,10 @@ export function MobileMenu({
       {open ? (
         <motion.div
           className="mobile-menu fixed inset-0 z-[100] flex flex-col overflow-y-auto bg-[var(--padel-ink)] px-5 pb-10 pt-24 sm:px-6"
-          initial={{ clipPath: 'inset(0 0 100% 0)' }}
-          animate={{ clipPath: 'inset(0 0 0% 0)' }}
-          exit={{ clipPath: 'inset(0 0 100% 0)' }}
-          transition={{ duration: 0.55, ease: [0.76, 0, 0.24, 1] }}
+          initial={reduceMotion ? false : { opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+          transition={menuTransition}
           role="dialog"
           aria-modal="true"
           aria-label={a11y.siteMenu}
@@ -241,8 +245,8 @@ export function MobileMenu({
                 initial={{ opacity: 0, y: 28 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
-                  duration: 0.55,
-                  delay: 0.18 + index * 0.06,
+                  duration: reduceMotion ? 0 : 0.28,
+                  delay: reduceMotion ? 0 : 0.06 + index * 0.035,
                   ease: [0.16, 1, 0.3, 1],
                 }}
             className="mobile-menu__link font-display flex items-baseline gap-3 border-b border-[var(--padel-line)] py-3.5 text-2xl font-semibold text-[var(--padel-ivory)]"
@@ -260,7 +264,7 @@ export function MobileMenu({
             onClick={onClose}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: reduceMotion ? 0 : 0.28, delay: reduceMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
             className="btn-premium mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-6 py-3.5 text-base font-semibold text-[var(--padel-red)]"
           >
             {entryLabel}
@@ -270,7 +274,7 @@ export function MobileMenu({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.62 }}
+            transition={{ duration: reduceMotion ? 0 : 0.24, delay: reduceMotion ? 0 : 0.22 }}
             className="mt-6 flex items-center justify-between gap-4 border-t border-[var(--padel-line)] pt-5 text-sm font-medium text-[var(--padel-muted)]"
           >
             <a
@@ -292,7 +296,7 @@ export function MobileMenu({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.68 }}
+            transition={{ duration: reduceMotion ? 0 : 0.24, delay: reduceMotion ? 0 : 0.24 }}
             className="mt-5 flex justify-center"
           >
             <LanguageSwitcher tone="dark" />
@@ -332,7 +336,7 @@ export function PadelNav() {
             : '0 18px 70px rgba(0,0,0,0.18)',
         }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 rounded-full border border-[var(--padel-line)] px-3 text-[var(--padel-ivory)] backdrop-blur-xl md:h-16 md:px-4 nav-shell"
+        className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 rounded-full border border-[var(--padel-line)] px-3 text-[var(--padel-ivory)] md:h-16 md:px-4 nav-shell"
       >
         <a
           href="#top"

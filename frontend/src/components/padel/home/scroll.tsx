@@ -154,6 +154,7 @@ export function SnapScrollController() {
   );
 
   useMotionValueEvent(scrollY, 'change', () => {
+    if (coarse) return;
     const current = readActiveSection();
     setActiveSection((previous) => (previous === current ? previous : current));
   });
@@ -193,6 +194,8 @@ export function SnapScrollController() {
     document.addEventListener('click', handleAnchorClick);
     return () => document.removeEventListener('click', handleAnchorClick);
   }, [snapToSection]);
+
+  if (coarse) return null;
 
   return (
     <nav className="snap-indicator" aria-label={dictionary.home.a11y.sectionNavigation}>

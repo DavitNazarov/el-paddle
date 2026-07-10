@@ -22,12 +22,13 @@ import { useCoarsePointer, useScrollParallaxEnabled } from './device';
 
 export function Preloader() {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
   const { dictionary } = useI18n();
   const [done, setDone] = useState(false);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion || coarse) return;
     const fallback = window.setTimeout(() => {
       setProgress(100);
       setDone(true);
@@ -45,17 +46,17 @@ export function Preloader() {
       window.clearTimeout(fallback);
       controls.stop();
     };
-  }, [reduceMotion]);
+  }, [coarse, reduceMotion]);
 
   useEffect(() => {
-    if (done || reduceMotion) return;
+    if (done || reduceMotion || coarse) return;
     document.documentElement.style.overflow = 'hidden';
     return () => {
       document.documentElement.style.overflow = '';
     };
-  }, [done, reduceMotion]);
+  }, [coarse, done, reduceMotion]);
 
-  if (reduceMotion) return null;
+  if (reduceMotion || coarse) return null;
 
   return (
     <AnimatePresence>
