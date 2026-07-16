@@ -142,7 +142,7 @@ export function AdminClubsClient() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="font-display text-xl font-semibold text-[var(--padel-ivory)]">{club.name}</h3>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-[rgba(246,239,225,0.55)]">
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-[rgba(213,201,177,0.55)]">
                       {club.description || admin.clubs.noDescription}
                     </p>
                   </div>
@@ -176,7 +176,7 @@ export function AdminClubsClient() {
                     {club.members.map((member) => (
                       <Badge
                         key={member.id}
-                        className="border-[rgba(246,239,225,0.18)] bg-[rgba(246,239,225,0.05)] text-[rgba(246,239,225,0.75)]"
+                        className="border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.05)] text-[rgba(213,201,177,0.75)]"
                       >
                         {member.user.fullName}
                         {member.roleTitle ? ` · ${member.roleTitle}` : ''}

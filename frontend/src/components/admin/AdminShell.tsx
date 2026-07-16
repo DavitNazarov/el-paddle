@@ -79,8 +79,8 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
       }
       sidebarFooter={
         <div className="space-y-3">
-          <div className="rounded-lg border border-[rgba(246,239,225,0.1)] bg-[rgba(246,239,225,0.03)] p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(246,239,225,0.42)]">
+          <div className="rounded-lg border border-[rgba(213,201,177,0.1)] bg-[rgba(213,201,177,0.03)] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(213,201,177,0.42)]">
               {dictionary.dashboard.admin.shell.snapshot}
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -131,7 +131,7 @@ function SnapshotItem({ label, value, highlight = false }: { label: string; valu
       <p className={cn('text-lg font-semibold tabular-nums text-[var(--padel-ivory)]', highlight && 'text-[var(--padel-ivory)]')}>
         {value}
       </p>
-      <p className="mt-0.5 text-[10px] text-[rgba(246,239,225,0.42)]">{label}</p>
+      <p className="mt-0.5 text-[10px] text-[rgba(213,201,177,0.42)]">{label}</p>
     </div>
   );
 }

@@ -78,19 +78,19 @@ export function PlayerShell({
               }
             />
           ))}
-          <div className="my-3 h-px bg-[rgba(246,239,225,0.08)]" />
+          <div className="my-3 h-px bg-[rgba(213,201,177,0.08)]" />
           <SidebarLink href="/" icon={Home} label={player.sidebar.publicSite} />
         </div>
       }
       sidebarFooter={
-        <div className="rounded-lg border border-[rgba(246,239,225,0.1)] bg-[rgba(246,239,225,0.03)] p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(246,239,225,0.42)]">
+        <div className="rounded-lg border border-[rgba(213,201,177,0.1)] bg-[rgba(213,201,177,0.03)] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(213,201,177,0.42)]">
             {player.signedIn}
           </p>
           <p className="mt-2 truncate text-sm font-medium text-[var(--padel-ivory)]">{user.fullName}</p>
-          <p className="mt-0.5 truncate text-xs text-[rgba(246,239,225,0.42)]">{user.email}</p>
+          <p className="mt-0.5 truncate text-xs text-[rgba(213,201,177,0.42)]">{user.email}</p>
           {user.club ? (
-            <p className="mt-1 truncate text-xs text-[rgba(246,239,225,0.42)]">{user.club.name}</p>
+            <p className="mt-1 truncate text-xs text-[rgba(213,201,177,0.42)]">{user.club.name}</p>
           ) : null}
         </div>
       }

@@ -1,242 +1,22 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-} from 'framer-motion';
-import {
-  ChevronLeft,
-  ChevronRight,
-  X,
-} from 'lucide-react';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { Reveal, Stagger, StaggerItem } from './motion';
+import { Reveal } from './motion';
 import { ScrollSection, SectionIntro } from './scroll';
 
-export const COURT_STAGE = [
-  {
-    src: '/images/el-padel-courts-aerial-close.jpg',
-    position: 'center 45%',
-  },
-  {
-    src: '/images/el-padel-courts-aerial-top.jpg',
-    position: 'center center',
-  },
-  {
-    src: '/images/el-padel-courts-aerial-city.png',
-    position: 'center 70%',
-  },
-  {
-    src: '/images/el-padel-courts-aerial-lake.png',
-    position: 'center 55%',
-  },
-] as const;
-
-export function CourtsLightbox({
-  open,
-  index,
-  onClose,
-  onChange,
-  shots,
-}: {
-  open: boolean;
-  index: number;
-  onClose: () => void;
-  onChange: (index: number) => void;
-  shots: Array<{ src: string; alt: string; label: string; position: string }>;
-}) {
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const { dictionary, t } = useI18n();
-  const courts = dictionary.home.courts;
-  const reduceMotion = useReducedMotion();
-  const active = shots[index];
-  const total = shots.length;
-  const [mounted, setMounted] = useState(false);
-  const [direction, setDirection] = useState(1);
-  const slideEase = [0.22, 1, 0.36, 1] as const;
-
-  const goTo = useCallback(
-    (nextIndex: number, dir: number) => {
-      setDirection(dir);
-      onChange(nextIndex);
-    },
-    [onChange],
-  );
-
-  const showPrev = useCallback(() => {
-    goTo((index - 1 + total) % total, -1);
-  }, [goTo, index, total]);
-
-  const showNext = useCallback(() => {
-    goTo((index + 1) % total, 1);
-  }, [goTo, index, total]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setMounted(true), 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-      if (event.key === 'ArrowLeft') showPrev();
-      if (event.key === 'ArrowRight') showNext();
-    };
-    const previousOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
-    window.addEventListener('keydown', handleKey);
-    return () => {
-      document.documentElement.style.overflow = previousOverflow;
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('keydown', handleKey);
-    };
-  }, [open, onClose, showNext, showPrev]);
-
-  if (!mounted) return null;
-
-  return createPortal(
-    <AnimatePresence>
-      {open && active ? (
-        <motion.div
-          className="courts-lightbox fixed inset-0 z-[130] flex items-center justify-center p-4 md:p-8"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.28 }}
-          role="dialog"
-          aria-modal="true"
-          aria-label={active.label}
-        >
-          <button
-            type="button"
-            className="courts-lightbox__backdrop absolute inset-0"
-            aria-label={courts.closePhoto}
-            onClick={onClose}
-          />
-
-          <motion.div
-            className="courts-lightbox__panel relative z-10 flex w-full max-w-6xl flex-col"
-            initial={{ opacity: 0, scale: 0.96, y: 18 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.98, y: 10 }}
-            transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <div className="courts-lightbox__toolbar">
-              <p className="courts-lightbox__title">
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                <span>{active.label}</span>
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="courts-lightbox__count">
-                  {t('home.courts.photoOf', { current: index + 1, total })}
-                </span>
-                <button
-                  ref={closeButtonRef}
-                  type="button"
-                  aria-label={courts.closePhoto}
-                  onClick={onClose}
-                  className="courts-lightbox__icon-btn"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="courts-lightbox__stage">
-              <AnimatePresence initial={false} custom={direction} mode="popLayout">
-                <motion.div
-                  key={active.src}
-                  className="courts-lightbox__shot"
-                  custom={direction}
-                  variants={{
-                    enter: (dir: number) =>
-                      reduceMotion
-                        ? { opacity: 0, x: 0, scale: 1 }
-                        : { opacity: 0, x: dir * 72, scale: 1.02 },
-                    center: { opacity: 1, x: 0, scale: 1 },
-                    exit: (dir: number) =>
-                      reduceMotion
-                        ? { opacity: 0, x: 0, scale: 1 }
-                        : { opacity: 0, x: dir * -56, scale: 0.985 },
-                  }}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{ duration: 0.48, ease: slideEase }}
-                >
-                  <Image
-                    src={active.src}
-                    alt={active.alt}
-                    fill
-                    sizes="(max-width: 1024px) 94vw, 72vw"
-                    className="object-contain"
-                    style={{ objectPosition: active.position }}
-                    priority
-                  />
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <div className="courts-lightbox__nav">
-              <button
-                type="button"
-                aria-label={courts.previousPhoto}
-                onClick={showPrev}
-                className="courts-lightbox__icon-btn"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                aria-label={courts.nextPhoto}
-                onClick={showNext}
-                className="courts-lightbox__icon-btn"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>,
-    document.body,
-  );
-}
+const COURT_IMAGE = {
+  src: '/images/el-padel-courts-aerial-close.jpg',
+  position: 'center 45%',
+} as const;
 
 export function CourtsSection() {
   const { dictionary } = useI18n();
   const courts = dictionary.home.courts;
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-
-  const shots = [
-    {
-      ...COURT_STAGE[0],
-      alt: courts.heroAlt,
-      label: courts.caption,
-    },
-    ...COURT_STAGE.slice(1).map((shot, index) => ({
-      ...shot,
-      alt: courts.galleryAlts[index],
-      label: courts.galleryLabels[index],
-    })),
-  ];
 
   return (
-    <ScrollSection
-      className="section-tight relative overflow-hidden px-5 md:px-10"
-    >
-      <div className="mx-auto max-w-7xl">
+    <ScrollSection className="section-tight relative overflow-hidden px-5 sm:px-6 md:px-10">
+      <div className="mx-auto w-full max-w-7xl">
         <Reveal>
           <div className="max-w-3xl">
             <SectionIntro
@@ -250,72 +30,36 @@ export function CourtsSection() {
         </Reveal>
 
         <Reveal delay={0.08}>
-          <div
-            className="courts-stage mt-8"
-            role="group"
+          <figure
+            className="courts-stage courts-stage__media relative isolate mt-8 aspect-[4/3] w-full overflow-hidden rounded-[6px] bg-[#581010] shadow-[0_24px_60px_rgba(0,0,0,0.38)] sm:aspect-video lg:aspect-[21/10]"
             aria-label={courts.galleryLabel}
           >
-            <figure className="courts-stage__hero">
-              <button
-                type="button"
-                className="courts-stage__media courts-stage__hero-media courts-stage__trigger"
-                aria-label={`${courts.openPhoto}: ${courts.caption}`}
-                onClick={() => setActiveIndex(0)}
-              >
-                <Image
-                  src={shots[0].src}
-                  alt={shots[0].alt}
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 68vw"
-                  className="courts-stage__img object-cover"
-                  style={{ objectPosition: shots[0].position }}
-                  priority
-                />
-                <div className="courts-stage__meta">
-                  <span>01</span>
-                  <span>{courts.caption}</span>
-                </div>
-              </button>
-            </figure>
-
-            <Stagger className="courts-stage__rail" delay={0.12} stagger={0.09}>
-              {shots.slice(1).map((shot, index) => (
-                <StaggerItem key={shot.src}>
-                  <figure className="courts-stage__shot">
-                    <button
-                      type="button"
-                      className="courts-stage__media courts-stage__shot-media courts-stage__trigger"
-                      aria-label={`${courts.openPhoto}: ${shot.label}`}
-                      onClick={() => setActiveIndex(index + 1)}
-                    >
-                      <Image
-                        src={shot.src}
-                        alt={shot.alt}
-                        fill
-                        sizes="(max-width: 1024px) 42vw, 22vw"
-                        className="courts-stage__img object-cover"
-                        style={{ objectPosition: shot.position }}
-                      />
-                      <div className="courts-stage__meta courts-stage__meta--compact">
-                        <span>{String(index + 2).padStart(2, '0')}</span>
-                        <span>{shot.label}</span>
-                      </div>
-                    </button>
-                  </figure>
-                </StaggerItem>
-              ))}
-            </Stagger>
-          </div>
+            <Image
+              src={COURT_IMAGE.src}
+              alt={courts.heroAlt}
+              fill
+              sizes="(max-width: 639px) calc(100vw - 2.5rem), (max-width: 767px) calc(100vw - 3rem), (max-width: 1344px) calc(100vw - 5rem), 1280px"
+              className="courts-stage__img object-cover [filter:saturate(1.18)_contrast(1.08)_brightness(1.03)]"
+              style={{ objectPosition: COURT_IMAGE.position }}
+            />
+            <div
+              className="pointer-events-none absolute inset-0 z-[1]"
+              style={{
+                background:
+                  'linear-gradient(180deg, transparent 58%, rgba(88, 16, 16, 0.78) 100%)',
+              }}
+              aria-hidden="true"
+            />
+            <figcaption
+              className="courts-stage__meta absolute inset-x-3 bottom-3 z-[2] flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.6rem] font-semibold tracking-[0.14em] uppercase text-[rgba(213,201,177,0.92)] sm:inset-x-4 sm:bottom-4 sm:text-[0.68rem] sm:tracking-[0.2em]"
+              style={{ textShadow: '0 1px 12px rgba(0, 0, 0, 0.45)' }}
+            >
+              <span className="tracking-[0.14em] text-[var(--padel-gold)]">01</span>
+              <span>{courts.caption}</span>
+            </figcaption>
+          </figure>
         </Reveal>
       </div>
-
-      <CourtsLightbox
-        open={activeIndex !== null}
-        index={activeIndex ?? 0}
-        onClose={() => setActiveIndex(null)}
-        onChange={setActiveIndex}
-        shots={shots}
-      />
     </ScrollSection>
   );
 }

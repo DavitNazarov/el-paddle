@@ -12,12 +12,10 @@ import {
   useInView,
   useMotionValue,
   useReducedMotion,
-  useScroll,
   useSpring,
-  useTransform,
 } from 'framer-motion';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { useCoarsePointer, useScrollParallaxEnabled } from './device';
+import { useCoarsePointer } from './device';
 
 export function Magnetic({
   children,
@@ -187,42 +185,12 @@ export function ParallaxLayer({
   speed?: number;
   rotate?: number;
 }) {
-  const scrollParallax = useScrollParallaxEnabled();
-
-  if (!scrollParallax) {
-    return (
-      <div
-        className={className}
-        style={rotate ? { transform: `rotate(${rotate}deg)` } : undefined}
-        aria-hidden
-      />
-    );
-  }
-
-  return <ParallaxLayerMotion className={className} speed={speed} rotate={rotate} />;
-}
-
-function ParallaxLayerMotion({
-  className,
-  speed,
-  rotate,
-}: {
-  className: string;
-  speed: number;
-  rotate: number;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start end', 'end start'],
-  });
-  const y = useTransform(scrollYProgress, [0, 1], [speed * 120, speed * -120]);
+  void speed;
 
   return (
-    <motion.div
-      ref={ref}
+    <div
       className={className}
-      style={{ y, rotate }}
+      style={rotate ? { transform: `rotate(${rotate}deg)` } : undefined}
       aria-hidden
     />
   );
@@ -318,8 +286,8 @@ export function Reveal({
 
   return (
     <motion.div
-      initial={reduceMotion ? false : { opacity: 0 }}
-      whileInView={{ opacity: 1 }}
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.64, delay, ease: easeOut }}
       className={className}
@@ -368,20 +336,20 @@ export function Stagger({
 export function StaggerItem({
   children,
   className = '',
-  y: _y = 22,
+  y = 22,
 }: {
   children: ReactNode;
   className?: string;
   y?: number;
 }) {
-  void _y;
   return (
     <motion.div
       className={className}
       variants={{
-        hidden: { opacity: 0 },
+        hidden: { opacity: 0, y },
         visible: {
           opacity: 1,
+          y: 0,
           transition: { duration: 0.58, ease: easeOut },
         },
       }}

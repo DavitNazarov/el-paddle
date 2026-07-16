@@ -151,14 +151,14 @@ export function AdminRegistrationsClient() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <RegistrationStatusBadge status={registration.status} />
-                          <Badge className="border-[rgba(246,239,225,0.18)] bg-transparent text-[rgba(246,239,225,0.7)]">
+                          <Badge className="border-[rgba(213,201,177,0.18)] bg-transparent text-[rgba(213,201,177,0.7)]">
                             {registration.category.name}
                           </Badge>
                         </div>
                         <h3 className="font-display mt-3 text-xl font-semibold text-[var(--padel-ivory)]">
                           {registration.event.title}
                         </h3>
-                        <p className="mt-1 text-sm text-[rgba(246,239,225,0.55)]">
+                        <p className="mt-1 text-sm text-[rgba(213,201,177,0.55)]">
                           {formatDate(registration.event.date, { dateStyle: 'medium', timeStyle: 'short' })}
                         </p>
                       </div>
@@ -192,7 +192,7 @@ export function AdminRegistrationsClient() {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 rounded-xl border border-[rgba(246,239,225,0.1)] bg-[rgba(246,239,225,0.04)] p-4 md:grid-cols-2">
+                    <div className="grid gap-3 rounded-xl border border-[rgba(213,201,177,0.1)] bg-[rgba(213,201,177,0.04)] p-4 md:grid-cols-2">
                       <TeamBlock title={copy.playerOne} name={registration.owner.fullName} email={registration.owner.email} phone={registration.ownerPhone} />
                       <TeamBlock
                         title={copy.playerTwo}
@@ -287,8 +287,8 @@ function TeamBlock({
     <div>
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--padel-gold)]">{title}</p>
       <p className="mt-2 font-semibold text-[var(--padel-ivory)]">{name}</p>
-      <p className="mt-1 truncate text-sm text-[rgba(246,239,225,0.55)]">{email}</p>
-      <p className="mt-0.5 text-sm text-[rgba(246,239,225,0.55)]">{phone}</p>
+      <p className="mt-1 truncate text-sm text-[rgba(213,201,177,0.55)]">{email}</p>
+      <p className="mt-0.5 text-sm text-[rgba(213,201,177,0.55)]">{phone}</p>
     </div>
   );
 }

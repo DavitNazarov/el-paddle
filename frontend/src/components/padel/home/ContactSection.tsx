@@ -35,7 +35,7 @@ export function ContactSection() {
               alt="El Padel — gold matador crest"
               width={280}
               height={186}
-              className="mx-auto h-auto w-[100px] object-contain md:w-[120px]"
+              className="logo-tint mx-auto h-auto w-[100px] object-contain md:w-[120px]"
             />
           </Parallax>
           <p className="font-script mt-4 text-2xl leading-none text-[var(--padel-gold)] md:text-3xl">
@@ -76,7 +76,7 @@ export function ContactSection() {
           <Magnetic className="mt-8" strength={0.25}>
             <a
               href="/register"
-              className="btn-premium inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-red)] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+              className="btn-premium inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-red)] hover:bg-[var(--padel-ivory)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
             >
               {dictionary.common.register}
               <ArrowRight className="h-4 w-4" />

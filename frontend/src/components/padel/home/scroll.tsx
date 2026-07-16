@@ -24,7 +24,7 @@ const LAZY_VIEW_MARGIN = '100% 0px 100% 0px';
 const forcedSectionIds = new Set<string>();
 const forceListeners = new Set<() => void>();
 
-/** Mount a lazy section immediately (anchor nav, hash links, snap dots). */
+/** Mount a deferred section immediately for anchor and hash navigation. */
 export function ensureSectionVisible(id: string) {
   if (!id || forcedSectionIds.has(id)) return;
   forcedSectionIds.add(id);
@@ -73,6 +73,8 @@ export function useActiveSection(ids: string[]) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const desktopNavigation = window.matchMedia('(min-width: 1280px)');
+    let listening = false;
 
     const update = () => {
       const anchor = window.scrollY + window.innerHeight * 0.42;
@@ -84,12 +86,30 @@ export function useActiveSection(ids: string[]) {
       setActive((previous) => (previous === current ? previous : current));
     };
 
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    return () => {
+    const stop = () => {
+      if (!listening) return;
+      listening = false;
       window.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+    };
+
+    const sync = () => {
+      if (!desktopNavigation.matches) {
+        stop();
+        return;
+      }
+      update();
+      if (listening) return;
+      listening = true;
+      window.addEventListener('scroll', update, { passive: true });
+      window.addEventListener('resize', update);
+    };
+
+    sync();
+    desktopNavigation.addEventListener('change', sync);
+    return () => {
+      desktopNavigation.removeEventListener('change', sync);
+      stop();
     };
     // ids is a stable module-level array
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,7 +150,7 @@ export function SnapScrollController() {
         const targetTop = section.offsetTop;
 
         if (reduceMotion || coarse) {
-          window.scrollTo({ top: targetTop, behavior: 'smooth' });
+          window.scrollTo({ top: targetTop, behavior: 'auto' });
           return;
         }
 
@@ -326,6 +346,8 @@ export function SectionIntro({
   align?: 'left' | 'center';
 }) {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
+  const lightweightMotion = Boolean(reduceMotion || coarse);
 
   return (
     <div className={align === 'center' ? 'mx-auto max-w-3xl text-center' : 'max-w-3xl'}>
@@ -342,10 +364,11 @@ export function SectionIntro({
         <motion.span
           className="section-kicker__rule"
           aria-hidden
-          initial={reduceMotion ? false : { scaleX: 0, opacity: 0 }}
-          whileInView={{ scaleX: 1, opacity: 0.55 }}
+          initial={lightweightMotion ? false : { scaleX: 0, opacity: 0 }}
+          animate={lightweightMotion ? { scaleX: 1, opacity: 0.55 } : undefined}
+          whileInView={lightweightMotion ? undefined : { scaleX: 1, opacity: 0.55 }}
           viewport={{ once: true, margin: '-40px' }}
-          transition={{ duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+          transition={lightweightMotion ? { duration: 0 } : { duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
           style={{ originX: 0 }}
         />
       </p>
@@ -363,10 +386,11 @@ export function SectionIntro({
           className={`mt-3 max-w-xl text-sm leading-6 text-[var(--padel-muted)] md:text-[0.95rem] md:leading-7 ${
             align === 'center' ? 'mx-auto' : ''
           }`}
-          initial={reduceMotion ? false : { opacity: 0 }}
-          whileInView={{ opacity: 1 }}
+          initial={lightweightMotion ? false : { opacity: 0 }}
+          animate={lightweightMotion ? { opacity: 1 } : undefined}
+          whileInView={lightweightMotion ? undefined : { opacity: 1 }}
           viewport={{ once: true, amount: 0.4 }}
-          transition={{ duration: 0.6, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          transition={lightweightMotion ? { duration: 0 } : { duration: 0.6, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
         >
           {copy}
         </motion.p>

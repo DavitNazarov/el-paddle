@@ -37,7 +37,7 @@ export function PadelHomeStyles() {
         .page-surface__gradient {
           position: absolute;
           inset: 0;
-          background: #801917;
+          background: #86000c;
         }
 
         .page-surface__aurora {
@@ -66,13 +66,19 @@ export function PadelHomeStyles() {
           background: transparent;
         }
 
-        .scroll-section--placeholder {
+        .el-padel-page main > section.scroll-section--placeholder {
+          min-height: min(100dvh, 920px);
+          contain: layout style paint;
+        }
+
+        .deferred-section-loader {
           min-height: min(100dvh, 920px);
           contain: layout style paint;
         }
 
         @media (max-width: 768px) {
-          .scroll-section--placeholder {
+          .el-padel-page main > section.scroll-section--placeholder,
+          .deferred-section-loader {
             min-height: min(88svh, 760px);
           }
         }
@@ -102,9 +108,9 @@ export function PadelHomeStyles() {
             transparent 100%
           );
           background:
-            radial-gradient(ellipse 58% 55% at 0% 50%, rgba(90, 18, 16, 0.38), transparent 70%),
-            radial-gradient(ellipse 58% 55% at 100% 50%, rgba(107, 26, 24, 0.32), transparent 70%),
-            radial-gradient(ellipse 62% 48% at 50% 50%, rgba(150, 38, 34, 0.24), transparent 72%);
+            radial-gradient(ellipse 58% 55% at 0% 50%, rgba(88, 16, 16, 0.38), transparent 70%),
+            radial-gradient(ellipse 58% 55% at 100% 50%, rgba(88, 16, 16, 0.32), transparent 70%),
+            radial-gradient(ellipse 62% 48% at 50% 50%, rgba(134, 0, 12, 0.24), transparent 72%);
         }
 
         .poster-hero::before {
@@ -131,23 +137,23 @@ export function PadelHomeStyles() {
 
         .scroll-section:nth-of-type(3n + 1)::before {
           background:
-            radial-gradient(ellipse 52% 46% at 0% 50%, rgba(90, 18, 16, 0.22), transparent 72%),
-            radial-gradient(ellipse 52% 46% at 100% 50%, rgba(107, 26, 24, 0.2), transparent 72%),
-            radial-gradient(ellipse 68% 52% at 50% 50%, rgba(150, 38, 34, 0.42), transparent 74%);
+            radial-gradient(ellipse 52% 46% at 0% 50%, rgba(88, 16, 16, 0.22), transparent 72%),
+            radial-gradient(ellipse 52% 46% at 100% 50%, rgba(88, 16, 16, 0.2), transparent 72%),
+            radial-gradient(ellipse 68% 52% at 50% 50%, rgba(134, 0, 12, 0.42), transparent 74%);
         }
 
         .scroll-section:nth-of-type(3n + 2)::before {
           background:
-            radial-gradient(ellipse 68% 54% at 0% 48%, rgba(90, 18, 16, 0.48), transparent 70%),
-            radial-gradient(ellipse 50% 44% at 100% 52%, rgba(107, 26, 24, 0.2), transparent 70%),
-            radial-gradient(ellipse 54% 40% at 50% 50%, rgba(150, 38, 34, 0.16), transparent 72%);
+            radial-gradient(ellipse 68% 54% at 0% 48%, rgba(88, 16, 16, 0.48), transparent 70%),
+            radial-gradient(ellipse 50% 44% at 100% 52%, rgba(88, 16, 16, 0.2), transparent 70%),
+            radial-gradient(ellipse 54% 40% at 50% 50%, rgba(134, 0, 12, 0.16), transparent 72%);
         }
 
         .scroll-section:nth-of-type(3n)::before {
           background:
-            radial-gradient(ellipse 50% 44% at 0% 52%, rgba(90, 18, 16, 0.2), transparent 70%),
-            radial-gradient(ellipse 68% 54% at 100% 48%, rgba(107, 26, 24, 0.46), transparent 70%),
-            radial-gradient(ellipse 54% 40% at 50% 50%, rgba(150, 38, 34, 0.16), transparent 72%);
+            radial-gradient(ellipse 50% 44% at 0% 52%, rgba(88, 16, 16, 0.2), transparent 70%),
+            radial-gradient(ellipse 68% 54% at 100% 48%, rgba(88, 16, 16, 0.46), transparent 70%),
+            radial-gradient(ellipse 54% 40% at 50% 50%, rgba(134, 0, 12, 0.16), transparent 72%);
         }
 
         .el-padel-page main > section {
@@ -187,17 +193,17 @@ export function PadelHomeStyles() {
             90deg,
             var(--padel-gold-deep),
             var(--padel-gold) 40%,
-            #efe1b8 55%,
+            #d5c9b1 55%,
             var(--padel-gold) 72%,
             var(--padel-gold-deep)
           );
-          box-shadow: 0 0 18px rgba(224, 196, 119, 0.45);
+          box-shadow: 0 0 18px rgba(213, 201, 177, 0.45);
         }
 
         .page-progress__glow {
           background: linear-gradient(
             180deg,
-            rgba(224, 196, 119, 0.35),
+            rgba(213, 201, 177, 0.35),
             transparent
           );
           filter: blur(8px);
@@ -248,7 +254,7 @@ export function PadelHomeStyles() {
         .floating-entry {
           box-shadow:
             0 24px 80px rgba(0, 0, 0, 0.45),
-            0 0 0 1px rgba(224, 196, 119, 0.08);
+            0 0 0 1px rgba(213, 201, 177, 0.08);
         }
 
         .floating-entry__pulse {
@@ -268,10 +274,10 @@ export function PadelHomeStyles() {
         @keyframes pulse-ring {
           0%,
           100% {
-            box-shadow: 0 0 0 0 rgba(224, 196, 119, 0.25);
+            box-shadow: 0 0 0 0 rgba(213, 201, 177, 0.25);
           }
           55% {
-            box-shadow: 0 0 0 8px rgba(224, 196, 119, 0);
+            box-shadow: 0 0 0 8px rgba(213, 201, 177, 0);
           }
         }
 
@@ -293,7 +299,7 @@ export function PadelHomeStyles() {
 
         .nav-shell {
           box-shadow:
-            inset 0 1px 0 rgba(246, 239, 225, 0.06),
+            inset 0 1px 0 rgba(213, 201, 177, 0.06),
             0 18px 70px rgba(0, 0, 0, 0.18);
         }
 
@@ -313,35 +319,35 @@ export function PadelHomeStyles() {
           letter-spacing: 0.18em;
           text-transform: uppercase;
           color: var(--padel-muted);
-          background: rgba(19, 2, 2, 0.18);
+          background: rgba(88, 16, 16, 0.18);
         }
 
         .poster-meta__bar {
           background: linear-gradient(
             90deg,
             var(--padel-ivory),
-            rgba(224, 196, 119, 0.85) 55%,
+            rgba(213, 201, 177, 0.85) 55%,
             var(--padel-ivory)
           );
-          box-shadow: 0 0 16px rgba(224, 196, 119, 0.18);
+          box-shadow: 0 0 16px rgba(213, 201, 177, 0.18);
         }
 
         .scroll-cue__track {
-          background: rgba(19, 2, 2, 0.28);
+          background: rgba(88, 16, 16, 0.28);
         }
 
         /* ---- Section intro frame ---- */
         .section-intro-frame {
           position: relative;
           padding-left: 0.85rem;
-          border-left: 1px solid rgba(224, 196, 119, 0.28);
+          border-left: 1px solid rgba(213, 201, 177, 0.28);
         }
 
         .section-intro-frame--center {
           padding-left: 0;
           border-left: none;
           padding-top: 0.75rem;
-          border-top: 1px solid rgba(224, 196, 119, 0.28);
+          border-top: 1px solid rgba(213, 201, 177, 0.28);
         }
 
         .section-kicker__index {
@@ -351,10 +357,10 @@ export function PadelHomeStyles() {
         @keyframes index-glow {
           0%,
           100% {
-            box-shadow: 0 0 0 0 rgba(224, 196, 119, 0);
+            box-shadow: 0 0 0 0 rgba(213, 201, 177, 0);
           }
           50% {
-            box-shadow: 0 0 0 6px rgba(224, 196, 119, 0.12);
+            box-shadow: 0 0 0 6px rgba(213, 201, 177, 0.12);
           }
         }
 
@@ -412,7 +418,7 @@ export function PadelHomeStyles() {
           left: -6%;
           height: 44rem;
           width: 44rem;
-          background: radial-gradient(circle, rgba(150, 38, 34, 0.28), transparent 62%);
+          background: radial-gradient(circle, rgba(134, 0, 12, 0.28), transparent 62%);
         }
 
         .page-surface__aurora-b {
@@ -420,7 +426,7 @@ export function PadelHomeStyles() {
           bottom: -16%;
           height: 40rem;
           width: 40rem;
-          background: radial-gradient(circle, rgba(90, 18, 16, 0.32), transparent 60%);
+          background: radial-gradient(circle, rgba(88, 16, 16, 0.32), transparent 60%);
         }
 
         .aurora-orb--a {
@@ -428,7 +434,7 @@ export function PadelHomeStyles() {
           left: -8%;
           height: 46rem;
           width: 46rem;
-          background: radial-gradient(circle, rgba(150, 38, 34, 0.24), transparent 62%);
+          background: radial-gradient(circle, rgba(134, 0, 12, 0.24), transparent 62%);
           filter: blur(70px);
           opacity: 0.55;
         }
@@ -438,7 +444,7 @@ export function PadelHomeStyles() {
           bottom: -18%;
           height: 42rem;
           width: 42rem;
-          background: radial-gradient(circle, rgba(107, 26, 24, 0.28), transparent 60%);
+          background: radial-gradient(circle, rgba(88, 16, 16, 0.28), transparent 60%);
           filter: blur(70px);
           opacity: 0.55;
         }
@@ -463,7 +469,7 @@ export function PadelHomeStyles() {
             left: -6%;
             height: 44rem;
             width: 44rem;
-            background: radial-gradient(circle, rgba(150, 38, 34, 0.28), transparent 62%);
+            background: radial-gradient(circle, rgba(134, 0, 12, 0.28), transparent 62%);
           }
 
           .page-surface__aurora::after {
@@ -471,7 +477,7 @@ export function PadelHomeStyles() {
             bottom: -16%;
             height: 40rem;
             width: 40rem;
-            background: radial-gradient(circle, rgba(90, 18, 16, 0.32), transparent 60%);
+            background: radial-gradient(circle, rgba(88, 16, 16, 0.32), transparent 60%);
           }
         }
 
@@ -523,7 +529,7 @@ export function PadelHomeStyles() {
           background: linear-gradient(
             100deg,
             transparent,
-            rgba(255, 255, 255, 0.55),
+            rgba(213, 201, 177, 0.55),
             transparent
           );
           transform: skewX(-18deg);
@@ -550,7 +556,7 @@ export function PadelHomeStyles() {
           background: linear-gradient(
             100deg,
             transparent,
-            rgba(224, 196, 119, 0.5),
+            rgba(213, 201, 177, 0.5),
             transparent
           );
         }
@@ -560,8 +566,8 @@ export function PadelHomeStyles() {
           position: relative;
           background: linear-gradient(
             160deg,
-            rgba(246, 239, 225, 0.055),
-            rgba(246, 239, 225, 0.015)
+            rgba(213, 201, 177, 0.055),
+            rgba(213, 201, 177, 0.015)
           );
           transition:
             transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
@@ -579,7 +585,7 @@ export function PadelHomeStyles() {
           position: absolute;
           inset: 1px;
           border-radius: inherit;
-          border: 1px solid rgba(246, 239, 225, 0.04);
+          border: 1px solid rgba(213, 201, 177, 0.04);
           pointer-events: none;
         }
 
@@ -637,9 +643,9 @@ export function PadelHomeStyles() {
           position: absolute;
           inset: 0;
           display: block;
-          border: 1.5px solid rgba(224, 196, 119, 0.95);
+          border: 1.5px solid rgba(213, 201, 177, 0.95);
           border-radius: 999px;
-          box-shadow: 0 0 0 1px rgba(10, 1, 2, 0.35);
+          box-shadow: 0 0 0 1px rgba(88, 16, 16, 0.35);
           transform-origin: center;
           will-change: transform, opacity;
         }
@@ -653,7 +659,7 @@ export function PadelHomeStyles() {
           width: 0.26rem;
           border-radius: 999px;
           background: var(--padel-gold);
-          box-shadow: 0 0 0 1px rgba(10, 1, 2, 0.35);
+          box-shadow: 0 0 0 1px rgba(88, 16, 16, 0.35);
           will-change: transform;
         }
 
@@ -744,7 +750,7 @@ export function PadelHomeStyles() {
         }
 
         .snap-indicator__dot:focus-visible .snap-indicator__mark {
-          box-shadow: 0 0 0 4px rgba(217, 191, 115, 0.24);
+          box-shadow: 0 0 0 4px rgba(213, 201, 177, 0.24);
         }
 
         @media (max-width: 900px) {
@@ -776,6 +782,7 @@ export function PadelHomeStyles() {
           font-weight: 500;
           color: var(--padel-gold);
         }
+
 
         /* ---- Hero rotating badge ---- */
         .hero-badge {
@@ -838,9 +845,9 @@ export function PadelHomeStyles() {
           width: 0.85rem;
           transform: translate(-50%, -50%);
           border-radius: 999px;
-          background: radial-gradient(circle at 32% 30%, #efe1b8, var(--padel-gold) 62%, #a8893f);
+          background: radial-gradient(circle at 32% 30%, #d5c9b1, var(--padel-gold) 62%, #581010);
           box-shadow:
-            0 0 0 4px rgba(217, 191, 115, 0.14),
+            0 0 0 4px rgba(213, 201, 177, 0.14),
             0 4px 14px rgba(0, 0, 0, 0.45);
         }
 
@@ -849,7 +856,7 @@ export function PadelHomeStyles() {
           position: absolute;
           inset: 18%;
           border-radius: 999px;
-          border-top: 1px solid rgba(19, 2, 2, 0.35);
+          border-top: 1px solid rgba(88, 16, 16, 0.35);
           transform: rotate(-24deg);
         }
 
@@ -874,19 +881,19 @@ export function PadelHomeStyles() {
           font-weight: 600;
           font-style: italic;
           line-height: 1;
-          color: rgba(246, 239, 225, 0.22);
+          color: rgba(213, 201, 177, 0.22);
           transition:
             color 0.4s ease,
             text-shadow 0.4s ease;
         }
 
         .score-rail__call--won {
-          color: rgba(246, 239, 225, 0.55);
+          color: rgba(213, 201, 177, 0.55);
         }
 
         .score-rail__call--active {
           color: var(--padel-gold);
-          text-shadow: 0 0 22px rgba(217, 191, 115, 0.4);
+          text-shadow: 0 0 22px rgba(213, 201, 177, 0.4);
         }
 
         .score-rail__sep {
@@ -906,7 +913,7 @@ export function PadelHomeStyles() {
           font-style: italic;
           line-height: 0.8;
           color: transparent;
-          -webkit-text-stroke: 1px rgba(217, 191, 115, 0.22);
+          -webkit-text-stroke: 1px rgba(213, 201, 177, 0.22);
           pointer-events: none;
           transition:
             -webkit-text-stroke-color 0.45s ease,
@@ -914,7 +921,7 @@ export function PadelHomeStyles() {
         }
 
         .flow-card:hover .flow-card__score {
-          -webkit-text-stroke-color: rgba(217, 191, 115, 0.55);
+          -webkit-text-stroke-color: rgba(213, 201, 177, 0.55);
           transform: translateY(-4px);
         }
 
@@ -933,8 +940,8 @@ export function PadelHomeStyles() {
         }
 
         .flow-card:hover .flow-card__tag {
-          border-color: rgba(217, 191, 115, 0.5);
-          background: rgba(217, 191, 115, 0.06);
+          border-color: rgba(213, 201, 177, 0.5);
+          background: rgba(213, 201, 177, 0.06);
         }
 
         /* ---- Entry meter + live badge ---- */
@@ -942,7 +949,7 @@ export function PadelHomeStyles() {
           background: linear-gradient(
             90deg,
             var(--padel-gold),
-            #efe1b8 55%,
+            #d5c9b1 55%,
             var(--padel-gold)
           );
         }
@@ -959,10 +966,10 @@ export function PadelHomeStyles() {
         @keyframes live-pulse {
           0%,
           100% {
-            box-shadow: 0 0 0 0 rgba(217, 191, 115, 0.55);
+            box-shadow: 0 0 0 0 rgba(213, 201, 177, 0.55);
           }
           55% {
-            box-shadow: 0 0 0 6px rgba(217, 191, 115, 0);
+            box-shadow: 0 0 0 6px rgba(213, 201, 177, 0);
           }
         }
 
@@ -1023,7 +1030,9 @@ export function PadelHomeStyles() {
         }
 
         .hero-crest {
-          filter: drop-shadow(0 18px 40px rgba(19, 2, 2, 0.42));
+          filter: brightness(0) saturate(100%) invert(87%) sepia(13%) saturate(412%)
+            hue-rotate(359deg) brightness(90%) contrast(87%)
+            drop-shadow(0 18px 40px rgba(88, 16, 16, 0.42));
         }
 
         .hero-chip {
@@ -1034,9 +1043,9 @@ export function PadelHomeStyles() {
         }
 
         .hero-chip:hover {
-          border-color: rgba(224, 196, 119, 0.55);
+          border-color: rgba(213, 201, 177, 0.55);
           color: var(--padel-ivory);
-          background: rgba(224, 196, 119, 0.08);
+          background: rgba(213, 201, 177, 0.08);
         }
 
         .upcoming-event-card {
@@ -1047,7 +1056,7 @@ export function PadelHomeStyles() {
         }
 
         .upcoming-event-card:hover {
-          border-color: rgba(224, 196, 119, 0.45);
+          border-color: rgba(213, 201, 177, 0.45);
           box-shadow: 0 28px 80px -40px rgba(0, 0, 0, 0.55);
         }
 
@@ -1084,9 +1093,9 @@ export function PadelHomeStyles() {
 
         .poster-vignette {
           background:
-            radial-gradient(circle at 48% 42%, transparent 0 19rem, rgba(90, 18, 16, 0.08) 31rem, transparent 72%),
-            linear-gradient(90deg, rgba(90, 18, 16, 0.14), transparent 22%, transparent 78%, rgba(90, 18, 16, 0.14)),
-            linear-gradient(180deg, rgba(90, 18, 16, 0.1) 0%, transparent 22%, transparent 100%);
+            radial-gradient(circle at 48% 42%, transparent 0 19rem, rgba(88, 16, 16, 0.08) 31rem, transparent 72%),
+            linear-gradient(90deg, rgba(88, 16, 16, 0.14), transparent 22%, transparent 78%, rgba(88, 16, 16, 0.14)),
+            linear-gradient(180deg, rgba(88, 16, 16, 0.1) 0%, transparent 22%, transparent 100%);
           pointer-events: none;
         }
 
@@ -1106,7 +1115,7 @@ export function PadelHomeStyles() {
 
         .poster-ball-wrap {
           width: min(480px, 38dvh, 72vw);
-          filter: drop-shadow(0 24px 50px rgba(19, 2, 2, 0.28));
+          filter: drop-shadow(0 24px 50px rgba(88, 16, 16, 0.28));
         }
 
         .poster-ball-canvas {
@@ -1114,7 +1123,7 @@ export function PadelHomeStyles() {
         }
 
         .poster-ball-copy {
-          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.22);
+          text-shadow: 0 1px 0 rgba(213, 201, 177, 0.22);
         }
 
         .poster-ball-copy h1 {
@@ -1196,247 +1205,6 @@ export function PadelHomeStyles() {
           box-shadow: 0 34px 110px rgba(0, 0, 0, 0.4);
         }
 
-        .courts-stage {
-          display: grid;
-          gap: 0.75rem;
-          align-items: stretch;
-        }
-
-        @media (min-width: 1024px) {
-          .courts-stage {
-            grid-template-columns: minmax(0, 1.7fr) minmax(13.5rem, 0.62fr);
-            gap: 0.75rem;
-            min-height: 30rem;
-          }
-        }
-
-        .courts-stage__media {
-          position: relative;
-          overflow: hidden;
-          isolation: isolate;
-          width: 100%;
-          border: 0;
-          padding: 0;
-          text-align: left;
-          cursor: zoom-in;
-          background: #1a0508;
-          box-shadow:
-            0 1px 0 rgba(246, 239, 225, 0.08) inset,
-            0 24px 60px rgba(0, 0, 0, 0.38);
-        }
-
-        .courts-stage__trigger:focus-visible {
-          outline: 2px solid var(--padel-gold);
-          outline-offset: 3px;
-        }
-
-        .courts-stage__media::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background:
-            linear-gradient(180deg, transparent 58%, rgba(12, 1, 2, 0.78) 100%);
-          z-index: 1;
-        }
-
-        .courts-stage__img {
-          filter: saturate(1.18) contrast(1.08) brightness(1.03);
-          transition:
-            transform 0.75s cubic-bezier(0.16, 1, 0.3, 1),
-            filter 0.45s ease;
-        }
-
-        .courts-stage__media:hover .courts-stage__img {
-          transform: scale(1.04);
-          filter: saturate(1.28) contrast(1.12) brightness(1.06);
-        }
-
-        .courts-lightbox__backdrop {
-          border: 0;
-          background: rgba(10, 1, 2, 0.88);
-          backdrop-filter: blur(10px);
-          cursor: zoom-out;
-        }
-
-        .courts-lightbox__panel {
-          gap: 0.85rem;
-        }
-
-        .courts-lightbox__toolbar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 1rem;
-        }
-
-        .courts-lightbox__title {
-          display: flex;
-          align-items: center;
-          gap: 0.7rem;
-          margin: 0;
-          font-size: 0.72rem;
-          font-weight: 600;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-          color: rgba(246, 239, 225, 0.92);
-        }
-
-        .courts-lightbox__title span:first-child {
-          color: var(--padel-gold);
-        }
-
-        .courts-lightbox__count {
-          font-size: 0.68rem;
-          font-weight: 600;
-          letter-spacing: 0.16em;
-          color: var(--padel-muted);
-        }
-
-        .courts-lightbox__stage {
-          position: relative;
-          width: 100%;
-          height: min(72dvh, 42rem);
-          overflow: hidden;
-          background: rgba(19, 2, 2, 0.55);
-          box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
-        }
-
-        .courts-lightbox__shot {
-          position: absolute;
-          inset: 0;
-          will-change: transform, opacity;
-        }
-
-        .courts-lightbox__stage img {
-          filter: saturate(1.16) contrast(1.06) brightness(1.02);
-        }
-
-        .courts-lightbox__nav {
-          display: flex;
-          justify-content: center;
-          gap: 0.65rem;
-        }
-
-        .courts-lightbox__icon-btn {
-          display: inline-flex;
-          height: 2.75rem;
-          width: 2.75rem;
-          align-items: center;
-          justify-content: center;
-          border: 1px solid var(--padel-line);
-          background: rgba(19, 2, 2, 0.45);
-          color: var(--padel-ivory);
-          transition:
-            border-color 0.25s ease,
-            background 0.25s ease,
-            color 0.25s ease;
-        }
-
-        .courts-lightbox__icon-btn:hover {
-          border-color: color-mix(in srgb, var(--padel-gold) 55%, var(--padel-line));
-          background: rgba(19, 2, 2, 0.7);
-          color: var(--padel-gold);
-        }
-
-        .courts-lightbox__icon-btn:focus-visible {
-          outline: 2px solid var(--padel-gold);
-          outline-offset: 2px;
-        }
-
-        .courts-stage__hero,
-        .courts-stage__shot {
-          margin: 0;
-          min-height: 0;
-        }
-
-        .courts-stage__hero-media {
-          aspect-ratio: 16 / 10;
-          min-height: 17rem;
-        }
-
-        @media (min-width: 1024px) {
-          .courts-stage__hero-media {
-            aspect-ratio: auto;
-            height: 100%;
-            min-height: 30rem;
-          }
-        }
-
-        .courts-stage__rail {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 0.75rem;
-        }
-
-        .courts-stage__rail > * {
-          min-height: 0;
-          height: 100%;
-        }
-
-        .courts-stage__rail .courts-stage__shot {
-          height: 100%;
-        }
-
-        @media (min-width: 1024px) {
-          .courts-stage__rail {
-            grid-template-columns: 1fr;
-            grid-template-rows: repeat(3, minmax(0, 1fr));
-            height: 100%;
-          }
-        }
-
-        .courts-stage__shot-media {
-          aspect-ratio: 5 / 4;
-          height: 100%;
-        }
-
-        @media (min-width: 1024px) {
-          .courts-stage__shot-media {
-            aspect-ratio: auto;
-          }
-        }
-
-        .courts-stage__meta {
-          position: absolute;
-          left: 0.9rem;
-          right: 0.9rem;
-          bottom: 0.85rem;
-          z-index: 2;
-          display: flex;
-          align-items: center;
-          gap: 0.65rem;
-          font-size: 0.68rem;
-          font-weight: 600;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-          color: rgba(246, 239, 225, 0.92);
-          text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
-        }
-
-        .courts-stage__meta span:first-child {
-          color: var(--padel-gold);
-          letter-spacing: 0.14em;
-        }
-
-        .courts-stage__meta--compact {
-          left: 0.7rem;
-          right: 0.7rem;
-          bottom: 0.65rem;
-          font-size: 0.58rem;
-          letter-spacing: 0.16em;
-        }
-
-        @media (max-width: 767px) {
-          .courts-stage__rail {
-            grid-template-columns: 1fr;
-          }
-
-          .courts-stage__shot-media {
-            aspect-ratio: 16 / 10;
-          }
-        }
-
         .poster-frame__inner {
           position: absolute;
           inset: -8%;
@@ -1492,11 +1260,11 @@ export function PadelHomeStyles() {
 
         .principle-row {
           background:
-            linear-gradient(135deg, rgba(246, 239, 225, 0.04) 0%, rgba(246, 239, 225, 0.015) 62%),
-            rgba(19, 2, 2, 0.16);
+            linear-gradient(135deg, rgba(213, 201, 177, 0.04) 0%, rgba(213, 201, 177, 0.015) 62%),
+            rgba(88, 16, 16, 0.16);
           box-shadow:
-            inset 0 1px 0 rgba(246, 239, 225, 0.08),
-            0 12px 44px rgba(19, 2, 2, 0.2);
+            inset 0 1px 0 rgba(213, 201, 177, 0.08),
+            0 12px 44px rgba(88, 16, 16, 0.2);
           transition:
             border-color 0.3s ease,
             background-color 0.3s ease,
@@ -1507,14 +1275,14 @@ export function PadelHomeStyles() {
           content: '';
           position: absolute;
           inset: 0;
-          background: radial-gradient(circle at 0% 50%, rgba(224, 196, 119, 0.14), transparent 52%);
+          background: radial-gradient(circle at 0% 50%, rgba(213, 201, 177, 0.14), transparent 52%);
           opacity: 0;
           transition: opacity 0.35s ease;
           pointer-events: none;
         }
 
         .principle-row:hover {
-          border-color: rgba(224, 196, 119, 0.45);
+          border-color: rgba(213, 201, 177, 0.45);
           transform: translateY(-2px);
         }
 
@@ -1529,8 +1297,8 @@ export function PadelHomeStyles() {
           align-items: center;
           justify-content: center;
           border-radius: 999px;
-          border: 1px solid rgba(224, 196, 119, 0.35);
-          background: rgba(224, 196, 119, 0.08);
+          border: 1px solid rgba(213, 201, 177, 0.35);
+          background: rgba(213, 201, 177, 0.08);
           transition:
             color 0.3s ease,
             border-color 0.3s ease,
@@ -1548,9 +1316,9 @@ export function PadelHomeStyles() {
           align-items: center;
           justify-content: center;
           border-radius: 999px;
-          border: 1px solid rgba(224, 196, 119, 0.32);
-          background: rgba(224, 196, 119, 0.07);
-          box-shadow: 0 0 0 0 rgba(224, 196, 119, 0.28);
+          border: 1px solid rgba(213, 201, 177, 0.32);
+          background: rgba(213, 201, 177, 0.07);
+          box-shadow: 0 0 0 0 rgba(213, 201, 177, 0.28);
           transition:
             border-color 0.3s ease,
             background-color 0.3s ease,
@@ -1567,8 +1335,8 @@ export function PadelHomeStyles() {
 
         .principle-row:hover .principle-row__num {
           color: var(--padel-gold-2);
-          border-color: rgba(224, 196, 119, 0.6);
-          background: rgba(224, 196, 119, 0.16);
+          border-color: rgba(213, 201, 177, 0.6);
+          background: rgba(213, 201, 177, 0.16);
         }
 
         .principle-row:hover .principle-row__copy {
@@ -1576,9 +1344,9 @@ export function PadelHomeStyles() {
         }
 
         .principle-row:hover .principle-row__check-shell {
-          border-color: rgba(224, 196, 119, 0.52);
-          background: rgba(224, 196, 119, 0.14);
-          box-shadow: 0 0 0 6px rgba(224, 196, 119, 0.08);
+          border-color: rgba(213, 201, 177, 0.52);
+          background: rgba(213, 201, 177, 0.14);
+          box-shadow: 0 0 0 6px rgba(213, 201, 177, 0.08);
         }
 
         .principle-row:hover .principle-row__check {
@@ -1587,54 +1355,299 @@ export function PadelHomeStyles() {
         }
 
         .prize-pool-shell {
+          isolation: isolate;
           background:
-            linear-gradient(160deg, rgba(246, 239, 225, 0.045), rgba(246, 239, 225, 0.01) 58%),
-            rgba(19, 2, 2, 0.2);
+            radial-gradient(circle at 50% 78%, rgba(213, 201, 177, 0.1), transparent 32%),
+            linear-gradient(145deg, rgba(213, 201, 177, 0.06), transparent 48%),
+            rgba(88, 16, 16, 0.32);
           box-shadow:
-            inset 0 1px 0 rgba(246, 239, 225, 0.08),
+            inset 0 1px 0 rgba(213, 201, 177, 0.08),
             0 30px 120px -42px rgba(0, 0, 0, 0.5);
-          backdrop-filter: blur(7px);
+          backdrop-filter: blur(10px);
+        }
+
+        .prize-pool-shell::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          background: linear-gradient(
+            105deg,
+            transparent 0 42%,
+            rgba(213, 201, 177, 0.035) 49%,
+            transparent 56%
+          );
+        }
+
+        .prize-pool__court {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          overflow: hidden;
+          pointer-events: none;
+          opacity: 0.34;
+        }
+
+        .prize-pool__court-outline {
+          position: absolute;
+          left: 8%;
+          right: 8%;
+          bottom: -22%;
+          height: 72%;
+          border: 1px solid rgba(213, 201, 177, 0.16);
+        }
+
+        .prize-pool__court-center {
+          position: absolute;
+          left: 50%;
+          bottom: -22%;
+          height: 72%;
+          width: 1px;
+          background: rgba(213, 201, 177, 0.16);
+        }
+
+        .prize-pool__court-circle {
+          position: absolute;
+          left: 50%;
+          bottom: 14%;
+          width: min(38vw, 29rem);
+          aspect-ratio: 1;
+          border: 1px solid rgba(213, 201, 177, 0.12);
+          border-radius: 999px;
+          transform: translate(-50%, 50%);
+        }
+
+        .prize-total-lockup__mark {
+          display: inline-flex;
+          height: 3.5rem;
+          width: 3.5rem;
+          flex: 0 0 auto;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(213, 201, 177, 0.38);
+          border-radius: 999px;
+          color: var(--padel-ivory);
+          background: rgba(213, 201, 177, 0.07);
+          box-shadow:
+            inset 0 0 0 5px rgba(213, 201, 177, 0.025),
+            0 12px 40px rgba(0, 0, 0, 0.16);
+        }
+
+        .prize-total-lockup__amount {
+          font-size: clamp(3.25rem, 7vw, 6.4rem);
+          letter-spacing: -0.045em;
+          text-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
+        }
+
+        .prize-pool-head__copy {
+          position: relative;
+          padding-left: 1.15rem;
+        }
+
+        .prize-pool-head__copy::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 0.3rem;
+          bottom: 0.3rem;
+          width: 1px;
+          background: var(--padel-line-strong);
+        }
+
+        .prize-podium-wrap {
+          padding: 2rem 1.25rem 1.25rem;
+        }
+
+        .prize-podium {
+          position: relative;
+          z-index: 2;
+          display: grid;
+          grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.16fr) minmax(0, 0.86fr);
+          grid-template-rows: 1fr;
+          align-items: end;
+          gap: 0.75rem;
+          max-width: 65rem;
+          margin: 0 auto;
+          padding-top: 3.75rem;
+        }
+
+        .prize-podium__item {
+          align-self: end;
+        }
+
+        .prize-podium__item--1 {
+          grid-column: 2;
+          grid-row: 1;
+        }
+
+        .prize-podium__item--2 {
+          grid-column: 1;
+          grid-row: 1;
+        }
+
+        .prize-podium__item--3 {
+          grid-column: 3;
+          grid-row: 1;
+        }
+
+        .prize-podium__halo {
+          position: absolute;
+          left: 50%;
+          top: 1.1rem;
+          z-index: 0;
+          width: min(42vw, 31rem);
+          aspect-ratio: 1;
+          border: 1px solid rgba(213, 201, 177, 0.13);
+          border-radius: 999px;
+          transform: translateX(-50%);
+          box-shadow:
+            0 0 0 1.8rem rgba(213, 201, 177, 0.018),
+            0 0 0 3.6rem rgba(213, 201, 177, 0.012);
+          pointer-events: none;
+        }
+
+        .prize-podium__baseline {
+          position: relative;
+          z-index: 1;
+          display: block;
+          height: 1px;
+          max-width: 68rem;
+          margin: 0 auto;
+          background: linear-gradient(90deg, transparent, var(--padel-line-strong), transparent);
         }
 
         .prize-tier {
+          min-height: 15.5rem;
           background:
-            linear-gradient(145deg, rgba(246, 239, 225, 0.04), rgba(246, 239, 225, 0.008) 60%),
-            rgba(19, 2, 2, 0.24);
+            linear-gradient(155deg, rgba(213, 201, 177, 0.07), transparent 52%),
+            rgba(88, 16, 16, 0.76);
+          box-shadow: inset 0 1px 0 rgba(213, 201, 177, 0.08);
           transition:
-            transform 0.35s ease,
+            transform 0.35s var(--padel-ease-out),
             border-color 0.35s ease,
-            background-color 0.35s ease;
+            background-color 0.35s ease,
+            box-shadow 0.35s ease;
         }
 
         .prize-tier__shine {
           position: absolute;
-          inset: -45% auto auto -30%;
-          width: 12rem;
-          height: 12rem;
+          inset: -42% -22% auto auto;
+          width: 14rem;
+          height: 14rem;
           border-radius: 999px;
-          background: radial-gradient(circle, rgba(224, 196, 119, 0.08), transparent 68%);
+          background: radial-gradient(circle, rgba(213, 201, 177, 0.18), transparent 68%);
           opacity: 0;
           transition: opacity 0.35s ease;
           pointer-events: none;
         }
 
+        .prize-tier__rank {
+          position: absolute;
+          top: 0.4rem;
+          right: 0.65rem;
+          z-index: 0;
+          color: rgba(213, 201, 177, 0.06);
+          font-family: var(--font-display);
+          font-size: clamp(4.75rem, 8vw, 7rem);
+          font-weight: 600;
+          line-height: 1;
+          letter-spacing: -0.08em;
+          pointer-events: none;
+        }
+
+        .prize-tier__medal {
+          display: inline-flex;
+          height: 2rem;
+          width: 2rem;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(213, 201, 177, 0.28);
+          border-radius: 999px;
+          color: var(--padel-ivory);
+          background: rgba(213, 201, 177, 0.06);
+        }
+
+        .prize-tier__place {
+          color: rgba(213, 201, 177, 0.7);
+        }
+
+        .prize-tier__amount {
+          color: var(--padel-ivory);
+          font-size: clamp(2.25rem, 4.1vw, 3.75rem);
+          letter-spacing: -0.035em;
+        }
+
+        .prize-tier__bonus {
+          color: rgba(213, 201, 177, 0.82);
+        }
+
+        .prize-tier__step {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 0.28rem;
+          background: rgba(213, 201, 177, 0.28);
+          transform-origin: left center;
+          transition: background-color 0.35s ease;
+        }
+
         .prize-tier:hover {
           transform: translateY(-3px);
-          border-color: rgba(224, 196, 119, 0.45);
+          border-color: rgba(213, 201, 177, 0.55);
+          box-shadow:
+            inset 0 1px 0 rgba(213, 201, 177, 0.12),
+            0 24px 55px -34px rgba(0, 0, 0, 0.72);
         }
 
         .prize-tier:hover .prize-tier__shine {
           opacity: 1;
         }
 
+        .prize-tier:hover .prize-tier__step {
+          background: rgba(213, 201, 177, 0.72);
+        }
+
         .prize-tier--featured {
-          border-color: rgba(224, 196, 119, 0.55);
-          background:
-            linear-gradient(145deg, rgba(224, 196, 119, 0.14), rgba(224, 196, 119, 0.02) 62%),
-            rgba(19, 2, 2, 0.2);
+          min-height: 19rem;
+          border-color: var(--padel-parchment);
+          background: var(--padel-parchment);
           box-shadow:
-            inset 0 1px 0 rgba(246, 239, 225, 0.16),
-            0 22px 70px -30px rgba(224, 196, 119, 0.4);
+            inset 0 1px 0 rgba(255, 255, 255, 0.28),
+            0 28px 80px -35px rgba(0, 0, 0, 0.75);
+        }
+
+        .prize-tier--featured .prize-tier__rank {
+          color: rgba(88, 16, 16, 0.07);
+        }
+
+        .prize-tier--featured .prize-tier__medal {
+          border-color: rgba(88, 16, 16, 0.22);
+          color: var(--padel-red);
+          background: rgba(134, 0, 12, 0.06);
+        }
+
+        .prize-tier--featured .prize-tier__place {
+          color: rgba(88, 16, 16, 0.66);
+        }
+
+        .prize-tier--featured .prize-tier__amount {
+          color: var(--padel-ink);
+          font-size: clamp(3rem, 5.2vw, 4.8rem);
+        }
+
+        .prize-tier--featured .prize-tier__bonus {
+          color: var(--padel-red);
+        }
+
+        .prize-tier--featured .prize-tier__step {
+          height: 0.38rem;
+          background: var(--padel-red);
+        }
+
+        .prize-tier--featured .prize-tier__shine {
+          background: radial-gradient(circle, rgba(255, 255, 255, 0.48), transparent 68%);
         }
 
         .stat-card {
@@ -1649,7 +1662,7 @@ export function PadelHomeStyles() {
           position: absolute;
           inset: auto -30% -60% -30%;
           height: 70%;
-          background: radial-gradient(circle, rgba(224, 196, 119, 0.16), transparent 68%);
+          background: radial-gradient(circle, rgba(213, 201, 177, 0.16), transparent 68%);
           opacity: 0;
           transition: opacity 0.35s ease;
           pointer-events: none;
@@ -1662,8 +1675,8 @@ export function PadelHomeStyles() {
         @media (min-width: 768px) {
           .stat-card--featured {
             transform: translateY(-0.75rem);
-            border-color: rgba(224, 196, 119, 0.35);
-            background: rgba(246, 239, 225, 0.04);
+            border-color: rgba(213, 201, 177, 0.35);
+            background: rgba(213, 201, 177, 0.04);
           }
 
           .stat-card--featured .stat-card__glow {
@@ -1672,7 +1685,7 @@ export function PadelHomeStyles() {
         }
 
         .stat-card:hover {
-          background: rgba(246, 239, 225, 0.03);
+          background: rgba(213, 201, 177, 0.03);
           transform: translateY(-3px);
         }
 
@@ -1683,7 +1696,7 @@ export function PadelHomeStyles() {
         }
 
         .detail-row:hover {
-          background: rgba(246, 239, 225, 0.035);
+          background: rgba(213, 201, 177, 0.035);
           transform: translateX(4px);
         }
 
@@ -1692,7 +1705,7 @@ export function PadelHomeStyles() {
           position: absolute;
           inset: 0;
           transform: translateY(100%);
-          background: linear-gradient(180deg, transparent, rgba(246, 239, 225, 0.08));
+          background: linear-gradient(180deg, transparent, rgba(213, 201, 177, 0.08));
           transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -1744,7 +1757,7 @@ export function PadelHomeStyles() {
         }
 
         .sponsor-chip:hover {
-          background: rgba(140, 25, 22, 0.06);
+          background: rgba(134, 0, 12, 0.06);
           border-color: var(--padel-red);
           color: var(--padel-red);
         }
@@ -1766,7 +1779,7 @@ export function PadelHomeStyles() {
           overflow: hidden;
           border-block: 1px solid var(--padel-line);
           background:
-            linear-gradient(90deg, var(--padel-ink), rgba(19, 2, 2, 0.94) 12%, rgba(19, 2, 2, 0.94) 88%, var(--padel-ink)),
+            linear-gradient(90deg, var(--padel-ink), rgba(88, 16, 16, 0.94) 12%, rgba(88, 16, 16, 0.94) 88%, var(--padel-ink)),
             var(--padel-ink);
           padding-block: 1.15rem;
           position: relative;
@@ -1794,7 +1807,7 @@ export function PadelHomeStyles() {
         }
 
         .preloader-court__inner {
-          background: rgba(140, 25, 22, 0.12);
+          background: rgba(134, 0, 12, 0.12);
         }
 
         .preloader-court__net {
@@ -1834,11 +1847,11 @@ export function PadelHomeStyles() {
           letter-spacing: 0.22em;
           text-transform: uppercase;
           white-space: nowrap;
-          color: rgba(246, 239, 225, 0.4);
+          color: rgba(213, 201, 177, 0.4);
         }
 
         .marquee-band__item:nth-child(odd) {
-          color: rgba(217, 191, 115, 0.6);
+          color: rgba(213, 201, 177, 0.6);
         }
 
         .marquee-band__star {
@@ -1892,7 +1905,7 @@ export function PadelHomeStyles() {
           height: 1.1rem;
           width: 1.1rem;
           border-radius: 999px;
-          border: 2px solid rgba(246, 239, 225, 0.35);
+          border: 2px solid rgba(213, 201, 177, 0.35);
           border-top-color: var(--padel-ivory);
           animation: spinner-turn 0.7s linear infinite;
         }
@@ -1953,7 +1966,7 @@ export function PadelHomeStyles() {
           }
 
           .flow-card__score {
-            -webkit-text-stroke-color: rgba(217, 191, 115, 0.32);
+            -webkit-text-stroke-color: rgba(213, 201, 177, 0.32);
           }
         }
 
@@ -1969,7 +1982,7 @@ export function PadelHomeStyles() {
           min-height: 3.2rem;
           width: 100%;
           border: none;
-          border-bottom: 1px solid #cbb9a4;
+          border-bottom: 1px solid #d5c9b1;
           border-radius: 0;
           background: transparent;
           padding: 0.75rem 0.15rem;
@@ -1986,7 +1999,7 @@ export function PadelHomeStyles() {
         .field-select {
           appearance: none;
           cursor: pointer;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238c1916' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2386000c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
           background-repeat: no-repeat;
           background-position: right 0.15rem center;
           padding-right: 1.5rem;
@@ -2020,12 +2033,12 @@ export function PadelHomeStyles() {
           height: 0.45rem;
           width: 0.45rem;
           border-radius: 999px;
-          background: rgba(19, 2, 2, 0.14);
+          background: rgba(88, 16, 16, 0.14);
         }
 
         .form-steps__dot--active {
           width: 1.6rem;
-          background: linear-gradient(90deg, var(--padel-red), #b32420);
+          background: linear-gradient(90deg, var(--padel-red), #86000c);
         }
 
         .premium-form textarea {
@@ -2035,7 +2048,7 @@ export function PadelHomeStyles() {
 
         .premium-form input::placeholder,
         .premium-form textarea::placeholder {
-          color: rgba(19, 2, 2, 0.34);
+          color: rgba(88, 16, 16, 0.34);
           font-style: italic;
         }
 
@@ -2055,7 +2068,7 @@ export function PadelHomeStyles() {
         .premium-form textarea:focus,
         .premium-form select:focus {
           border-color: var(--padel-red);
-          background: rgba(140, 25, 22, 0.028);
+          background: rgba(134, 0, 12, 0.028);
         }
 
         .visual-poster {
@@ -2084,7 +2097,7 @@ export function PadelHomeStyles() {
           align-items: flex-end;
           justify-content: flex-start;
           padding: 1.5rem;
-          background: linear-gradient(180deg, transparent 35%, rgba(19, 2, 2, 0.72));
+          background: linear-gradient(180deg, transparent 35%, rgba(88, 16, 16, 0.72));
           opacity: 0;
           transition: opacity 0.45s var(--padel-ease-out);
         }
@@ -2200,7 +2213,7 @@ export function PadelHomeStyles() {
           position: absolute;
           inset: 0;
           background:
-            repeating-linear-gradient(110deg, rgba(246, 239, 225, 0.035) 0 1px, transparent 1px 8px),
+            repeating-linear-gradient(110deg, rgba(213, 201, 177, 0.035) 0 1px, transparent 1px 8px),
             linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.24));
           opacity: 0.86;
         }
@@ -2229,8 +2242,8 @@ export function PadelHomeStyles() {
 
         .poster-court-study {
           background:
-            linear-gradient(160deg, rgba(19, 2, 2, 0.66) 0 21%, transparent 21%),
-            linear-gradient(135deg, #8c1916, #5c0d0b);
+            linear-gradient(160deg, rgba(88, 16, 16, 0.66) 0 21%, transparent 21%),
+            linear-gradient(135deg, #86000c, #581010);
         }
 
         .poster-court-study::before,
@@ -2258,8 +2271,8 @@ export function PadelHomeStyles() {
 
         .poster-type-study {
           background:
-            radial-gradient(circle at 74% 22%, rgba(246, 239, 225, 0.08), transparent 12rem),
-            linear-gradient(135deg, #120202, #8c1916 52%, #6f1210);
+            radial-gradient(circle at 74% 22%, rgba(213, 201, 177, 0.08), transparent 12rem),
+            linear-gradient(135deg, #581010, #86000c 52%, #581010);
         }
 
         .poster-type-study::before {
@@ -2267,7 +2280,7 @@ export function PadelHomeStyles() {
           position: absolute;
           left: -0.5rem;
           top: 42%;
-          color: #e20f0b;
+          color: #86000c;
           font-family: var(--font-display);
           font-size: clamp(4rem, 12vw, 8.5rem);
           font-weight: 700;
@@ -2402,20 +2415,80 @@ export function PadelHomeStyles() {
           }
 
           .prize-pool-head {
-            gap: 0.85rem;
-            padding-bottom: 1.2rem;
+            gap: 1.1rem;
           }
 
-          .prize-pool-head h3 {
-            font-size: clamp(2.3rem, 7.2vw, 3.2rem);
+          .prize-total-lockup__mark {
+            height: 3rem;
+            width: 3rem;
           }
 
-          .prize-tier {
-            padding: 1.05rem;
+          .prize-total-lockup__amount {
+            font-size: clamp(2.8rem, 13.5vw, 4.2rem);
           }
 
-          .prize-tier p:nth-of-type(2) {
-            font-size: clamp(2.25rem, 9vw, 3.15rem);
+          .prize-pool-head__copy {
+            padding-top: 0.1rem;
+            padding-left: 0;
+          }
+
+          .prize-pool-head__copy::before {
+            display: none;
+          }
+
+          .prize-podium-wrap {
+            padding: 1rem;
+          }
+
+          .prize-podium {
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            padding-top: 0;
+          }
+
+          .prize-podium__item {
+            width: 100%;
+          }
+
+          .prize-podium__item--1 {
+            order: 1;
+          }
+
+          .prize-podium__item--2 {
+            order: 2;
+          }
+
+          .prize-podium__item--3 {
+            order: 3;
+          }
+
+          .prize-podium__halo {
+            top: 0;
+            width: 82vw;
+            max-width: 23rem;
+          }
+
+          .prize-tier,
+          .prize-tier--featured {
+            min-height: 0;
+          }
+
+          .prize-tier__content {
+            min-height: 12.5rem;
+            padding: 1.15rem;
+          }
+
+          .prize-tier--featured .prize-tier__content {
+            min-height: 15rem;
+          }
+
+          .prize-tier__amount {
+            font-size: clamp(2.45rem, 12vw, 3.55rem);
+          }
+
+          .prize-tier--featured .prize-tier__amount {
+            font-size: clamp(3.25rem, 15vw, 4.5rem);
           }
 
           .detail-row {
@@ -2645,7 +2718,563 @@ export function PadelHomeStyles() {
           }
         }
 
+        /* ================================================================ */
+        /* 2026 homepage refinement: stable, court-first, mobile-first      */
+        /* ================================================================ */
+
+        .el-padel-page {
+          background:
+            linear-gradient(180deg, #86000c 0%, #6f0710 42%, #581010 100%);
+        }
+
+        .el-padel-page main > section {
+          min-height: auto;
+        }
+
+        .el-padel-page main > section.poster-hero {
+          min-height: 100svh;
+        }
+
+        .hero-ambient {
+          overflow: hidden;
+        }
+
+        .hero-ambient__glow {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: min(52rem, 88vw);
+          aspect-ratio: 1;
+          border-radius: 999px;
+          background: radial-gradient(
+            circle,
+            rgba(213, 201, 177, 0.16) 0%,
+            rgba(134, 0, 12, 0.08) 38%,
+            transparent 70%
+          );
+          filter: blur(10px);
+          translate: -50% -50%;
+          transform-origin: center;
+        }
+
+        .hero-ambient__beam {
+          position: absolute;
+          left: 50%;
+          top: 12%;
+          height: 76%;
+          width: 1px;
+          background: linear-gradient(
+            180deg,
+            transparent,
+            rgba(213, 201, 177, 0.48) 35%,
+            rgba(213, 201, 177, 0.18) 68%,
+            transparent
+          );
+          box-shadow: 0 0 28px rgba(213, 201, 177, 0.24);
+          transform-origin: center;
+        }
+
+        .hero-ambient__sweep {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          height: 135%;
+          width: 18%;
+          opacity: 0.16;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(213, 201, 177, 0.22),
+            transparent
+          );
+          filter: blur(20px);
+          translate: -50% -50%;
+          rotate: 14deg;
+        }
+
+        .hero-logo-stage {
+          width: min(24rem, 88vw);
+          min-height: 17rem;
+        }
+
+        .hero-logo-orbit {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          border-radius: 999px;
+          translate: -50% -50%;
+          pointer-events: none;
+        }
+
+        .hero-logo-orbit::after {
+          content: '';
+          position: absolute;
+          left: 50%;
+          top: -3px;
+          height: 6px;
+          width: 6px;
+          border-radius: 999px;
+          background: var(--padel-gold);
+          box-shadow: 0 0 14px rgba(213, 201, 177, 0.8);
+          transform: translateX(-50%);
+        }
+
+        .hero-logo-orbit--outer {
+          height: 17rem;
+          width: 17rem;
+          border: 1px solid rgba(213, 201, 177, 0.2);
+          border-left-color: transparent;
+        }
+
+        .hero-logo-orbit--inner {
+          height: 13.75rem;
+          width: 13.75rem;
+          border: 1px dashed rgba(213, 201, 177, 0.17);
+          border-right-color: transparent;
+        }
+
+        .hero-logo-image {
+          position: relative;
+          z-index: 1;
+          filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.32));
+        }
+
+        .hero-gold-line {
+          background: linear-gradient(
+            90deg,
+            transparent,
+            var(--padel-gold),
+            transparent
+          );
+          box-shadow: 0 0 16px rgba(213, 201, 177, 0.3);
+        }
+
+        .el-padel-page section[id] {
+          scroll-margin-top: 5.75rem;
+        }
+
+        .scroll-section::before {
+          opacity: 0.42;
+        }
+
+        .hero-bg {
+          background: var(--padel-ink);
+        }
+
+        .hero-bg__image {
+          object-position: center 54%;
+          filter: saturate(1.08) contrast(1.08) brightness(0.9);
+          transform: translateZ(0) scale(1.02);
+          transform-origin: center;
+        }
+
+        .hero-bg__wash {
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(90deg, rgba(88, 16, 16, 0.96) 0%, rgba(88, 16, 16, 0.78) 38%, rgba(88, 16, 16, 0.22) 100%),
+            linear-gradient(180deg, rgba(88, 16, 16, 0.72) 0%, rgba(88, 16, 16, 0.18) 42%, rgba(88, 16, 16, 0.88) 100%);
+        }
+
+        .hero-bg__court-lines {
+          position: absolute;
+          inset: 0;
+          opacity: 0.2;
+          background:
+            linear-gradient(90deg, transparent 7%, var(--padel-line) 7%, var(--padel-line) calc(7% + 1px), transparent calc(7% + 1px)),
+            linear-gradient(90deg, transparent 50%, var(--padel-line) 50%, var(--padel-line) calc(50% + 1px), transparent calc(50% + 1px)),
+            linear-gradient(0deg, transparent 18%, var(--padel-line) 18%, var(--padel-line) calc(18% + 1px), transparent calc(18% + 1px));
+          mask-image: linear-gradient(90deg, #000, transparent 72%);
+          -webkit-mask-image: linear-gradient(90deg, #000, transparent 72%);
+        }
+
+        .hero-shell {
+          position: relative;
+          z-index: 2;
+        }
+
+        .hero-eyebrow,
+        .hero-facts__label,
+        .hero-fact__label {
+          letter-spacing: 0.2em;
+        }
+
+        .hero-title {
+          letter-spacing: 0;
+          text-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+          text-wrap: balance;
+        }
+
+        .hero-copyline {
+          text-wrap: pretty;
+        }
+
+        .hero-actions a {
+          transition:
+            transform 0.26s var(--padel-ease-out),
+            border-color 0.26s ease,
+            background-color 0.26s ease,
+            color 0.26s ease;
+        }
+
+        .hero-facts {
+          border: 1px solid var(--padel-line-strong);
+          border-radius: 8px;
+          background:
+            linear-gradient(145deg, rgba(213, 201, 177, 0.09), rgba(213, 201, 177, 0.03)),
+            rgba(88, 16, 16, 0.56);
+          box-shadow: 0 26px 80px rgba(0, 0, 0, 0.26);
+          padding: 1rem;
+        }
+
+        .hero-facts__label {
+          margin-bottom: 0.85rem;
+          color: var(--padel-gold);
+          font-size: 0.64rem;
+          font-weight: 700;
+          text-transform: uppercase;
+        }
+
+        .hero-facts__grid {
+          display: grid;
+          gap: 0.7rem;
+        }
+
+        .hero-fact {
+          display: grid;
+          grid-template-columns: 1.25rem minmax(0, 1fr);
+          gap: 0.75rem;
+          align-items: flex-start;
+          border-top: 1px solid var(--padel-line);
+          padding-top: 0.75rem;
+        }
+
+        .hero-fact:first-child {
+          border-top: 0;
+          padding-top: 0;
+        }
+
+        .hero-fact__label,
+        .hero-fact__value {
+          display: block;
+        }
+
+        .hero-fact__label {
+          font-size: 0.56rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          color: rgba(213, 201, 177, 0.62);
+        }
+
+        .hero-fact__value {
+          margin-top: 0.12rem;
+          color: var(--padel-ivory);
+          font-family: var(--font-display);
+          font-size: 1.05rem;
+          font-weight: 600;
+          line-height: 1.2;
+        }
+
+        .hero-chip-rail {
+          position: relative;
+          z-index: 2;
+        }
+
+        .hero-scroll-cue {
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+        }
+
+        .section-pad {
+          padding-top: 6.5rem;
+          padding-bottom: 6.5rem;
+        }
+
+        .section-tight {
+          padding-top: 5.25rem;
+          padding-bottom: 5.25rem;
+        }
+
+        .section-intro-frame {
+          border-left-color: rgba(213, 201, 177, 0.34);
+          padding-left: 1rem;
+        }
+
+        .section-kicker {
+          letter-spacing: 0.18em;
+        }
+
+        .section-accent {
+          color: var(--padel-ivory);
+          opacity: 0.74;
+        }
+
+        .glass-card,
+        .poster-frame,
+        .upcoming-event-card,
+        .prize-pool-shell,
+        .prize-tier,
+        .premium-form,
+        .court-card,
+        .courts-stage__media,
+        .contact-link,
+        .el-padel-page .rounded-xl {
+          border-radius: 8px;
+        }
+
+        .poster-frame {
+          background: rgba(88, 16, 16, 0.22);
+          box-shadow: 0 26px 90px rgba(0, 0, 0, 0.26);
+        }
+
+        .poster-frame__media,
+        .courts-stage__media {
+          border-radius: 6px;
+        }
+
+        .poster-frame__inner,
+        .courts-stage__img,
+        .visual-poster__image {
+          transform: translateZ(0);
+        }
+
+        .principle-row,
+        .prize-tier,
+        .contact-link,
+        .courts-stage__media {
+          transition:
+            transform 0.26s var(--padel-ease-out),
+            border-color 0.26s ease,
+            background-color 0.26s ease,
+            box-shadow 0.26s ease;
+        }
+
+        .sponsors-section-card,
+        .el-padel-page article {
+          border-radius: 8px;
+        }
+
+        .upcoming-event-card,
+        .prize-pool-shell,
+        .premium-form,
+        .court-card {
+          box-shadow: 0 26px 90px rgba(0, 0, 0, 0.22);
+        }
+
+        .marquee-band {
+          padding-block: 0.9rem;
+        }
+
+        .marquee-band__item {
+          letter-spacing: 0.16em;
+        }
+
+        @media (min-width: 769px) and (hover: hover) and (pointer: fine) {
+          .hero-bg__image {
+            animation: hero-photo-breathe 18s ease-in-out infinite;
+          }
+
+          .hero-facts {
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+          }
+        }
+
+        @keyframes hero-photo-breathe {
+          0%,
+          100% {
+            transform: translateZ(0) scale(1.02);
+          }
+
+          50% {
+            transform: translateZ(0) scale(1.055);
+          }
+        }
+
+        @media (max-width: 900px) {
+          .poster-hero {
+            min-height: 100svh;
+            padding-top: max(6.25rem, calc(env(safe-area-inset-top) + 5.25rem));
+            padding-bottom: max(4rem, calc(env(safe-area-inset-bottom) + 3rem));
+          }
+
+          .hero-bg__image {
+            object-position: 64% center;
+          }
+
+          .hero-bg__wash {
+            background:
+              linear-gradient(180deg, rgba(88, 16, 16, 0.86) 0%, rgba(88, 16, 16, 0.68) 46%, rgba(88, 16, 16, 0.96) 100%),
+              linear-gradient(90deg, rgba(88, 16, 16, 0.9), rgba(88, 16, 16, 0.34));
+          }
+
+          .hero-shell {
+            min-height: auto;
+            gap: 1.5rem;
+          }
+
+          .hero-logo-stage {
+            min-height: 15rem;
+          }
+
+          .hero-logo-orbit--outer {
+            height: 15rem;
+            width: 15rem;
+          }
+
+          .hero-logo-orbit--inner {
+            height: 12rem;
+            width: 12rem;
+          }
+
+          .hero-brand-row {
+            margin-bottom: 1.5rem;
+          }
+
+          .hero-title {
+            max-width: 9ch;
+            font-size: 3.65rem;
+            line-height: 0.92;
+          }
+
+          .hero-copyline {
+            margin-top: 1.25rem;
+            font-size: 1rem;
+            line-height: 1.65;
+          }
+
+          .hero-actions {
+            margin-top: 1.5rem;
+          }
+
+          .hero-actions a {
+            width: 100%;
+          }
+
+          .hero-facts {
+            padding: 0.9rem;
+          }
+
+          .hero-facts__grid {
+            gap: 0.6rem;
+          }
+
+          .hero-chip-rail {
+            margin-top: 1rem;
+          }
+
+          .section-pad {
+            padding-top: 4rem;
+            padding-bottom: 4rem;
+          }
+
+          .section-tight {
+            padding-top: 3.4rem;
+            padding-bottom: 3.4rem;
+          }
+
+          .section-intro-frame {
+            padding-left: 0.9rem;
+          }
+
+          .section-kicker {
+            letter-spacing: 0.14em;
+          }
+
+          .section-kicker__rule {
+            display: none;
+          }
+
+          .floating-entry {
+            width: calc(100vw - 1rem);
+            border-radius: 8px;
+            bottom: max(0.6rem, calc(env(safe-area-inset-bottom) + 0.55rem));
+          }
+
+          .floating-entry .btn-premium {
+            min-width: 6.8rem;
+            padding-inline: 0.9rem;
+          }
+
+          /* Mobile motion budget: retain hierarchy, remove persistent paint work. */
+          .scroll-section::before,
+          .hero-ambient__beam,
+          .hero-ambient__sweep,
+          .section-orbit {
+            display: none;
+          }
+
+          .hero-ambient__glow {
+            filter: none;
+            opacity: 0.28;
+          }
+
+          .prize-pool-shell {
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+          }
+
+          .aurora-orb,
+          .poster-frame__inner,
+          .courts-stage__img,
+          .hero-title-line__inner,
+          .hero-logo-image {
+            will-change: auto;
+          }
+
+          .hero-logo-image {
+            filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.24));
+          }
+
+          .gold-ink,
+          .floating-entry__pulse,
+          .section-kicker__index,
+          .live-badge__dot,
+          .hero-logo-orbit,
+          .prize-tier--featured .prize-tier__shine {
+            animation: none !important;
+          }
+        }
+
         @media (prefers-reduced-motion: reduce) {
+          .hero-ambient__glow {
+            opacity: 0.28;
+          }
+        }
+
+        @media (max-width: 460px) {
+          .padel-nav-header {
+            padding-inline: 0.6rem;
+          }
+
+          .nav-shell {
+            height: 3.35rem;
+            padding-inline: 0.55rem;
+          }
+
+          .hero-title {
+            font-size: 3rem;
+          }
+
+          .hero-fact__value {
+            font-size: 0.98rem;
+          }
+
+          .hero-chip {
+            font-size: 0.52rem;
+            letter-spacing: 0.12em;
+          }
+
+          .contact-link__text {
+            font-size: 1.2rem;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .hero-bg__image {
+            animation: none !important;
+          }
+
           .stat-card,
           .detail-row,
           .detail-row::before,
@@ -2663,7 +3292,9 @@ export function PadelHomeStyles() {
           .section-kicker__index,
           .hero-chip,
           .upcoming-event-card,
-          .prize-tier {
+          .prize-tier,
+          .prize-tier__shine,
+          .prize-tier__step {
             transition: none !important;
             animation: none !important;
           }

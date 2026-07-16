@@ -18,7 +18,7 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         gold:
-          'bg-[var(--padel-ivory)] text-[var(--padel-red)] hover:bg-white',
+          'bg-[var(--padel-ivory)] text-[var(--padel-red)] hover:bg-[var(--padel-ivory)]',
         red:
           'bg-[var(--padel-red)] text-[var(--padel-ivory)] hover:bg-[var(--padel-red-2)]',
       },

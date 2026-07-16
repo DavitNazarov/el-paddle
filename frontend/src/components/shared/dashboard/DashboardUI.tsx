@@ -90,7 +90,7 @@ type SurfaceCardProps = {
 } & React.HTMLAttributes<HTMLDivElement>;
 
 export const formControlClassName =
-  'min-h-11 border-[rgba(19,2,2,0.14)] bg-white text-[var(--padel-ink)] placeholder:text-[rgba(19,2,2,0.42)] focus-visible:ring-[var(--padel-focus-ring)]';
+  'min-h-11 border-[rgba(88,16,16,0.14)] bg-[var(--padel-ivory)] text-[var(--padel-ink)] placeholder:text-[rgba(88,16,16,0.42)] focus-visible:ring-[var(--padel-focus-ring)]';
 
 export const selectControlClassName = cn(
   formControlClassName,
@@ -101,10 +101,10 @@ export const softButtonClassName = 'dash-soft-btn border';
 
 /** Outline control for parchment dialogs / light surfaces */
 export const modalSoftButtonClassName =
-  'border-[rgba(19,2,2,0.12)] bg-white text-[var(--padel-ink)] hover:bg-[#f7efe3]';
+  'border-[rgba(88,16,16,0.12)] bg-[var(--padel-ivory)] text-[var(--padel-ink)] hover:bg-[var(--padel-ivory)]';
 
 export const sidebarTabTriggerClassName =
-  'dash-sidebar-link justify-start focus-visible:ring-1 focus-visible:ring-[rgba(231,194,93,0.46)] focus-visible:ring-offset-0';
+  'dash-sidebar-link justify-start focus-visible:ring-1 focus-visible:ring-[rgba(213,201,177,0.46)] focus-visible:ring-offset-0';
 
 export const mobileTabTriggerClassName =
   'dash-mobile-link min-h-11 flex-1 flex-col gap-1 rounded-full px-2 py-2 text-[11px] font-semibold leading-tight sm:flex-row sm:gap-2 sm:px-3 sm:text-sm';
@@ -156,7 +156,7 @@ export function DashboardShell({
           >
             <div
               className={cn(
-                'flex w-full items-center gap-3 border-b border-white/10 py-5',
+                'flex w-full items-center gap-3 border-b border-[rgba(213,201,177,0.1)] py-5',
                 sidebarOpen ? 'justify-between px-5' : 'justify-center px-3',
               )}
             >
@@ -165,7 +165,7 @@ export function DashboardShell({
                   <Link href="/" className="font-display text-xl font-semibold tracking-normal text-[var(--padel-ivory)]">
                     {sidebarTitle}
                   </Link>
-                  <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(246,239,225,0.42)]">
+                  <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(213,201,177,0.42)]">
                     {sidebarSubtitle}
                   </p>
                 </div>
@@ -178,7 +178,7 @@ export function DashboardShell({
                 aria-label={sidebarToggleLabel}
                 aria-expanded={sidebarOpen}
                 onClick={() => setSidebarOpen((current) => !current)}
-                className="h-9 w-9 shrink-0 rounded-md text-[var(--padel-ivory)] hover:bg-white/10 hover:text-[var(--padel-ivory)] focus-visible:ring-1 focus-visible:ring-[rgba(231,194,93,0.4)] focus-visible:ring-offset-0"
+                className="h-9 w-9 shrink-0 rounded-md text-[var(--padel-ivory)] hover:bg-[rgba(213,201,177,0.1)] hover:text-[var(--padel-ivory)] focus-visible:ring-1 focus-visible:ring-[rgba(213,201,177,0.4)] focus-visible:ring-offset-0"
               >
                 {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
               </Button>
@@ -196,7 +196,7 @@ export function DashboardShell({
                 {sidebarContent}
               </nav>
             ) : null}
-            {sidebarFooter && sidebarOpen ? <div className="w-full border-t border-white/10 p-4">{sidebarFooter}</div> : null}
+            {sidebarFooter && sidebarOpen ? <div className="w-full border-t border-[rgba(213,201,177,0.1)] p-4">{sidebarFooter}</div> : null}
           </aside>
         ) : null}
 
@@ -214,7 +214,7 @@ export function DashboardShell({
                   <h1 className="mt-2 text-2xl font-semibold leading-tight tracking-normal text-[var(--padel-ivory)] sm:text-[1.75rem]">
                     {title}
                   </h1>
-                  <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[rgba(246,239,225,0.5)] sm:line-clamp-none line-clamp-2">
+                  <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[rgba(213,201,177,0.5)] sm:line-clamp-none line-clamp-2">
                     {description}
                   </p>
                 </motion.div>
@@ -276,10 +276,10 @@ export function StatCard({
   delay = 0,
 }: StatCardProps) {
   const toneClass = {
-    neutral: 'bg-[rgba(246,239,225,0.08)] text-[rgba(246,239,225,0.7)]',
+    neutral: 'bg-[rgba(213,201,177,0.08)] text-[rgba(213,201,177,0.7)]',
     success: 'bg-emerald-500/15 text-emerald-300',
-    warning: 'bg-[rgba(224,196,119,0.12)] text-[var(--padel-gold)]',
-    danger: 'bg-[rgba(224,52,43,0.12)] text-[#f07169]',
+    warning: 'bg-[rgba(213,201,177,0.12)] text-[var(--padel-gold)]',
+    danger: 'bg-[rgba(134,0,12,0.12)] text-[var(--padel-red)]',
   }[tone];
 
   const content = (
@@ -296,7 +296,7 @@ export function StatCard({
         ) : null}
       </div>
       {description ? (
-        <p className="relative mt-3 text-sm leading-5 text-[rgba(246,239,225,0.48)]">{description}</p>
+        <p className="relative mt-3 text-sm leading-5 text-[rgba(213,201,177,0.48)]">{description}</p>
       ) : null}
     </div>
   );
@@ -338,7 +338,7 @@ export function SectionHeading({
           {title}
         </h2>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm leading-5 text-[rgba(246,239,225,0.48)]">{description}</p>
+          <p className="mt-1 max-w-2xl text-sm leading-5 text-[rgba(213,201,177,0.48)]">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -360,10 +360,10 @@ export function DashboardField({
   return (
     <div className="dash-field space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <Label htmlFor={id} className="text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(19,2,2,0.62)]">
+        <Label htmlFor={id} className="text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(88,16,16,0.62)]">
           {label}
         </Label>
-        {hint ? <span className="text-xs text-[rgba(19,2,2,0.46)]">{hint}</span> : null}
+        {hint ? <span className="text-xs text-[rgba(88,16,16,0.46)]">{hint}</span> : null}
       </div>
       {children}
     </div>
@@ -412,7 +412,7 @@ export function EmptyState({
   action,
 }: EmptyStateProps) {
   return (
-    <SurfaceCard className="border-dashed border-[rgba(246,239,225,0.18)] bg-[rgba(246,239,225,0.03)]">
+    <SurfaceCard className="border-dashed border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.03)]">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-4">
           <span className="dash-empty-icon">
@@ -421,7 +421,7 @@ export function EmptyState({
           <div>
             <h3 className="font-semibold text-[var(--padel-ivory)]">{title}</h3>
             {description ? (
-              <p className="mt-1 text-sm leading-6 text-[rgba(246,239,225,0.55)]">{description}</p>
+              <p className="mt-1 text-sm leading-6 text-[rgba(213,201,177,0.55)]">{description}</p>
             ) : null}
           </div>
         </div>
@@ -500,7 +500,7 @@ export function RegistrationStatusBadge({
   }
 
   return (
-    <Badge className="border-[rgba(246,239,225,0.18)] bg-[rgba(246,239,225,0.06)] text-[rgba(246,239,225,0.75)]">
+    <Badge className="border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.06)] text-[rgba(213,201,177,0.75)]">
       {t('dashboard.status.PENDING')}
     </Badge>
   );
@@ -527,7 +527,7 @@ export function Metric({
     <div className="dash-metric">
       <p className="dash-metric__label">{label}</p>
       <p className="dash-metric__value">{value}</p>
-      {hint ? <p className="text-xs text-[rgba(246,239,225,0.42)]">{hint}</p> : null}
+      {hint ? <p className="text-xs text-[rgba(213,201,177,0.42)]">{hint}</p> : null}
     </div>
   );
 }
@@ -548,7 +548,7 @@ export function AttentionRow({
       <span className={cn('dash-attention__dot', urgent && 'dash-attention__dot--urgent')} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-[var(--padel-ivory)]">{title}</p>
-        {detail ? <p className="mt-0.5 text-xs leading-5 text-[rgba(246,239,225,0.48)]">{detail}</p> : null}
+        {detail ? <p className="mt-0.5 text-xs leading-5 text-[rgba(213,201,177,0.48)]">{detail}</p> : null}
       </div>
       {action}
     </div>
@@ -565,8 +565,8 @@ export function MetaRow({
   className?: string;
 }) {
   return (
-    <span className={cn('inline-flex items-center gap-2 text-sm text-[rgba(246,239,225,0.58)]', className)}>
-      <Icon className="h-4 w-4 shrink-0 text-[rgba(246,239,225,0.4)]" />
+    <span className={cn('inline-flex items-center gap-2 text-sm text-[rgba(213,201,177,0.58)]', className)}>
+      <Icon className="h-4 w-4 shrink-0 text-[rgba(213,201,177,0.4)]" />
       {children}
     </span>
   );

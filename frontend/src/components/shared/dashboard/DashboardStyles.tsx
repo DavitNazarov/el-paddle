@@ -5,19 +5,19 @@ export function DashboardStyles() {
   return (
     <style jsx global>{`
       .dash-app {
-        --dash-surface: rgba(246, 239, 225, 0.045);
-        --dash-surface-strong: rgba(246, 239, 225, 0.08);
-        --dash-border: rgba(246, 239, 225, 0.1);
-        --dash-border-strong: rgba(246, 239, 225, 0.2);
+        --dash-surface: rgba(213, 201, 177, 0.045);
+        --dash-surface-strong: rgba(213, 201, 177, 0.08);
+        --dash-border: rgba(213, 201, 177, 0.1);
+        --dash-border-strong: rgba(213, 201, 177, 0.2);
         --dash-text: var(--padel-ivory);
-        --dash-muted: rgba(246, 239, 225, 0.55);
-        --dash-faint: rgba(246, 239, 225, 0.38);
+        --dash-muted: rgba(213, 201, 177, 0.55);
+        --dash-faint: rgba(213, 201, 177, 0.38);
         position: relative;
         isolation: isolate;
         min-height: 100dvh;
         overflow-x: clip;
         color: var(--dash-text);
-        background: #100808;
+        background: var(--padel-red);
       }
 
       .dash-app::before {
@@ -27,8 +27,8 @@ export function DashboardStyles() {
         z-index: 0;
         pointer-events: none;
         background:
-          radial-gradient(ellipse 70% 40% at 0% 0%, rgba(140, 25, 22, 0.12), transparent 55%),
-          radial-gradient(ellipse 50% 30% at 100% 0%, rgba(224, 196, 119, 0.05), transparent 50%);
+          radial-gradient(ellipse 70% 40% at 0% 0%, rgba(134, 0, 12, 0.12), transparent 55%),
+          radial-gradient(ellipse 50% 30% at 100% 0%, rgba(213, 201, 177, 0.05), transparent 50%);
       }
 
       .dash-app > * {
@@ -44,21 +44,21 @@ export function DashboardStyles() {
         font-weight: 650;
         letter-spacing: 0.2em;
         text-transform: uppercase;
-        color: rgba(246, 239, 225, 0.45);
+        color: rgba(213, 201, 177, 0.45);
       }
 
       .dash-kicker::before {
         content: '';
         width: 0.85rem;
         height: 1px;
-        background: rgba(224, 196, 119, 0.55);
+        background: rgba(213, 201, 177, 0.55);
       }
 
       .dash-glass {
         position: relative;
         border: 1px solid var(--dash-border);
         border-radius: 0.75rem;
-        background: rgba(246, 239, 225, 0.035);
+        background: rgba(213, 201, 177, 0.035);
         transition:
           border-color 0.2s ease,
           background 0.2s ease;
@@ -66,16 +66,16 @@ export function DashboardStyles() {
 
       .dash-glass:hover {
         border-color: var(--dash-border-strong);
-        background: rgba(246, 239, 225, 0.05);
+        background: rgba(213, 201, 177, 0.05);
       }
 
       .dash-glass--featured {
-        background: rgba(246, 239, 225, 0.055);
-        border-color: rgba(246, 239, 225, 0.14);
+        background: rgba(213, 201, 177, 0.055);
+        border-color: rgba(213, 201, 177, 0.14);
       }
 
       .dash-glass--featured:hover {
-        border-color: rgba(246, 239, 225, 0.22);
+        border-color: rgba(213, 201, 177, 0.22);
       }
 
       .dash-stat {
@@ -84,7 +84,7 @@ export function DashboardStyles() {
 
       .dash-sidebar {
         border-right: 1px solid var(--dash-border);
-        background: #0c0606;
+        background: #581010;
       }
 
       .dash-sidebar-link {
@@ -106,17 +106,17 @@ export function DashboardStyles() {
 
       .dash-sidebar-link:hover {
         color: var(--padel-ivory);
-        background: rgba(246, 239, 225, 0.05);
+        background: rgba(213, 201, 177, 0.05);
       }
 
       .dash-sidebar-link[data-active='true'] {
         color: var(--padel-ivory);
-        background: rgba(246, 239, 225, 0.08);
+        background: rgba(213, 201, 177, 0.08);
         box-shadow: inset 2px 0 0 var(--padel-gold);
       }
 
       .dash-sidebar-link[data-active='true'] .dash-nav-badge {
-        background: rgba(224, 196, 119, 0.2);
+        background: rgba(213, 201, 177, 0.2);
         color: var(--padel-gold-2);
       }
 
@@ -130,13 +130,13 @@ export function DashboardStyles() {
         padding: 0 0.35rem;
         font-size: 0.65rem;
         font-weight: 700;
-        background: rgba(224, 52, 43, 0.85);
-        color: #fff;
+        background: rgba(134, 0, 12, 0.85);
+        color: var(--padel-ivory);
       }
 
       .dash-header {
         border-bottom: 1px solid var(--dash-border);
-        background: rgba(12, 6, 6, 0.88);
+        background: rgba(88, 16, 16, 0.88);
         backdrop-filter: blur(12px);
       }
 
@@ -161,13 +161,13 @@ export function DashboardStyles() {
       .dash-chip:hover {
         color: var(--padel-ivory);
         border-color: var(--dash-border-strong);
-        background: rgba(246, 239, 225, 0.04);
+        background: rgba(213, 201, 177, 0.04);
       }
 
       .dash-chip[data-active='true'] {
         color: var(--padel-ivory);
-        border-color: rgba(246, 239, 225, 0.28);
-        background: rgba(246, 239, 225, 0.1);
+        border-color: rgba(213, 201, 177, 0.28);
+        background: rgba(213, 201, 177, 0.1);
       }
 
       .dash-chip__count {
@@ -178,7 +178,7 @@ export function DashboardStyles() {
         border-radius: 999px;
         padding: 0 0.3rem;
         font-size: 0.68rem;
-        background: rgba(246, 239, 225, 0.1);
+        background: rgba(213, 201, 177, 0.1);
         color: inherit;
       }
 
@@ -189,7 +189,7 @@ export function DashboardStyles() {
         font-weight: 700;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: rgba(19, 2, 2, 0.55);
+        color: rgba(88, 16, 16, 0.55);
       }
 
       .dash-progress {
@@ -198,7 +198,7 @@ export function DashboardStyles() {
         left: 0;
         z-index: 60;
         height: 2px;
-        background: rgba(224, 196, 119, 0.7);
+        background: rgba(213, 201, 177, 0.7);
         transform-origin: left;
         pointer-events: none;
       }
@@ -233,8 +233,8 @@ export function DashboardStyles() {
 
       .dash-mobile-link[data-active='true'] {
         color: var(--padel-ivory);
-        border-color: rgba(246, 239, 225, 0.28);
-        background: rgba(246, 239, 225, 0.1);
+        border-color: rgba(213, 201, 177, 0.28);
+        background: rgba(213, 201, 177, 0.1);
       }
 
       .dash-empty-icon {
@@ -245,8 +245,8 @@ export function DashboardStyles() {
         align-items: center;
         justify-content: center;
         border-radius: 0.6rem;
-        background: rgba(246, 239, 225, 0.06);
-        color: rgba(246, 239, 225, 0.65);
+        background: rgba(213, 201, 177, 0.06);
+        color: rgba(213, 201, 177, 0.65);
         border: 1px solid var(--dash-border);
       }
 
@@ -257,7 +257,7 @@ export function DashboardStyles() {
       }
 
       .dash-soft-btn:hover {
-        background: rgba(246, 239, 225, 0.08) !important;
+        background: rgba(213, 201, 177, 0.08) !important;
         color: var(--padel-ivory) !important;
       }
 
@@ -279,7 +279,7 @@ export function DashboardStyles() {
         gap: 0.75rem;
         border-radius: 0.65rem;
         border: 1px solid var(--dash-border);
-        background: rgba(246, 239, 225, 0.03);
+        background: rgba(213, 201, 177, 0.03);
         padding: 0.85rem 1rem;
       }
 
@@ -302,7 +302,7 @@ export function DashboardStyles() {
         gap: 0.25rem;
         border-radius: 0.65rem;
         border: 1px solid var(--dash-border);
-        background: rgba(246, 239, 225, 0.03);
+        background: rgba(213, 201, 177, 0.03);
         padding: 0.9rem 1rem;
       }
 
@@ -319,7 +319,7 @@ export function DashboardStyles() {
         font-weight: 650;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: rgba(246, 239, 225, 0.42);
+        color: rgba(213, 201, 177, 0.42);
       }
     `}</style>
   );

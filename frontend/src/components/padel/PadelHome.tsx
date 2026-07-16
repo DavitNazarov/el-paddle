@@ -1,9 +1,7 @@
 'use client';
 
-import { Suspense } from 'react';
 import { padelVars } from './home/constants';
 import {
-  Preloader,
   CursorRing,
   FilmGrain,
   PageProgress,
@@ -21,7 +19,6 @@ import {
 } from './home/lazy-sections';
 import {
   SnapScrollController,
-  LazyMount,
   ViewportDeferredSection,
 } from './home/scroll';
 import {
@@ -34,17 +31,12 @@ import { Hero } from './home/Hero';
 import { MarqueeBand } from './home/motion';
 import { PadelHomeStyles } from './home/PadelHomeStyles';
 
-function DeferredSection({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={null}>{children}</Suspense>;
-}
-
 export function PadelHome() {
   return (
     <div
       style={padelVars}
-      className="el-padel-page min-h-screen overflow-x-clip bg-[var(--padel-red)] text-white"
+      className="el-padel-page min-h-screen overflow-x-clip bg-[var(--padel-red)] text-[var(--padel-ivory)]"
     >
-      <Preloader />
       <CursorRing />
       <FilmGrain />
       <PageProgress />
@@ -55,37 +47,33 @@ export function PadelHome() {
       <main className="page-canvas relative">
         <PageSurface />
         <Hero />
-        <LazyMount>
-          <MarqueeBand />
-        </LazyMount>
+        <MarqueeBand />
         <ViewportDeferredSection id="history">
-          <DeferredSection><HistorySection /></DeferredSection>
+          <HistorySection />
         </ViewportDeferredSection>
         <ViewportDeferredSection id="courts">
-          <DeferredSection><CourtsSection /></DeferredSection>
+          <CourtsSection />
         </ViewportDeferredSection>
         <ViewportDeferredSection id="competition">
-          <DeferredSection><CompetitionSection /></DeferredSection>
+          <CompetitionSection />
         </ViewportDeferredSection>
         <ViewportDeferredSection id="features">
-          <DeferredSection><FeaturesSection /></DeferredSection>
+          <FeaturesSection />
         </ViewportDeferredSection>
         <ViewportDeferredSection id="sponsors">
-          <DeferredSection><SponsorsSection /></DeferredSection>
-        </ViewportDeferredSection>
-        <ViewportDeferredSection id="registration">
-          <DeferredSection><RegistrationSection /></DeferredSection>
+          <SponsorsSection />
         </ViewportDeferredSection>
         <ViewportDeferredSection id="visit">
-          <DeferredSection><WeatherRouteSection /></DeferredSection>
+          <WeatherRouteSection />
+        </ViewportDeferredSection>
+        <ViewportDeferredSection id="registration">
+          <RegistrationSection />
         </ViewportDeferredSection>
         <ViewportDeferredSection id="contact">
-          <DeferredSection><ContactSection /></DeferredSection>
+          <ContactSection />
         </ViewportDeferredSection>
       </main>
-      <LazyMount eager>
-        <SiteFooter />
-      </LazyMount>
+      <SiteFooter />
 
       <PadelHomeStyles />
     </div>

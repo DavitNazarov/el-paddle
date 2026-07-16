@@ -1,25 +1,25 @@
 import type { CSSProperties } from 'react';
 
 export const padelVars = {
-  '--padel-red': '#801917',
-  '--padel-red-2': '#641410',
-  '--padel-red-3': '#4a0f0d',
-  '--padel-red-light': '#962622',
-  '--padel-red-left': '#5a1210',
-  '--padel-red-right': '#6b1a18',
-  '--padel-ink': '#130202',
-  '--padel-ivory': '#f6efe1',
-  '--padel-parchment': '#fff5e6',
-  '--padel-muted': '#decfbd',
-  '--padel-line': 'rgba(246, 239, 225, 0.18)',
-  '--padel-line-strong': 'rgba(246, 239, 225, 0.36)',
-  '--padel-gold': '#e0c477',
-  '--padel-gold-2': '#f2e3ad',
-  '--padel-gold-deep': '#a8863c',
-  '--padel-ember': '#e0342b',
-  '--padel-glow': 'rgba(224, 196, 119, 0.5)',
+  '--padel-red': '#86000c',
+  '--padel-red-2': '#581010',
+  '--padel-red-3': '#581010',
+  '--padel-red-light': '#86000c',
+  '--padel-red-left': '#581010',
+  '--padel-red-right': '#581010',
+  '--padel-ink': '#581010',
+  '--padel-ivory': '#d5c9b1',
+  '--padel-parchment': '#d5c9b1',
+  '--padel-muted': '#d5c9b1',
+  '--padel-line': 'rgba(213, 201, 177, 0.18)',
+  '--padel-line-strong': 'rgba(213, 201, 177, 0.36)',
+  '--padel-gold': '#d5c9b1',
+  '--padel-gold-2': '#d5c9b1',
+  '--padel-gold-deep': '#d5c9b1',
+  '--padel-ember': '#86000c',
+  '--padel-glow': 'rgba(213, 201, 177, 0.5)',
   '--padel-shadow': '0 30px 90px -30px rgba(0, 0, 0, 0.65)',
-  '--padel-shadow-gold': '0 24px 70px -28px rgba(224, 196, 119, 0.35)',
+  '--padel-shadow-gold': '0 24px 70px -28px rgba(213, 201, 177, 0.35)',
 } as CSSProperties;
 
 export const navItems = [
@@ -38,8 +38,8 @@ export const snapStops = [
   { id: 'competition', key: 'event' },
   { id: 'features', key: 'format' },
   { id: 'sponsors', key: 'sponsors' },
-  { id: 'registration', key: 'register' },
   { id: 'visit', key: 'visit' },
+  { id: 'registration', key: 'register' },
   { id: 'contact', key: 'contact' },
 ] as const;
 

@@ -59,7 +59,7 @@ export function PlayerSettingsClient({ initialUser }: PlayerSettingsClientProps)
             <h3 className="font-display text-lg font-semibold text-[var(--padel-ivory)]">
               {copy.deleteTitle}
             </h3>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-[rgba(246,239,225,0.55)]">
+            <p className="mt-2 max-w-xl text-sm leading-6 text-[rgba(213,201,177,0.55)]">
               {copy.deleteWarning}
             </p>
           </div>
@@ -93,7 +93,7 @@ export function PlayerSettingsClient({ initialUser }: PlayerSettingsClientProps)
           />
         }
       >
-        <p className="text-sm leading-6 text-[rgba(246,239,225,0.65)]">{copy.deleteWarning}</p>
+        <p className="text-sm leading-6 text-[rgba(213,201,177,0.65)]">{copy.deleteWarning}</p>
       </DashboardModal>
     </PlayerShell>
   );

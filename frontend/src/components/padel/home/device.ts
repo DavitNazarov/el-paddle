@@ -1,33 +1,48 @@
 'use client';
 
-import {
-  useEffect,
-  useLayoutEffect,
-  useState,
-} from 'react';
-import { useReducedMotion } from 'framer-motion';
+import { useSyncExternalStore } from 'react';
 
-const mobileMotionQuery = '(pointer: coarse), (hover: none), (max-width: 768px)';
-const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+const mobileMotionQuery = '(pointer: coarse), (hover: none), (max-width: 900px)';
+const mobileMotionListeners = new Set<() => void>();
+let mobileMotionMedia: MediaQueryList | null = null;
 
-/** True for touch/small-screen devices; DevTools device mode often keeps pointer:fine. */
-export function useCoarsePointer() {
-  const [coarse, setCoarse] = useState(false);
-
-  useBrowserLayoutEffect(() => {
-    const media = window.matchMedia(mobileMotionQuery);
-    const sync = () => setCoarse(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
-
-  return coarse;
+function getMobileMotionMedia() {
+  if (typeof window === 'undefined') return null;
+  mobileMotionMedia ??= window.matchMedia(mobileMotionQuery);
+  return mobileMotionMedia;
 }
 
-/** Scroll-linked transforms desync on iOS momentum scroll; skip on touch devices. */
-export function useScrollParallaxEnabled() {
-  const reduceMotion = useReducedMotion();
-  const coarse = useCoarsePointer();
-  return !reduceMotion && !coarse;
+function notifyMobileMotionListeners() {
+  mobileMotionListeners.forEach((listener) => listener());
+}
+
+function subscribeToMobileMotion(listener: () => void) {
+  const media = getMobileMotionMedia();
+  mobileMotionListeners.add(listener);
+  if (mobileMotionListeners.size === 1) {
+    media?.addEventListener('change', notifyMobileMotionListeners);
+  }
+
+  return () => {
+    mobileMotionListeners.delete(listener);
+    if (mobileMotionListeners.size === 0) {
+      media?.removeEventListener('change', notifyMobileMotionListeners);
+    }
+  };
+}
+
+function getMobileMotionSnapshot() {
+  return getMobileMotionMedia()?.matches ?? false;
+}
+
+/**
+ * True when the UI should use the lightweight mobile motion budget.
+ * Width is included because device emulators and hybrid laptops can still report a fine pointer.
+ */
+export function useCoarsePointer() {
+  return useSyncExternalStore(
+    subscribeToMobileMotion,
+    getMobileMotionSnapshot,
+    () => false,
+  );
 }

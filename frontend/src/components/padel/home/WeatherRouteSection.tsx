@@ -86,7 +86,7 @@ export function WeatherRouteSection() {
             </p>
 
             <div className={`mt-5 grid gap-3 ${arrivalTime ? 'sm:grid-cols-2' : ''}`}>
-              <div className="border border-[#dacbb9] p-3.5">
+              <div className="border border-[#d5c9b1] p-3.5">
                 <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-red)]">
                   01
                 </p>
@@ -97,7 +97,7 @@ export function WeatherRouteSection() {
               </div>
 
               {arrivalTime ? (
-                <div className="border border-[#dacbb9] p-3.5">
+                <div className="border border-[#d5c9b1] p-3.5">
                   <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-red)]">
                     02
                   </p>
@@ -117,7 +117,7 @@ export function WeatherRouteSection() {
                 href={mapsHref}
                 target="_blank"
                 rel="noreferrer"
-                className="btn-premium btn-premium--dark inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
+                className="btn-premium btn-premium--dark inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-ivory)] hover:bg-[#581010] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
               >
                 {visit.routeOpen}
                 <ArrowUpRight className="h-4 w-4" />

@@ -129,7 +129,7 @@ export function CompetitionSection() {
                 <Stagger className="grid gap-3" delay={0.12} stagger={0.06}>
                   {detailRows.map(({ icon: Icon, label, value }) => (
                     <StaggerItem key={label} y={14}>
-                      <div className="border-b border-[#dacbb9] pb-3 last:border-b-0">
+                      <div className="border-b border-[#d5c9b1] pb-3 last:border-b-0">
                         <p className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-red)]">
                           <Icon className="h-3.5 w-3.5" />
                           {label}

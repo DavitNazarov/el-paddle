@@ -241,7 +241,7 @@ export function AdminEventsClient() {
           <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="font-semibold text-[var(--padel-ivory)]">{copy.needCategoriesTitle}</h3>
-              <p className="mt-1 text-sm text-[rgba(246,239,225,0.55)]">{copy.needCategoriesDescription}</p>
+              <p className="mt-1 text-sm text-[rgba(213,201,177,0.55)]">{copy.needCategoriesDescription}</p>
             </div>
             <Button asChild variant="red" className="rounded-md">
               <Link href="/admin/categories">{copy.goToCategories}</Link>
@@ -302,7 +302,7 @@ export function AdminEventsClient() {
                         <Badge
                           className={
                             event.isPublished
-                              ? 'border-transparent bg-emerald-600/90 text-white'
+                              ? 'border-transparent bg-emerald-600/90 text-[var(--padel-ivory)]'
                               : 'border-[var(--padel-gold)]/40 bg-[var(--padel-gold)]/20 text-[var(--padel-gold-2)]'
                           }
                         >
@@ -311,7 +311,7 @@ export function AdminEventsClient() {
                         {event.categories.map((category) => (
                           <Badge
                             key={category.id}
-                            className="border-[rgba(246,239,225,0.18)] bg-transparent text-[rgba(246,239,225,0.7)]"
+                            className="border-[rgba(213,201,177,0.18)] bg-transparent text-[rgba(213,201,177,0.7)]"
                           >
                             {category.name}
                           </Badge>
@@ -327,11 +327,11 @@ export function AdminEventsClient() {
                       <p className="mt-3 text-sm font-medium text-[var(--padel-gold)]">
                         {admin.events.feeLabel}: {event.participationFee} GEL
                       </p>
-                      <p className="mt-1 text-sm text-[rgba(246,239,225,0.65)]">
+                      <p className="mt-1 text-sm text-[rgba(213,201,177,0.65)]">
                         {admin.events.receiverLabel}:{' '}
                         <span className="text-[var(--padel-ivory)]">{event.bankAccountReceiver}</span>
                       </p>
-                      <p className="mt-1 text-sm text-[rgba(246,239,225,0.65)]">
+                      <p className="mt-1 text-sm text-[rgba(213,201,177,0.65)]">
                         {admin.events.ibanLabel}:{' '}
                         <span className="font-mono tracking-wide text-[var(--padel-ivory)]">
                           {event.bankAccountIban}
@@ -344,7 +344,7 @@ export function AdminEventsClient() {
                         </p>
                       ) : null}
                       {event.description ? (
-                        <p className="mt-3 text-sm leading-6 text-[rgba(246,239,225,0.55)]">{event.description}</p>
+                        <p className="mt-3 text-sm leading-6 text-[rgba(213,201,177,0.55)]">{event.description}</p>
                       ) : null}
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
@@ -521,7 +521,7 @@ export function AdminEventsClient() {
             />
           </DashboardField>
           <fieldset>
-            <legend className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(19,2,2,0.62)]">
+            <legend className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(88,16,16,0.62)]">
               {admin.events.categories}
             </legend>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -534,7 +534,7 @@ export function AdminEventsClient() {
                       'flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 text-sm font-medium',
                       selected
                         ? 'border-[var(--padel-red)] bg-[var(--padel-red)]/7 text-[var(--padel-red)]'
-                        : 'border-[rgba(19,2,2,0.12)] bg-white',
+                        : 'border-[rgba(88,16,16,0.12)] bg-[var(--padel-ivory)]',
                     )}
                   >
                     <input

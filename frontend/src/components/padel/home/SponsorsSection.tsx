@@ -10,8 +10,8 @@ export function SponsorsSection() {
   const accentGradients = [
     'from-[var(--padel-red)]/40 via-[var(--padel-red-right)]/18 to-transparent',
     'from-[var(--padel-gold)]/40 via-[var(--padel-gold)]/15 to-transparent',
-    'from-[#f39d55]/35 via-[var(--padel-red)]/12 to-transparent',
-    'from-[#8f5f52]/35 via-[var(--padel-gold)]/12 to-transparent',
+    'from-[#d5c9b1]/35 via-[var(--padel-red)]/12 to-transparent',
+    'from-[#581010]/35 via-[var(--padel-gold)]/12 to-transparent',
   ] as const;
 
   return (

@@ -18,7 +18,7 @@ import {
   useTransform,
 } from 'framer-motion';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { useCoarsePointer, useScrollParallaxEnabled } from './device';
+import { useCoarsePointer } from './device';
 
 export function Preloader() {
   const reduceMotion = useReducedMotion();
@@ -62,7 +62,7 @@ export function Preloader() {
     <AnimatePresence>
       {!done ? (
         <motion.div
-          className="preloader fixed inset-0 z-[120] flex flex-col items-center justify-center bg-[var(--padel-ink)]"
+          className="preloader fixed inset-0 z-[120] flex flex-col items-center justify-center bg-[var(--padel-red)]"
           exit={{ y: '-100%' }}
           transition={{ duration: 0.85, ease: [0.76, 0, 0.24, 1] }}
           aria-hidden
@@ -78,7 +78,7 @@ export function Preloader() {
               width={280}
               height={186}
               priority
-              className="h-auto w-[150px] object-contain md:w-[190px]"
+              className="logo-tint h-auto w-[150px] object-contain md:w-[190px]"
             />
           </motion.div>
           <div className="mt-10 flex w-[min(240px,72vw)] flex-col items-center gap-4">
@@ -250,7 +250,15 @@ export function PageSurface() {
 }
 
 export function PageProgress() {
-  const scrollParallax = useScrollParallaxEnabled();
+  const coarse = useCoarsePointer();
+  const reduceMotion = useReducedMotion();
+
+  if (coarse || reduceMotion) return null;
+
+  return <DesktopPageProgress />;
+}
+
+function DesktopPageProgress() {
   const { scrollYProgress } = useScroll();
   const glowOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.35, 0.7, 1]);
 
@@ -261,13 +269,11 @@ export function PageProgress() {
         className="page-progress fixed left-0 top-0 z-[90] h-[3px] w-full origin-left"
         style={{ scaleX: scrollYProgress }}
       />
-      {scrollParallax ? (
-        <motion.div
-          aria-hidden
-          className="page-progress__glow pointer-events-none fixed left-0 top-0 z-[89] h-8 w-full origin-left"
-          style={{ scaleX: scrollYProgress, opacity: glowOpacity }}
-        />
-      ) : null}
+      <motion.div
+        aria-hidden
+        className="page-progress__glow pointer-events-none fixed left-0 top-0 z-[89] h-8 w-full origin-left"
+        style={{ scaleX: scrollYProgress, opacity: glowOpacity }}
+      />
     </>
   );
 }

@@ -86,16 +86,16 @@ export function AdminOverviewClient() {
             <Link
               key={step.title}
               href={step.href}
-              className="dash-attention group transition-colors hover:border-[rgba(246,239,225,0.22)] hover:bg-[rgba(246,239,225,0.05)]"
+              className="dash-attention group transition-colors hover:border-[rgba(213,201,177,0.22)] hover:bg-[rgba(213,201,177,0.05)]"
             >
-              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[rgba(246,239,225,0.08)] text-xs font-semibold text-[rgba(246,239,225,0.7)]">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[rgba(213,201,177,0.08)] text-xs font-semibold text-[rgba(213,201,177,0.7)]">
                 {index + 1}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-[var(--padel-ivory)]">{step.title}</p>
-                <p className="mt-0.5 text-xs leading-5 text-[rgba(246,239,225,0.45)]">{step.description}</p>
+                <p className="mt-0.5 text-xs leading-5 text-[rgba(213,201,177,0.45)]">{step.description}</p>
               </div>
-              <ArrowRight className="h-4 w-4 shrink-0 text-[rgba(246,239,225,0.35)] transition-transform group-hover:translate-x-0.5" />
+              <ArrowRight className="h-4 w-4 shrink-0 text-[rgba(213,201,177,0.35)] transition-transform group-hover:translate-x-0.5" />
             </Link>
           ))}
         </div>
@@ -196,7 +196,7 @@ export function AdminOverviewClient() {
               className={cn(softButtonClassName, 'h-auto min-h-14 justify-start gap-3 rounded-lg px-4 py-3')}
             >
               <Link href={action.href}>
-                <action.icon className="h-4 w-4 text-[rgba(246,239,225,0.5)]" />
+                <action.icon className="h-4 w-4 text-[rgba(213,201,177,0.5)]" />
                 <span>{action.label}</span>
               </Link>
             </Button>

@@ -20,7 +20,7 @@ export function LanguageSwitcher({ tone = 'dark', className }: LanguageSwitcherP
         'inline-flex min-h-11 items-center gap-1 rounded-full border p-1',
         dark
           ? 'border-[var(--padel-line)] bg-[var(--padel-ink)]/34 text-[var(--padel-ivory)]'
-          : 'border-[rgba(19,2,2,0.12)] bg-white/70 text-[var(--padel-ink)]',
+          : 'border-[rgba(88,16,16,0.12)] bg-[var(--padel-ivory)]/70 text-[var(--padel-ink)]',
         className,
       )}
       role="group"
@@ -44,7 +44,7 @@ export function LanguageSwitcher({ tone = 'dark', className }: LanguageSwitcherP
               isActive && dark && 'bg-[var(--padel-ivory)] text-[var(--padel-red)]',
               isActive && !dark && 'bg-[var(--padel-red)] text-[var(--padel-ivory)]',
               !isActive && dark && 'text-[var(--padel-muted)] hover:text-[var(--padel-ivory)]',
-              !isActive && !dark && 'text-[rgba(19,2,2,0.58)] hover:text-[var(--padel-red)]',
+              !isActive && !dark && 'text-[rgba(88,16,16,0.58)] hover:text-[var(--padel-red)]',
             )}
             title={localeNames[item].label}
           >

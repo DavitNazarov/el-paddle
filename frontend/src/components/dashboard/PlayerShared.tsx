@@ -49,7 +49,7 @@ export function EventCard({ event, registrationKeys, registeredEventIds, onRegis
                   className={cn(
                     registered
                       ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
-                      : 'border-[rgba(246,239,225,0.14)] bg-transparent text-[rgba(246,239,225,0.65)]',
+                      : 'border-[rgba(213,201,177,0.14)] bg-transparent text-[rgba(213,201,177,0.65)]',
                   )}
                 >
                   {category.name}
@@ -75,7 +75,7 @@ export function EventCard({ event, registrationKeys, registeredEventIds, onRegis
             {t('dashboard.player.registerModal.feeAmount', { amount: event.participationFee })}
           </p>
           {event.description ? (
-            <p className="mt-3 max-w-2xl text-sm leading-5 text-[rgba(246,239,225,0.5)]">{event.description}</p>
+            <p className="mt-3 max-w-2xl text-sm leading-5 text-[rgba(213,201,177,0.5)]">{event.description}</p>
           ) : null}
           {alreadyRegistered ? (
             <p className="mt-3 text-sm text-emerald-300/90">
@@ -84,7 +84,7 @@ export function EventCard({ event, registrationKeys, registeredEventIds, onRegis
               })}
             </p>
           ) : (
-            <p className="mt-3 text-sm text-[rgba(246,239,225,0.42)]">
+            <p className="mt-3 text-sm text-[rgba(213,201,177,0.42)]">
               {t('dashboard.player.oneCategoryHint', { count: event.categories.length })}
             </p>
           )}
@@ -184,26 +184,26 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
             </div>
           ) : null}
 
-          <div className="rounded-md border border-[rgba(19,2,2,0.1)] bg-[#f7efe3] px-3 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(19,2,2,0.5)]">
+          <div className="rounded-md border border-[rgba(88,16,16,0.1)] bg-[#d5c9b1] px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(88,16,16,0.5)]">
               {player.registerModal.feeLabel}
             </p>
             <p className="mt-1 text-lg font-semibold text-[var(--padel-ink)]">
               {t('dashboard.player.registerModal.feeAmount', { amount: registerEvent.participationFee })}
             </p>
-            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(19,2,2,0.5)]">
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(88,16,16,0.5)]">
               {player.registerModal.bankReceiverLabel}
             </p>
             <p className="mt-1 text-sm font-semibold text-[var(--padel-ink)]">
               {registerEvent.bankAccountReceiver}
             </p>
-            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(19,2,2,0.5)]">
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(88,16,16,0.5)]">
               {player.registerModal.bankAccountLabel}
             </p>
             <p className="mt-1 break-all font-mono text-sm font-semibold tracking-wide text-[var(--padel-ink)]">
               {registerEvent.bankAccountIban}
             </p>
-            <p className="mt-2 text-xs leading-5 text-[rgba(19,2,2,0.55)]">{player.registerModal.feeNote}</p>
+            <p className="mt-2 text-xs leading-5 text-[rgba(88,16,16,0.55)]">{player.registerModal.feeNote}</p>
           </div>
 
           <DashboardField label={player.fields.category} id={`category-${registerEvent.id}`}>

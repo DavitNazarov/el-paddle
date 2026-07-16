@@ -241,12 +241,12 @@ export function AdminUsersClient() {
                         </Badge>
                       ) : null}
                     </div>
-                    <p className="mt-1 truncate text-sm text-[rgba(246,239,225,0.55)]">{user.email}</p>
+                    <p className="mt-1 truncate text-sm text-[rgba(213,201,177,0.55)]">{user.email}</p>
                     {user.club ? (
-                      <p className="mt-1 text-sm text-[rgba(246,239,225,0.45)]">{user.club.name}</p>
+                      <p className="mt-1 text-sm text-[rgba(213,201,177,0.45)]">{user.club.name}</p>
                     ) : null}
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge className="border-[rgba(246,239,225,0.18)] bg-[rgba(246,239,225,0.05)] text-[rgba(246,239,225,0.75)]">
+                      <Badge className="border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.05)] text-[rgba(213,201,177,0.75)]">
                         {user.role === 'ADMIN' ? <Shield className="mr-1 h-3 w-3" /> : <UserRound className="mr-1 h-3 w-3" />}
                         {roleLabel(user.role)}
                       </Badge>
@@ -254,14 +254,14 @@ export function AdminUsersClient() {
                         className={
                           user.isDisqualified
                             ? 'border-[var(--padel-red)]/35 bg-[var(--padel-red)]/15 text-[var(--padel-red)]'
-                            : 'border-[rgba(246,239,225,0.18)] bg-[rgba(246,239,225,0.05)] text-[rgba(246,239,225,0.75)]'
+                            : 'border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.05)] text-[rgba(213,201,177,0.75)]'
                         }
                       >
                         {statusLabel(user)}
                       </Badge>
                     </div>
                     {user.isDisqualified ? (
-                      <p className="mt-3 text-sm leading-6 text-[rgba(246,239,225,0.55)]">
+                      <p className="mt-3 text-sm leading-6 text-[rgba(213,201,177,0.55)]">
                         {copy.disqualifiedUntil.replace(
                           '{date}',
                           new Date(user.disqualifiedUntil!).toLocaleDateString(),
@@ -278,7 +278,7 @@ export function AdminUsersClient() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="rounded-md border-[rgba(246,239,225,0.18)] bg-transparent text-[var(--padel-ivory)]"
+                          className="rounded-md border-[rgba(213,201,177,0.18)] bg-transparent text-[var(--padel-ivory)]"
                           disabled={busy}
                           onClick={() => {
                             void clearDisqualification(user);
@@ -290,7 +290,7 @@ export function AdminUsersClient() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="rounded-md border-[rgba(246,239,225,0.18)] bg-transparent text-[var(--padel-ivory)]"
+                          className="rounded-md border-[rgba(213,201,177,0.18)] bg-transparent text-[var(--padel-ivory)]"
                           onClick={() => {
                             setDisqualifyForm({ until: '', reason: '' });
                             setDisqualifying(user);
@@ -484,7 +484,7 @@ export function AdminUsersClient() {
           />
         }
       >
-        <p className="text-sm leading-6 text-[rgba(246,239,225,0.65)]">{copy.deleteWarning}</p>
+        <p className="text-sm leading-6 text-[rgba(213,201,177,0.65)]">{copy.deleteWarning}</p>
       </DashboardModal>
     </AdminShell>
   );

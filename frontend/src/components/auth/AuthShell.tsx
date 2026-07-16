@@ -19,10 +19,10 @@ export function AuthShell({ variant, children }: AuthShellProps) {
   const content = dictionary.authShell[variant];
 
   return (
-    <main className="min-h-dvh overflow-x-hidden bg-[var(--padel-ink)] px-4 py-5 text-[var(--padel-ivory)] sm:px-5 md:px-8 md:py-6">
+    <main className="min-h-dvh overflow-x-hidden bg-[var(--padel-red)] px-4 py-5 text-[var(--padel-ivory)] sm:px-5 md:px-8 md:py-6">
       <div className="pointer-events-none fixed inset-0" aria-hidden>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_12%,rgba(224,196,119,0.22),transparent_34%),radial-gradient(circle_at_84%_72%,rgba(140,25,22,0.72),transparent_42%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(246,239,225,0.07)_1px,transparent_1px),linear-gradient(180deg,rgba(246,239,225,0.05)_1px,transparent_1px)] bg-[size:88px_88px] opacity-30" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_12%,rgba(213,201,177,0.22),transparent_34%),radial-gradient(circle_at_84%_72%,rgba(134,0,12,0.72),transparent_42%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(213,201,177,0.07)_1px,transparent_1px),linear-gradient(180deg,rgba(213,201,177,0.05)_1px,transparent_1px)] bg-[size:88px_88px] opacity-30" />
       </div>
 
       <div className="relative mx-auto flex min-h-[calc(100dvh-2.5rem)] w-full max-w-7xl flex-col">
@@ -41,7 +41,7 @@ export function AuthShell({ variant, children }: AuthShellProps) {
               width={52}
               height={52}
               priority
-              className="h-12 w-12 object-contain"
+              className="logo-tint h-12 w-12 object-contain"
             />
           </div>
         </header>

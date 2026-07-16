@@ -72,7 +72,7 @@ export function PlayerOverviewClient({ initialUser }: { initialUser: PublicUser 
               <div>
                 <p className="dash-kicker">{player.nextEventLabel}</p>
                 {loading ? (
-                  <p className="mt-3 text-sm text-[rgba(246,239,225,0.5)]">{player.sections.loadingDescription}</p>
+                  <p className="mt-3 text-sm text-[rgba(213,201,177,0.5)]">{player.sections.loadingDescription}</p>
                 ) : nextEvent ? (
                   <>
                     <h2 className="mt-2 text-xl font-semibold text-[var(--padel-ivory)]">{nextEvent.title}</h2>
@@ -91,11 +91,11 @@ export function PlayerOverviewClient({ initialUser }: { initialUser: PublicUser 
                 ) : (
                   <>
                     <h2 className="mt-2 text-xl font-semibold text-[var(--padel-ivory)]">{player.sections.noEventsTitle}</h2>
-                    <p className="mt-2 text-sm text-[rgba(246,239,225,0.5)]">{player.sections.noEventsDescription}</p>
+                    <p className="mt-2 text-sm text-[rgba(213,201,177,0.5)]">{player.sections.noEventsDescription}</p>
                   </>
                 )}
               </div>
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[rgba(246,239,225,0.06)] text-[rgba(246,239,225,0.55)]">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[rgba(213,201,177,0.06)] text-[rgba(213,201,177,0.55)]">
                 <Trophy className="h-4 w-4" />
               </span>
             </div>
@@ -144,7 +144,7 @@ export function PlayerOverviewClient({ initialUser }: { initialUser: PublicUser 
                 />
               ) : null}
               {!registrationCounts.pending && !events.length ? (
-                <p className="text-sm text-[rgba(246,239,225,0.48)]">{player.pages.allClear}</p>
+                <p className="text-sm text-[rgba(213,201,177,0.48)]">{player.pages.allClear}</p>
               ) : null}
             </div>
           </div>
@@ -180,12 +180,12 @@ export function PlayerOverviewClient({ initialUser }: { initialUser: PublicUser 
           ) : null}
           {recentEntries.length ? (
             <SurfaceCard>
-              <div className="divide-y divide-[rgba(246,239,225,0.08)] px-4 sm:px-5">
+              <div className="divide-y divide-[rgba(213,201,177,0.08)] px-4 sm:px-5">
                 {recentEntries.map((registration) => (
                   <div key={registration.id} className="flex items-center justify-between gap-3 py-3.5">
                     <div className="min-w-0">
                       <p className="truncate font-medium text-[var(--padel-ivory)]">{registration.event.title}</p>
-                      <p className="mt-0.5 truncate text-xs text-[rgba(246,239,225,0.45)]">
+                      <p className="mt-0.5 truncate text-xs text-[rgba(213,201,177,0.45)]">
                         {registration.category.name} ·{' '}
                         {formatDate(registration.event.date, { dateStyle: 'medium' })}
                       </p>

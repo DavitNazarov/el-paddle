@@ -1,14 +1,20 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Users } from 'lucide-react';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { useCoarsePointer } from './device';
 import { Counter, Magnetic, Parallax, Reveal, Stagger, StaggerItem } from './motion';
 import { ScrollSection, SectionIntro } from './scroll';
 
+const registrationReadiness = 100;
+
 export function RegistrationSection() {
+  const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
   const { dictionary } = useI18n();
   const registration = dictionary.home.registration;
+  const lightweightMotion = Boolean(reduceMotion || coarse);
 
   return (
     <ScrollSection
@@ -37,16 +43,17 @@ export function RegistrationSection() {
                   </p>
                 </div>
                 <p className="font-display text-3xl font-semibold text-[var(--padel-ivory)]">
-                  <Counter to={75} suffix="%" />
+                  <Counter to={registrationReadiness} suffix="%" />
                 </p>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-[var(--padel-ivory)]/18">
                 <motion.div
                   className="entry-meter__fill h-full origin-left rounded-full"
-                  initial={{ scaleX: 0 }}
-                  whileInView={{ scaleX: 0.75 }}
+                  initial={lightweightMotion ? false : { scaleX: 0 }}
+                  whileInView={lightweightMotion ? undefined : { scaleX: registrationReadiness / 100 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+                  transition={lightweightMotion ? { duration: 0 } : { duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+                  style={lightweightMotion ? { scaleX: registrationReadiness / 100 } : undefined}
                 />
               </div>
               <p className="mt-3 text-sm leading-6 text-[var(--padel-muted)]">
@@ -59,7 +66,7 @@ export function RegistrationSection() {
         <Reveal delay={0.08}>
           <Parallax speed={0.16}>
           <div className="premium-form bg-[var(--padel-parchment)] p-5 text-[var(--padel-ink)] md:p-7">
-            <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#dacbb9] pb-5">
+            <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#d5c9b1] pb-5">
               <div>
                 <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[var(--padel-red)]">
                   {registration.cardKicker}
@@ -82,7 +89,7 @@ export function RegistrationSection() {
             <Stagger className="grid gap-3" delay={0.1} stagger={0.08}>
               {registration.steps.map(([step, title, copy]) => (
                 <StaggerItem key={step} y={16}>
-                  <div className="border-b border-[#dacbb9] pb-3 last:border-b-0">
+                  <div className="border-b border-[#d5c9b1] pb-3 last:border-b-0">
                     <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-red)]">{step}</p>
                     <h3 className="font-display mt-1 text-lg font-semibold md:text-xl">{title}</h3>
                     <p className="mt-1 text-sm leading-6 text-[var(--padel-ink)]/65">{copy}</p>
@@ -95,7 +102,7 @@ export function RegistrationSection() {
               <Magnetic strength={0.16}>
                 <a
                   href="/register"
-                  className="btn-premium btn-premium--dark group inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-ivory)] hover:bg-[#6f1210] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
+                  className="btn-premium btn-premium--dark group inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-[var(--padel-red)] px-5 py-2.5 text-sm font-semibold text-[var(--padel-ivory)] hover:bg-[#581010] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-ink)]"
                 >
                   {dictionary.common.register}
                   <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />

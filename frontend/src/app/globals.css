@@ -1,3 +1,4 @@
+@import '../components/padel/home/PrizePool.css';
 @import 'tailwindcss';
 
 @theme inline {
@@ -32,41 +33,41 @@
   --font-script: 'Snell Roundhand', 'Brush Script MT', cursive;
 
   /* shadcn/ui semantic tokens tuned to the El Padel palette */
-  --background: 4 81% 4%;
-  --foreground: 42 47% 92%;
-  --card: 36 100% 95%;
-  --card-foreground: 4 81% 4%;
-  --primary: 2 72% 32%;
-  --primary-foreground: 42 47% 92%;
-  --secondary: 43 56% 67%;
-  --secondary-foreground: 4 81% 4%;
-  --muted: 29 28% 84%;
-  --muted-foreground: 20 20% 38%;
-  --accent: 43 56% 67%;
-  --accent-foreground: 4 81% 4%;
-  --destructive: 0 74% 42%;
-  --destructive-foreground: 42 47% 92%;
-  --border: 38 36% 78%;
-  --input: 37 27% 72%;
-  --ring: 43 56% 67%;
+  --background: 355 100% 26%;
+  --foreground: 40 30% 76%;
+  --card: 0 69% 20%;
+  --card-foreground: 40 30% 76%;
+  --primary: 355 100% 26%;
+  --primary-foreground: 40 30% 76%;
+  --secondary: 0 69% 20%;
+  --secondary-foreground: 40 30% 76%;
+  --muted: 0 69% 20%;
+  --muted-foreground: 40 30% 76%;
+  --accent: 40 30% 76%;
+  --accent-foreground: 0 69% 20%;
+  --destructive: 355 100% 26%;
+  --destructive-foreground: 40 30% 76%;
+  --border: 40 30% 76%;
+  --input: 40 30% 76%;
+  --ring: 40 30% 76%;
   --radius: 0.5rem;
 
   /* Shared brand tokens (mirrored in PadelHome inline vars) */
-  --padel-red: #8c1916;
-  --padel-red-2: #6f1210;
-  --padel-red-3: #3b0605;
-  --padel-ink: #130202;
-  --padel-ivory: #f6efe1;
-  --padel-parchment: #fff5e6;
-  --padel-muted: #decfbd;
-  --padel-line: rgba(246, 239, 225, 0.18);
-  --padel-line-strong: rgba(246, 239, 225, 0.36);
-  --padel-gold: #e0c477;
-  --padel-gold-2: #f2e3ad;
-  --padel-gold-deep: #a8863c;
-  --padel-ember: #e0342b;
-  --padel-glow: rgba(224, 196, 119, 0.5);
-  --padel-focus-ring: rgba(224, 196, 119, 0.45);
+  --padel-red: #86000c;
+  --padel-red-2: #581010;
+  --padel-red-3: #581010;
+  --padel-ink: #581010;
+  --padel-ivory: #d5c9b1;
+  --padel-parchment: #d5c9b1;
+  --padel-muted: #d5c9b1;
+  --padel-line: rgba(213, 201, 177, 0.18);
+  --padel-line-strong: rgba(213, 201, 177, 0.36);
+  --padel-gold: #d5c9b1;
+  --padel-gold-2: #d5c9b1;
+  --padel-gold-deep: #d5c9b1;
+  --padel-ember: #86000c;
+  --padel-glow: rgba(213, 201, 177, 0.5);
+  --padel-focus-ring: rgba(213, 201, 177, 0.45);
   --padel-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --padel-ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -84,10 +85,15 @@ body {
   max-width: 100%;
   overflow-x: clip;
   background: var(--padel-red);
-  color: #ffffff;
+  color: var(--padel-ivory);
   font-family:
     var(--font-sans), ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.logo-tint {
+  filter: brightness(0) saturate(100%) invert(87%) sepia(13%) saturate(412%)
+    hue-rotate(359deg) brightness(90%) contrast(87%);
 }
 
 @supports not (overflow: clip) {
@@ -116,9 +122,9 @@ select {
 .admin-field textarea {
   min-height: 3rem;
   width: 100%;
-  border: 1px solid rgba(19, 2, 2, 0.18);
+  border: 1px solid rgba(88, 16, 16, 0.18);
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(213, 201, 177, 0.55);
   padding: 0.75rem 0.85rem;
   color: var(--padel-ink);
   outline: none;
@@ -130,7 +136,7 @@ select {
 
 .dashboard-field select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238c1916' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2386000c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-position: right 0.85rem center;
   background-repeat: no-repeat;
   padding-right: 2.4rem;
@@ -142,15 +148,15 @@ select {
 .admin-field input:focus,
 .admin-field textarea:focus {
   border-color: var(--padel-red);
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(140, 25, 22, 0.12);
+  background: var(--padel-ivory);
+  box-shadow: 0 0 0 3px rgba(134, 0, 12, 0.12);
 }
 
 .account-field input::placeholder,
 .dashboard-field input::placeholder,
 .admin-field input::placeholder,
 .admin-field textarea::placeholder {
-  color: rgba(19, 2, 2, 0.42);
+  color: rgba(88, 16, 16, 0.42);
 }
 
 .dashboard-field span,
@@ -166,20 +172,20 @@ select {
 .admin-field input,
 .admin-field textarea {
   border-color: var(--padel-line);
-  background: rgba(246, 239, 225, 0.08);
+  background: rgba(213, 201, 177, 0.08);
   color: var(--padel-ivory);
 }
 
 .admin-field input:focus,
 .admin-field textarea:focus {
   border-color: var(--padel-gold);
-  background: rgba(246, 239, 225, 0.12);
-  box-shadow: 0 0 0 3px rgba(224, 196, 119, 0.14);
+  background: rgba(213, 201, 177, 0.12);
+  box-shadow: 0 0 0 3px rgba(213, 201, 177, 0.14);
 }
 
 .admin-field input::placeholder,
 .admin-field textarea::placeholder {
-  color: rgba(246, 239, 225, 0.42);
+  color: rgba(213, 201, 177, 0.42);
 }
 
 .admin-field span {
@@ -213,7 +219,7 @@ p {
 @supports (scrollbar-width: thin) {
   html {
     scrollbar-width: thin;
-    scrollbar-color: rgba(217, 191, 115, 0.55) var(--padel-ink);
+    scrollbar-color: rgba(213, 201, 177, 0.55) var(--padel-ink);
   }
 }
 
@@ -226,13 +232,13 @@ p {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(217, 191, 115, 0.45);
+  background: rgba(213, 201, 177, 0.45);
   border: 2px solid var(--padel-ink);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(217, 191, 115, 0.7);
+  background: rgba(213, 201, 177, 0.7);
 }
 
 .dashboard-dialog-overlay {
@@ -266,6 +272,69 @@ p {
     opacity: 1;
     scale: 1;
   }
+}
+
+.sheet-overlay[data-state='open'] {
+  animation: sheet-overlay-in 160ms var(--padel-ease-out) both;
+}
+
+.sheet-overlay[data-state='closed'] {
+  animation: sheet-overlay-out 120ms ease-in both;
+}
+
+.sheet-content[data-state='open'] {
+  animation: sheet-content-in 180ms var(--padel-ease-out) both;
+}
+
+.sheet-content[data-state='closed'] {
+  animation: sheet-content-out 140ms ease-in both;
+}
+
+@keyframes sheet-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheet-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes sheet-content-in {
+  from {
+    opacity: 0.96;
+    transform: translate3d(var(--sheet-enter-x, 0), var(--sheet-enter-y, -12px), 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes sheet-content-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0.96;
+    transform: translate3d(var(--sheet-enter-x, 0), var(--sheet-enter-y, -10px), 0);
+  }
+}
+
+.sheet-content[data-side='right'] {
+  --sheet-enter-x: 12px;
+  --sheet-enter-y: 0;
+}
+
+.sheet-content[data-side='bottom'] {
+  --sheet-enter-x: 0;
+  --sheet-enter-y: 12px;
+}
+
+.sheet-content[data-side='left'] {
+  --sheet-enter-x: -12px;
+  --sheet-enter-y: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

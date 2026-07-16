@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
 } from 'react';
 import Image from 'next/image';
@@ -27,7 +26,15 @@ import { apiFetch } from '@/lib/api';
 import type { PublicUser } from '@/lib/auth';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { navItems, navSectionIds } from './constants';
+import { useCoarsePointer } from './device';
 import { Magnetic } from './motion';
 import { useActiveSection } from './scroll';
 
@@ -65,20 +72,19 @@ export function authEntryHref(user: PublicUser | null) {
 
 export function FloatingEntryBar() {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
   const { dictionary } = useI18n();
   const user = useSessionUser();
   const floating = dictionary.home.floating;
   const { scrollY } = useScroll();
   const [visible, setVisible] = useState(false);
+  const [contactReached, setContactReached] = useState(false);
   const entryHref = authEntryHref(user);
   const entryLabel = user ? dictionary.common.dashboard : floating.cta;
 
   const shouldShow = useCallback((latest: number) => {
-    const contact = document.getElementById('contact');
-    const beforeContact =
-      !contact || latest + window.innerHeight < contact.offsetTop + 80;
-    return latest > window.innerHeight * 0.72 && beforeContact;
-  }, []);
+    return latest > window.innerHeight * 0.72 && !contactReached;
+  }, [contactReached]);
 
   useMotionValueEvent(scrollY, 'change', (latest) => {
     setVisible((previous) => {
@@ -91,22 +97,32 @@ export function FloatingEntryBar() {
     const update = () => setVisible(shouldShow(window.scrollY));
     const frame = window.requestAnimationFrame(update);
     window.addEventListener('resize', update);
-    window.addEventListener('hashchange', update);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', update);
-      window.removeEventListener('hashchange', update);
     };
   }, [shouldShow]);
+
+  useEffect(() => {
+    const contact = document.getElementById('contact');
+    if (!contact) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setContactReached(entry.isIntersecting),
+      { rootMargin: '0px 0px 80px 0px' },
+    );
+    observer.observe(contact);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <AnimatePresence>
       {visible ? (
         <motion.aside
-          initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.96 }}
+          initial={reduceMotion ? false : coarse ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 16, scale: 0.98 }}
-          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          exit={coarse ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
+          transition={{ duration: coarse ? 0.18 : 0.36, ease: [0.16, 1, 0.3, 1] }}
           className="floating-entry fixed bottom-5 left-1/2 z-[80] flex w-[min(92vw,26rem)] -translate-x-1/2 items-center gap-3 rounded-full border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/88 px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] md:bottom-7"
           aria-label={floating.cta}
         >
@@ -122,13 +138,16 @@ export function FloatingEntryBar() {
             </p>
           </div>
           <Magnetic strength={0.18}>
-            <a
-              href={entryHref}
-              className="btn-premium inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-[var(--padel-ivory)] px-4 py-2 text-sm font-semibold text-[var(--padel-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+            <Button
+              asChild
+              variant="gold"
+              className="btn-premium min-h-11 shrink-0 rounded-full px-4 focus-visible:ring-[var(--padel-gold)]"
             >
-              {entryLabel}
-              <ArrowRight className="h-4 w-4" />
-            </a>
+              <a href={entryHref}>
+                {entryLabel}
+                <ArrowRight />
+              </a>
+            </Button>
           </Magnetic>
         </motion.aside>
       ) : null}
@@ -138,6 +157,7 @@ export function FloatingEntryBar() {
 
 export function BackToTop() {
   const reduceMotion = useReducedMotion();
+  const coarse = useCoarsePointer();
   const { dictionary } = useI18n();
   const { scrollY } = useScroll();
   const [visible, setVisible] = useState(false);
@@ -152,7 +172,7 @@ export function BackToTop() {
   const scrollUp = () => {
     window.scrollTo({
       top: 0,
-      behavior: reduceMotion ? 'auto' : 'smooth',
+      behavior: reduceMotion || coarse ? 'auto' : 'smooth',
     });
   };
 
@@ -161,10 +181,10 @@ export function BackToTop() {
       {visible ? (
         <motion.button
           type="button"
-          initial={reduceMotion ? false : { opacity: 0, scale: 0.8 }}
+          initial={reduceMotion ? false : coarse ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.85 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          exit={coarse ? { opacity: 0 } : { opacity: 0, scale: 0.85 }}
+          transition={{ duration: coarse ? 0.16 : 0.26, ease: [0.16, 1, 0.3, 1] }}
           onClick={scrollUp}
           aria-label={dictionary.home.footer.backTop}
           className="back-to-top fixed bottom-5 right-5 z-[75] flex h-12 w-12 items-center justify-center rounded-full border border-[var(--padel-line-strong)] bg-[var(--padel-ink)]/80 text-[var(--padel-ivory)] transition-colors duration-200 hover:border-[var(--padel-gold)] hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] md:bottom-7 md:right-7"
@@ -176,7 +196,6 @@ export function BackToTop() {
   );
 }
 
-
 export function MobileMenu({
   open,
   onClose,
@@ -186,124 +205,88 @@ export function MobileMenu({
   onClose: () => void;
   user: PublicUser | null;
 }) {
-  const reduceMotion = useReducedMotion();
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const { dictionary } = useI18n();
   const nav = dictionary.home.nav;
   const a11y = dictionary.home.a11y;
   const entryHref = authEntryHref(user);
   const entryLabel = user ? dictionary.common.dashboard : dictionary.common.register;
-  const menuTransition = reduceMotion
-    ? { duration: 0 }
-    : { duration: 0.26, ease: [0.16, 1, 0.3, 1] as const };
-
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.documentElement.style.overflow = 'hidden';
-    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
-    window.addEventListener('keydown', handleKey);
-    return () => {
-      document.documentElement.style.overflow = '';
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('keydown', handleKey);
-    };
-  }, [open, onClose]);
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          className="mobile-menu fixed inset-0 z-[100] flex flex-col overflow-y-auto bg-[var(--padel-ink)] px-5 pb-10 pt-24 sm:px-6"
-          initial={reduceMotion ? false : { opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
-          transition={menuTransition}
-          role="dialog"
-          aria-modal="true"
-          aria-label={a11y.siteMenu}
-        >
-          <div className="mobile-menu__lines" aria-hidden />
-          <button
-            ref={closeButtonRef}
+    <Sheet
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
+    >
+      <SheetContent
+        side="top"
+        className="mobile-menu flex h-dvh flex-col px-5 pb-8 pt-20 sm:px-6"
+        aria-describedby={undefined}
+      >
+        <SheetTitle className="sr-only">{a11y.siteMenu}</SheetTitle>
+        <div className="mobile-menu__lines" aria-hidden />
+        <SheetClose asChild>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label={a11y.closeMenu}
-            onClick={onClose}
-            className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full border border-[var(--padel-line)] text-[var(--padel-ivory)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
+            className="absolute right-4 top-4 h-11 w-11 rounded-full border border-[var(--padel-line)] text-[var(--padel-ivory)] hover:bg-[var(--padel-ivory)]/10 hover:text-[var(--padel-ivory)] focus-visible:ring-[var(--padel-gold)]"
           >
-            <X className="h-5 w-5" />
-          </button>
+            <X />
+          </Button>
+        </SheetClose>
 
-          <nav aria-label={a11y.mobileNavigation} className="mt-4 flex flex-1 flex-col justify-center gap-1">
-            {navItems.map((item, index) => (
-              <motion.a
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                initial={{ opacity: 0, y: 28 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: reduceMotion ? 0 : 0.28,
-                  delay: reduceMotion ? 0 : 0.06 + index * 0.035,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-            className="mobile-menu__link font-display flex items-baseline gap-3 border-b border-[var(--padel-line)] py-3.5 text-2xl font-semibold text-[var(--padel-ivory)]"
-              >
-                <span className="text-xs font-semibold tracking-[0.3em] text-[var(--padel-gold)]">
-                  {`0${index + 1}`}
-                </span>
-                {nav[item.key]}
-              </motion.a>
-            ))}
-          </nav>
+        <nav aria-label={a11y.mobileNavigation} className="mt-4 flex flex-1 flex-col justify-center gap-1">
+          {navItems.map((item, index) => (
+            <a
+              key={item.href}
+              href={item.href}
+              onClick={onClose}
+              className="mobile-menu__link font-display flex min-h-12 items-baseline gap-3 border-b border-[var(--padel-line)] py-3 text-2xl font-semibold text-[var(--padel-ivory)]"
+            >
+              <span className="text-xs font-semibold tracking-[0.3em] text-[var(--padel-gold)]">
+                {`0${index + 1}`}
+              </span>
+              {nav[item.key]}
+            </a>
+          ))}
+        </nav>
 
-          <motion.a
-            href={entryHref}
-            onClick={onClose}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.28, delay: reduceMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="btn-premium mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--padel-ivory)] px-6 py-3.5 text-base font-semibold text-[var(--padel-red)]"
-          >
+        <Button
+          asChild
+          variant="gold"
+          size="lg"
+          className="btn-premium mt-6 min-h-12 w-full rounded-full text-base"
+        >
+          <a href={entryHref} onClick={onClose}>
             {entryLabel}
             <ArrowRight className="h-5 w-5" />
-          </motion.a>
+          </a>
+        </Button>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: reduceMotion ? 0 : 0.24, delay: reduceMotion ? 0 : 0.22 }}
-            className="mt-6 flex items-center justify-between gap-4 border-t border-[var(--padel-line)] pt-5 text-sm font-medium text-[var(--padel-muted)]"
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--padel-line)] pt-4 text-sm font-medium text-[var(--padel-muted)]">
+          <a
+            href="tel:+995555000000"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
           >
-            <a
-              href="tel:+995555000000"
-              className="inline-flex min-h-11 items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
-            >
-              <Phone className="h-4 w-4 text-[var(--padel-gold)]" />
-              +995 555 000 000
-            </a>
-            <a
-              href="https://www.instagram.com/elpadell/"
-              aria-label={a11y.instagram}
-              className="inline-flex min-h-11 items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
-            >
-              <Instagram className="h-4 w-4 text-[var(--padel-gold)]" />
-              Instagram
-            </a>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: reduceMotion ? 0 : 0.24, delay: reduceMotion ? 0 : 0.24 }}
-            className="mt-5 flex justify-center"
+            <Phone className="h-4 w-4 text-[var(--padel-gold)]" />
+            +995 555 000 000
+          </a>
+          <a
+            href="https://www.instagram.com/elpadell/"
+            aria-label={a11y.instagram}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
           >
-            <LanguageSwitcher tone="dark" />
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+            <Instagram className="h-4 w-4 text-[var(--padel-gold)]" />
+            Instagram
+          </a>
+        </div>
+        <div className="mt-4 flex justify-center">
+          <LanguageSwitcher tone="dark" />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -330,7 +313,7 @@ export function PadelNav() {
     <header className="padel-nav-header fixed inset-x-0 top-0 z-[70] px-3 pt-3 md:px-6 md:pt-5">
       <motion.div
         animate={{
-          backgroundColor: scrolled ? 'rgba(19,2,2,0.62)' : 'rgba(19,2,2,0.28)',
+          backgroundColor: scrolled ? 'rgba(88,16,16,0.62)' : 'rgba(88,16,16,0.28)',
           boxShadow: scrolled
             ? '0 22px 80px rgba(0,0,0,0.4)'
             : '0 18px 70px rgba(0,0,0,0.18)',
@@ -349,7 +332,7 @@ export function PadelNav() {
             width={44}
             height={44}
             priority
-            className="h-9 w-9 object-contain md:h-10 md:w-10"
+            className="logo-tint h-9 w-9 object-contain md:h-10 md:w-10"
           />
           <span className="gold-ink font-display hidden text-[0.82rem] font-semibold uppercase tracking-[0.34em] sm:inline">
             El Padel
@@ -390,24 +373,29 @@ export function PadelNav() {
         <div className="flex items-center gap-2">
           <LanguageSwitcher tone="dark" className="hidden md:inline-flex" />
           <Magnetic strength={0.22}>
-            <a
-              href={entryHref}
-              className="btn-premium group hidden min-h-11 items-center gap-2 rounded-full bg-[var(--padel-ivory)] px-4 py-2.5 text-sm font-semibold text-[var(--padel-red)] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] sm:inline-flex md:px-5"
+            <Button
+              asChild
+              variant="gold"
+              className="btn-premium group hidden min-h-11 rounded-full px-4 sm:inline-flex md:px-5"
             >
-              {entryLabel}
-              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-            </a>
+              <a href={entryHref}>
+                {entryLabel}
+                <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
+              </a>
+            </Button>
           </Magnetic>
 
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label={a11y.openMenu}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--padel-line)] text-[var(--padel-ivory)] transition-colors duration-200 hover:border-[var(--padel-line-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)] xl:hidden"
+            className="h-11 w-11 rounded-full border border-[var(--padel-line)] text-[var(--padel-ivory)] hover:border-[var(--padel-line-strong)] hover:bg-[var(--padel-ivory)]/10 hover:text-[var(--padel-ivory)] focus-visible:ring-[var(--padel-gold)] xl:hidden"
           >
-            <Menu className="h-5 w-5" />
-          </button>
+            <Menu />
+          </Button>
         </div>
       </motion.div>
 

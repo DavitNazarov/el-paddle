@@ -178,11 +178,11 @@ export function AdminCategoriesClient() {
                 <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="font-display text-lg font-semibold text-[var(--padel-ivory)]">{category.name}</h3>
-                    <p className="mt-2 text-sm leading-6 text-[rgba(246,239,225,0.55)]">
+                    <p className="mt-2 text-sm leading-6 text-[rgba(213,201,177,0.55)]">
                       {category.description || copy.noDescription}
                     </p>
                     {inUse ? (
-                      <p className="mt-2 text-xs text-[rgba(246,239,225,0.4)]">
+                      <p className="mt-2 text-xs text-[rgba(213,201,177,0.4)]">
                         {copy.inUseByEvents.replace('{count}', String(category.eventCount))}
                       </p>
                     ) : null}
@@ -326,7 +326,7 @@ export function AdminCategoriesClient() {
           />
         }
       >
-        <p className="text-sm leading-6 text-[rgba(246,239,225,0.65)]">{copy.deleteWarning}</p>
+        <p className="text-sm leading-6 text-[rgba(213,201,177,0.65)]">{copy.deleteWarning}</p>
       </DashboardModal>
     </AdminShell>
   );

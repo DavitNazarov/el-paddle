@@ -25,7 +25,7 @@ export function ClubClient({ club }: { club: ClubClientDto }) {
   const copy = dictionary.club;
 
   return (
-    <main className="min-h-dvh bg-[var(--padel-ink)] px-5 py-6 text-[var(--padel-ivory)] md:px-8">
+    <main className="min-h-dvh bg-[var(--padel-red)] px-5 py-6 text-[var(--padel-ivory)] md:px-8">
       <div className="mx-auto max-w-6xl">
         <header className="flex items-center justify-between gap-4">
           <Button asChild variant="outline" className="border-[var(--padel-line)] bg-transparent text-[var(--padel-ivory)]">

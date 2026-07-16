@@ -105,7 +105,7 @@ export function PlayerEntriesClient({ initialUser }: { initialUser: PublicUser }
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="font-semibold text-[var(--padel-ivory)]">{registration.event.title}</h3>
-                  <p className="mt-1 text-sm text-[rgba(246,239,225,0.5)]">{registration.category.name}</p>
+                  <p className="mt-1 text-sm text-[rgba(213,201,177,0.5)]">{registration.category.name}</p>
                 </div>
                 <RegistrationStatusBadge status={registration.status} />
               </div>
