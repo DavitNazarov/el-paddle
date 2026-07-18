@@ -1,7 +1,10 @@
 import { startOfToday } from '../../common/dates.js';
 import { eventInclude } from '../../common/includes.js';
-import { jsonError } from '../../common/http.js';
+import { isNotFoundError, jsonError } from '../../common/http.js';
 import { prisma } from '../../database/prisma.js';
+import { EventStatus, NotificationType, type Prisma } from '../../generated/prisma/client.js';
+import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 
 export async function listEvents({ adminScope }: { adminScope: boolean }) {
   return prisma.event.findMany({
@@ -14,6 +17,15 @@ export async function listEvents({ adminScope }: { adminScope: boolean }) {
     orderBy: { date: 'asc' },
     include: eventInclude,
   });
+}
+
+export async function getEventById(id: string, adminScope = false) {
+  const event = await prisma.event.findFirst({
+    where: { id, ...(adminScope ? {} : { isPublished: true }) },
+    include: eventInclude,
+  });
+  if (!event) jsonError('Event not found.', 404);
+  return event;
 }
 
 type CreateEventInput = {
@@ -41,6 +53,83 @@ type UpdateEventInput = {
   isPublished?: boolean;
   categoryIds?: string[];
 };
+
+const eventTransitions: Record<EventStatus, EventStatus[]> = {
+  REGISTRATION_OPEN: [EventStatus.REGISTRATION_CLOSED],
+  REGISTRATION_CLOSED: [EventStatus.ONGOING],
+  ONGOING: [EventStatus.COMPLETED],
+  // Completion locks event operations, but an administrator can explicitly
+  // reopen the event to correct or update tournament data.
+  COMPLETED: [EventStatus.ONGOING],
+};
+
+export function canTransitionEvent(from: EventStatus, to: EventStatus) {
+  return eventTransitions[from].includes(to);
+}
+
+export async function changeEventStatus(input: {
+  eventId: string;
+	  status: EventStatus;
+	  actorId: string;
+	  canRollbackCompleted: boolean;
+	  reason?: string;
+  expectedVersion: number;
+  commandId: string;
+}) {
+  const hash = payloadHash(input);
+  return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'event.status', input.commandId, hash);
+    if (replay) {
+      const current = await tx.event.findUnique({ where: { id: input.eventId }, include: eventInclude });
+      if (!current) jsonError('Event not found.', 404);
+      return current;
+    }
+    const event = await tx.event.findUnique({ where: { id: input.eventId }, include: eventInclude });
+    if (!event) jsonError('Event not found.', 404);
+    if (event.version !== input.expectedVersion) jsonError('Event changed. Refresh and try again.', 409);
+    if (event.status === input.status) return event;
+    if (!canTransitionEvent(event.status, input.status)) jsonError('Invalid event status transition.', 409);
+    if (event.status === EventStatus.COMPLETED && input.status === EventStatus.ONGOING && !input.canRollbackCompleted) {
+      jsonError('Event correction capability is required to reopen a completed event.', 403);
+    }
+
+    if (input.status === EventStatus.ONGOING) {
+      const lockedBrackets = await tx.bracket.count({ where: { eventId: event.id, status: { in: ['LOCKED', 'COMPLETED'] } } });
+      if (!lockedBrackets) jsonError('Lock at least one bracket before starting the event.', 409);
+    }
+    if (input.status === EventStatus.COMPLETED) {
+      const unfinished = await tx.match.count({ where: { bracket: { eventId: event.id }, status: { notIn: ['COMPLETED', 'CANCELLED'] } } });
+      if (unfinished) jsonError('Complete or cancel every match before completing the event.', 409);
+    }
+
+    const now = new Date();
+    const updateResult = await tx.event.updateMany({
+      where: { id: event.id, version: input.expectedVersion, status: event.status },
+      data: {
+        status: input.status,
+        version: { increment: 1 },
+        ...(input.status === EventStatus.REGISTRATION_CLOSED ? { registrationClosedAt: now } : {}),
+        ...(input.status === EventStatus.ONGOING ? { startedAt: now } : {}),
+        ...(input.status === EventStatus.COMPLETED ? { completedAt: now } : {}),
+      },
+    });
+    if (updateResult.count !== 1) jsonError('Event changed. Refresh and try again.', 409);
+    const updated = await tx.event.findUniqueOrThrow({ where: { id: event.id }, include: eventInclude });
+    await tx.eventStatusHistory.create({
+      data: { eventId: event.id, fromStatus: event.status, toStatus: input.status, actorId: input.actorId, reason: input.reason, commandId: input.commandId },
+    });
+    await writeAudit(tx, { action: 'event.status.updated', actorId: input.actorId, eventId: event.id, entityType: 'Event', entityId: event.id, before: { status: event.status }, after: { status: input.status }, publicReason: input.reason });
+    await queueOutbox(tx, { topic: 'event.status.updated', aggregateType: 'Event', aggregateId: event.id, payload: { eventId: event.id, status: input.status, version: updated.version }, deduplicationKey: `event:${event.id}:status:v${updated.version}` });
+
+    const registrations = await tx.eventRegistration.findMany({ where: { eventId: event.id, status: 'APPROVED' }, include: { owner: true, teammate: true } });
+    const contacts = new Map(registrations.flatMap((entry) => [entry.owner, entry.teammate]).map((user) => [user.id, user]));
+    for (const user of contacts.values()) {
+      await queueNotification(tx, { recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.MATCH_SCHEDULED, title: `Event status: ${input.status.replaceAll('_', ' ')}`, message: `${event.title} has moved to ${input.status.replaceAll('_', ' ').toLowerCase()}.`, entityType: 'Event', entityId: event.id, eventId: event.id, actionPath: `/dashboard/events/${event.id}`, version: updated.version });
+    }
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'event.status', commandId: input.commandId, hash, response: { eventId: event.id, version: updated.version } });
+    return updated;
+  });
+}
 
 async function assertCategoriesExist(categoryIds: string[]) {
   const categories = await prisma.category.findMany({
@@ -90,12 +179,44 @@ export async function createEvent(input: CreateEventInput) {
   });
 }
 
+export async function deleteEvent(id: string, actorId: string) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const event = await tx.event.findUnique({
+        where: { id },
+        select: { id: true, title: true, status: true, isPublished: true },
+      });
+      if (!event) jsonError('Event not found.', 404);
+      if (event.status === EventStatus.COMPLETED) jsonError('Reopen the completed event before editing it.', 409);
+
+      // Remove registration references in a deterministic order before the
+      // event-level cascades delete the remaining owned records.
+      await tx.bracket.deleteMany({ where: { eventId: id } });
+      await tx.opponentRequest.deleteMany({ where: { eventId: id } });
+      await tx.eventRegistration.deleteMany({ where: { eventId: id } });
+      await tx.event.delete({ where: { id } });
+      await writeAudit(tx, {
+        action: 'event.deleted',
+        actorId,
+        eventId: id,
+        entityType: 'Event',
+        entityId: id,
+        before: event,
+      });
+    });
+  } catch (error) {
+    if (isNotFoundError(error)) jsonError('Event not found.', 404);
+    throw error;
+  }
+}
+
 export async function updateEvent(id: string, input: UpdateEventInput) {
   const existing = await prisma.event.findUnique({
     where: { id },
-    select: { id: true },
+    select: { id: true, status: true },
   });
   if (!existing) jsonError('Event not found.', 404);
+  if (existing.status === EventStatus.COMPLETED) jsonError('Reopen the completed event before editing it.', 409);
 
   if (input.categoryIds) {
     await assertCategoriesExist(input.categoryIds);
@@ -171,4 +292,24 @@ export async function listPublicEvents() {
   ]);
 
   return { upcoming: upcoming[0] ?? null, previous };
+}
+
+export async function updateTournamentPublication(input: {
+  eventId: string;
+  actorId: string;
+  publicLiveScoringEnabled?: boolean;
+  resultsPublished?: boolean;
+  expectedVersion: number;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const event = await tx.event.findUnique({ where: { id: input.eventId } });
+    if (!event) jsonError('Event not found.', 404);
+    if (event.version !== input.expectedVersion) jsonError('Event changed. Refresh and try again.', 409);
+    if (input.publicLiveScoringEnabled && event.status !== 'ONGOING') jsonError('Public live scoring is available only while the event is ongoing.', 409);
+    if (input.resultsPublished && event.status !== 'COMPLETED') jsonError('Complete the event before publishing final results.', 409);
+    const updated = await tx.event.update({ where: { id: event.id }, data: { ...(input.publicLiveScoringEnabled !== undefined ? { publicLiveScoringEnabled: input.publicLiveScoringEnabled } : {}), ...(input.resultsPublished !== undefined ? { resultsPublishedAt: input.resultsPublished ? new Date() : null } : {}), version: { increment: 1 } }, include: eventInclude });
+    await writeAudit(tx, { action: 'event.tournament-publication.updated', actorId: input.actorId, eventId: event.id, entityType: 'Event', entityId: event.id, before: { publicLiveScoringEnabled: event.publicLiveScoringEnabled, resultsPublishedAt: event.resultsPublishedAt?.toISOString() }, after: { publicLiveScoringEnabled: updated.publicLiveScoringEnabled, resultsPublishedAt: updated.resultsPublishedAt?.toISOString() } });
+    await queueOutbox(tx, { topic: 'event.publication.updated', aggregateType: 'Event', aggregateId: event.id, payload: { eventId: event.id, publicLiveScoringEnabled: updated.publicLiveScoringEnabled, resultsPublished: Boolean(updated.resultsPublishedAt), version: updated.version }, deduplicationKey: `event:${event.id}:tournament-publication:v${updated.version}` });
+    return updated;
+  });
 }

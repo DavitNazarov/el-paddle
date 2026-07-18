@@ -73,10 +73,10 @@ export function AdminOverviewClient() {
   return (
     <AdminShell title={copy.title} description={copy.description} eyebrow={dictionary.dashboard.admin.shell.eyebrow}>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label={dictionary.dashboard.admin.stats[0][0]} value={counts.pending} hint={dictionary.dashboard.admin.stats[0][1]} />
-        <Metric label={dictionary.dashboard.admin.stats[1][0]} value={counts.approved} hint={dictionary.dashboard.admin.stats[1][1]} />
-        <Metric label={dictionary.dashboard.admin.stats[2][0]} value={counts.published} hint={dictionary.dashboard.admin.stats[2][1]} />
-        <Metric label={dictionary.dashboard.admin.stats[3][0]} value={counts.declined} hint={dictionary.dashboard.admin.stats[3][1]} />
+        <Metric label={dictionary.dashboard.admin.stats[0][0]} value={counts.pending} hint={dictionary.dashboard.admin.stats[0][1]} tone="warning" />
+        <Metric label={dictionary.dashboard.admin.stats[1][0]} value={counts.approved} hint={dictionary.dashboard.admin.stats[1][1]} tone="success" />
+        <Metric label={dictionary.dashboard.admin.stats[2][0]} value={counts.published} hint={dictionary.dashboard.admin.stats[2][1]} tone="info" />
+        <Metric label={dictionary.dashboard.admin.stats[3][0]} value={counts.declined} hint={dictionary.dashboard.admin.stats[3][1]} tone="danger" />
       </section>
 
       <section className="mt-6">
@@ -129,7 +129,7 @@ export function AdminOverviewClient() {
                   <div className="flex items-center gap-2">
                     <RegistrationStatusBadge status={registration.status} />
                     <Button asChild size="sm" variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
-                      <Link href="/admin/registrations">{copy.review}</Link>
+                      <Link href={`/admin/events/${registration.event.id}/registrations`}>{copy.review}</Link>
                     </Button>
                   </div>
                 }

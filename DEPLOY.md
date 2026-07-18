@@ -1,12 +1,19 @@
 # Production Deployment
 
+## Legal launch gate
+
+Before exposing registration publicly, set every `NEXT_PUBLIC_LEGAL_*` value in the frontend environment, especially the registered legal entity name, legal form, identification number, legal address, and working privacy/contact email. Confirm the event-specific fee, cancellation deadlines, media practices, age rules, and participation wording with Georgian counsel. The site deliberately displays a launch warning on legal pages while `NEXT_PUBLIC_LEGAL_ENTITY_ID` is unset.
+
+Deploy the `20260717170000_legal_acceptance` migration before the application version that enforces legal acceptance. Keep the policy version constants aligned between `backend/src/common/legal.ts` and `frontend/src/lib/legal.ts` whenever a material policy update requires renewed acceptance.
+
 This repository is a separated full-stack app:
 
 - `frontend/`: Next.js UI, built as a standalone Node server.
 - `backend/`: Express API, Prisma, PostgreSQL access, auth, Resend email, Google OAuth.
 - `postgres`: PostgreSQL 16 container managed by Docker Compose.
+- `worker`: PostgreSQL-backed transactional outbox processor for email delivery and scheduled expiry work.
 
-No NestJS or Socket.IO/WebSocket server was detected. The Nginx config still includes `Upgrade`/`Connection` proxy headers because they are harmless and keep the proxy ready if WebSockets are added later.
+The backend uses Socket.IO for committed tournament updates; the API process handles realtime outbox topics because it owns the Socket.IO server. The worker handles email outbox topics. The existing Nginx upgrade headers carry realtime connections without an additional public port.
 
 ## 1. Clone On The VPS
 
@@ -45,11 +52,11 @@ Required values:
 - `NEXT_PUBLIC_API_URL`
 - `JWT_SECRET`
 - `ADMIN_EMAILS`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
 
 Optional values:
 
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REDIRECT_URI`
@@ -65,8 +72,13 @@ FRONTEND_URL=https://app.example.com
 BACKEND_URL=https://api.example.com
 NEXT_PUBLIC_API_URL=https://api.example.com
 GOOGLE_REDIRECT_URI=https://api.example.com/api/auth/google/callback
-DATABASE_URL=postgresql://elpadel:YOUR_DB_PASSWORD@postgres:5432/elpadel?schema=public
+POSTGRES_USER=elpadel_app
+POSTGRES_PASSWORD=GENERATED_UNIQUE_PASSWORD
+POSTGRES_DB=elpadel_prod
+DATABASE_URL=postgresql://elpadel_app:GENERATED_UNIQUE_PASSWORD@postgres:5432/elpadel_prod?schema=public
 ```
+
+Use a brand-new production database name, user, password, and Docker volume. Do not point production at a development, staging, demo, restored-from-local, or seeded database. The mock seed script is guarded and must not be run in production.
 
 Generate a strong `JWT_SECRET`:
 
@@ -96,6 +108,12 @@ Check container status:
 docker compose ps
 ```
 
+Run the non-mutating production readiness check:
+
+```bash
+npm run readiness:check
+```
+
 The compose file publishes only localhost ports for Nginx:
 
 - Frontend: `127.0.0.1:3000`
@@ -121,20 +139,23 @@ Migration strategy note:
 - This is safer than running migrations automatically in the container entrypoint because every restart or every future scaled backend replica would try to run migrations.
 - The tradeoff is that deployers must remember to run `prisma:migrate:deploy` after pulling code that includes new Prisma migrations.
 - The production backend image does not include TypeScript dev tooling, so the local `db:seed` script is not intended to run inside the production container.
+- Verify both `backend` and `worker` are healthy/running after each migration. Failed email deliveries remain retryable through the admin delivery API.
 
 ## 5. Create The First Admin
 
 Use this only while the production database has no admin users. The endpoint requires `FIRST_ADMIN_BOOTSTRAP_TOKEN` and returns `409` after the first admin exists.
 
 ```bash
-curl -X POST "$BACKEND_URL/api/admin/bootstrap" \
+CSRF_TOKEN=$(curl -s -c /tmp/elpadel-cookies "$BACKEND_URL/api/auth/csrf" | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -b /tmp/elpadel-cookies -X POST "$BACKEND_URL/api/admin/bootstrap" \
   -H "content-type: application/json" \
+  -H "x-csrf-token: $CSRF_TOKEN" \
+  -H "x-bootstrap-token: YOUR_FIRST_ADMIN_BOOTSTRAP_TOKEN" \
   -d '{
-    "bootstrapToken": "YOUR_FIRST_ADMIN_BOOTSTRAP_TOKEN",
     "email": "you@example.com",
     "name": "Your",
     "surname": "Name",
-    "password": "Use-a-long-password"
+    "password": "Use-a-long-unique-password"
   }'
 ```
 
@@ -180,6 +201,13 @@ git pull
 docker compose up -d --build
 docker compose exec backend npm run prisma:migrate:deploy
 docker compose ps
+```
+
+Take a database backup before every production migration:
+
+```bash
+mkdir -p backups
+docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > "backups/elpadel-$(date -u +%Y%m%dT%H%M%SZ).dump"
 ```
 
 If only environment variables changed:
@@ -266,7 +294,26 @@ Renewal check:
 sudo certbot renew --dry-run
 ```
 
-## 10. Existing System PostgreSQL Alternative
+## 10. Backups And Restore Drills
+
+Create a compressed custom-format backup:
+
+```bash
+mkdir -p backups
+docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > "backups/elpadel-$(date -u +%Y%m%dT%H%M%SZ).dump"
+```
+
+Restore into a new database name first, never over the live database as a first step:
+
+```bash
+docker compose exec -T postgres createdb -U "$POSTGRES_USER" elpadel_restore_check
+docker compose exec -T postgres pg_restore -U "$POSTGRES_USER" -d elpadel_restore_check --clean --if-exists < backups/YOUR_BACKUP.dump
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d elpadel_restore_check -c 'select count(*) from "User";'
+```
+
+Run a restore drill before launch and after every material schema change. Record the backup file, restore timestamp, command output, and operator in your ops log.
+
+## 11. Existing System PostgreSQL Alternative
 
 The default production compose uses a PostgreSQL container with a named volume:
 
@@ -282,24 +329,25 @@ If you intentionally want to use the VPS system-level PostgreSQL instead:
 
 On Linux, containers do not always have `host.docker.internal` by default, so using the bundled Postgres container is the simpler and more repeatable production setup.
 
-## 10. Production Notes / TODOs
+## 12. Production Notes / TODOs
 
 - Backend has a real health endpoint at `/health` and the backend Docker image uses it.
 - Frontend healthcheck hits `/`.
 - Docker images use Node 22 because this project uses Prisma 7.8, whose dependency tree expects Node 22+.
-- No Socket.IO/WebSocket server was detected in the codebase.
+- Socket.IO runs in the backend API process. Keep `RUN_OUTBOX_IN_API=true` in production so realtime outbox topics are emitted by the process with the live Socket.IO server.
 - `RESEND_API_KEY` is required in production (`NODE_ENV=production`). Without it, auth emails fail closed (no console fallback that could mark users verified without delivery).
 - After bootstrapping the first admin, remove `FIRST_ADMIN_BOOTSTRAP_TOKEN` from `.env` and recreate the backend container. In production the backend **refuses to start** if the token is still set while an admin already exists.
+- Production account creation passwords must be at least 12 characters and no more than 72 UTF-8 bytes.
 - Logout bumps `User.sessionVersion`, which invalidates outstanding JWTs for that account (stolen cookies stop working after logout).
 - Security-relevant actions emit structured `[audit]` JSON lines to stdout (login success/failure, logout, bootstrap, disqualify, account delete).
 - Gmail login is disabled unless `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` are configured.
 - Keep `.env` out of Git.
 - Nginx config in `deploy/nginx.conf` rate-limits `/api/auth/login`, `/register`, `/verify`, and `/api/admin/bootstrap`. The Express app also applies in-process limits.
 - Postgres is not published on the host in `docker-compose.yml` (backend-only network access).
-- CI runs `npm audit --audit-level=high` on pull requests. Locally: `npm run audit`.
+- CI runs lint, tests, build, and `npm audit --audit-level=high` on pull requests. Locally: `npm run lint && npm test && npm run build && npm run audit`.
 - Known moderate advisories in transitive `next`/`postcss` and `prisma`/`@hono/node-server` currently require major downgrades or unreleased upgrades — do **not** run `npm audit fix --force`. Re-check after Next 16.3+ / Prisma 7.9+ land.
 
-## 11. Vercel Frontend-Only Deploy
+## 13. Vercel Frontend-Only Deploy
 
 The backend is not a Vercel serverless app; it is an Express API intended to run from the Docker/VPS setup above.
 

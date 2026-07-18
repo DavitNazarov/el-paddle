@@ -15,11 +15,16 @@ type LoginPageProps = {
   }>;
 };
 
+function safeNextPath(value?: string) {
+  if (!value?.startsWith('/') || value.startsWith('//')) return '/dashboard';
+  return value;
+}
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const user = await getCurrentUser();
-  if (user) redirect(user.role === 'ADMIN' ? '/admin' : '/dashboard');
-  const nextPath = params.next?.startsWith('/') ? params.next : '/dashboard';
+  if (user) redirect(user.role === 'ADMIN' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
+  const nextPath = safeNextPath(params.next);
 
   return (
     <AuthShell variant="login">

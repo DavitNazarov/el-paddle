@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, ListChecks, Users } from 'lucide-react';
+import { ArrowRightLeft, CalendarDays, ListChecks, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   EmptyState,
@@ -18,16 +19,37 @@ import { useI18n } from '@/components/shared/I18nProvider';
 import { usePlayerDashboard } from '@/hooks/usePlayerDashboard';
 import { cn } from '@/lib/utils';
 import type { PublicUser } from '@/types/auth';
-import type { StatusFilter } from '@/types/dashboard';
+import type { RegistrationDto, StatusFilter } from '@/types/dashboard';
+import { ClubLineupEditor } from './ClubLineupEditor';
 import { PlayerShell } from './PlayerShell';
 
 export function PlayerEntriesClient({ initialUser }: { initialUser: PublicUser }) {
   const { dictionary, t, formatDate } = useI18n();
   const player = dictionary.dashboard.player;
   const api = usePlayerDashboard(initialUser);
-  const { user, registrations, registrationCounts, loading, message, error, filterRegistrations } = api;
+  const {
+    user,
+    registrations,
+    clubMembers,
+    clubMembershipRole,
+    registrationCounts,
+    loading,
+    message,
+    error,
+    setMessage,
+    filterRegistrations,
+    loadDashboard,
+  } = api;
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [managedEntry, setManagedEntry] = useState<RegistrationDto | null>(null);
   const filtered = filterRegistrations(statusFilter);
+  const copy = player.clubEntries;
+  const clubPlayers = [user, ...clubMembers].filter(
+    (member, index, all) => all.findIndex((candidate) => candidate.id === member.id) === index,
+  );
+  function openLineupManager(registration: RegistrationDto) {
+    setManagedEntry(registration);
+  }
 
   return (
     <PlayerShell
@@ -107,7 +129,14 @@ export function PlayerEntriesClient({ initialUser }: { initialUser: PublicUser }
                   <h3 className="font-semibold text-[var(--padel-ivory)]">{registration.event.title}</h3>
                   <p className="mt-1 text-sm text-[rgba(213,201,177,0.5)]">{registration.category.name}</p>
                 </div>
-                <RegistrationStatusBadge status={registration.status} />
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Badge className="border-[var(--dash-border)] bg-[#f7f9fc] text-[var(--dash-muted)]">
+                    {registration.owner.id === user.id || registration.teammate.id === user.id
+                      ? copy.yourTeam
+                      : copy.clubTeam}
+                  </Badge>
+                  <RegistrationStatusBadge status={registration.status} />
+                </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
                 <MetaRow icon={CalendarDays}>
@@ -120,14 +149,42 @@ export function PlayerEntriesClient({ initialUser }: { initialUser: PublicUser }
                 </MetaRow>
               </div>
               {registration.declineReason ? (
-                <p className="mt-3 rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                <p className="mt-3 rounded-md border border-[rgba(194,65,59,0.24)] bg-[var(--dash-coral-soft)] px-3 py-2 text-sm text-[var(--dash-coral)]">
                   {registration.declineReason}
                 </p>
+              ) : null}
+              {clubMembershipRole === 'LEADER' ? (
+                <div className="mt-4 border-t border-[var(--dash-border)] pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(softButtonClassName, 'min-h-11 rounded-lg')}
+                    onClick={() => openLineupManager(registration)}
+                  >
+                    <ArrowRightLeft className="h-4 w-4" />
+                    {copy.manageLineup}
+                  </Button>
+                </div>
               ) : null}
             </div>
           </SurfaceCard>
         ))}
       </div>
+
+      {managedEntry ? (
+        <ClubLineupEditor
+          key={`${managedEntry.id}:${managedEntry.version}`}
+          registration={managedEntry}
+          clubPlayers={clubPlayers}
+          onClose={() => setManagedEntry(null)}
+          onConflict={() => loadDashboard(false)}
+          onUpdated={async () => {
+            setManagedEntry(null);
+            setMessage(copy.success);
+            await loadDashboard(false);
+          }}
+        />
+      ) : null}
     </PlayerShell>
   );
 }

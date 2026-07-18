@@ -1,0 +1,108 @@
+import type { NotificationType, Prisma } from '../generated/prisma/client.js';
+
+type NotifyInput = {
+  recipientUserId: string;
+  recipientEmail?: string | null;
+  type: NotificationType;
+  title: string;
+  message: string;
+  entityType: string;
+  entityId: string;
+  eventId?: string;
+  actionPath: string;
+  version: number;
+  metadata?: Prisma.InputJsonValue;
+  emailEyebrow?: string;
+  emailActionLabel?: string;
+};
+
+export async function queueNotification(tx: Prisma.TransactionClient, input: NotifyInput) {
+  const deduplicationKey = `${input.entityType}:${input.entityId}:${input.type}:v${input.version}:user:${input.recipientUserId}`;
+  const notification = await tx.notification.upsert({
+    where: { deduplicationKey },
+    update: {},
+    create: {
+      recipientUserId: input.recipientUserId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      eventId: input.eventId,
+      actionPath: input.actionPath,
+      metadata: input.metadata,
+      deduplicationKey,
+    },
+  });
+
+  if (input.recipientEmail) {
+    await tx.emailDelivery.upsert({
+      where: { deduplicationKey },
+      update: {},
+      create: {
+        notificationId: notification.id,
+        recipientEmail: input.recipientEmail,
+        template: input.type,
+        payload: {
+          title: input.title,
+          message: input.message,
+          actionPath: input.actionPath,
+          emailEyebrow: input.emailEyebrow,
+          emailActionLabel: input.emailActionLabel,
+        },
+        deduplicationKey,
+      },
+    });
+    await queueOutbox(tx, {
+      topic: 'email.send',
+      aggregateType: 'Notification',
+      aggregateId: notification.id,
+      payload: { notificationId: notification.id },
+      deduplicationKey: `email:${deduplicationKey}`,
+    });
+  }
+
+  await queueOutbox(tx, {
+    topic: 'notification.created',
+    aggregateType: 'Notification',
+    aggregateId: notification.id,
+    payload: { notificationId: notification.id, recipientUserId: input.recipientUserId },
+    deduplicationKey: `ws:${deduplicationKey}`,
+  });
+  return notification;
+}
+
+export async function queueOutbox(
+  tx: Prisma.TransactionClient,
+  input: {
+    topic: string;
+    aggregateType: string;
+    aggregateId: string;
+    payload: Prisma.InputJsonValue;
+    deduplicationKey: string;
+  },
+) {
+  return tx.outboxMessage.upsert({
+    where: { deduplicationKey: input.deduplicationKey },
+    update: {},
+    create: input,
+  });
+}
+
+export async function writeAudit(
+  tx: Prisma.TransactionClient,
+  input: {
+    action: string;
+    actorId?: string;
+    eventId?: string;
+    entityType: string;
+    entityId: string;
+    before?: Prisma.InputJsonValue;
+    after?: Prisma.InputJsonValue;
+    publicReason?: string;
+    internalReason?: string;
+    ip?: string | null;
+  },
+) {
+  return tx.auditLog.create({ data: { ...input, ip: input.ip ?? undefined } });
+}

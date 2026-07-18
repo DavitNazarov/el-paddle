@@ -5,8 +5,11 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  lint-and-audit:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +31,11 @@ jobs:
       - name: Lint frontend
         run: npm run lint --workspace frontend
 
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
       - name: Dependency audit
-        # Fail on high/critical. Moderate issues in Next/Prisma transitive deps
-        # currently require major upgrades — tracked separately.
         run: npm audit --audit-level=high

@@ -13,7 +13,7 @@ type ModalFormFooterProps = {
   disabled?: boolean;
   submitType?: 'submit' | 'button';
   onSubmitClick?: () => void;
-  submitVariant?: 'red' | 'outline';
+  submitVariant?: 'red' | 'outline' | 'destructive';
   submitClassName?: string;
 };
 

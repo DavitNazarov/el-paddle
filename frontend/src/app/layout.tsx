@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
 import { I18nProvider } from '@/components/shared/I18nProvider';
 import { normalizeLocale } from '@/lib/i18n';
+import { LegalFooter } from '@/components/legal/LegalFooter';
 import './globals.css';
 
 export const viewport: Viewport = {
@@ -31,7 +32,10 @@ export default async function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang={initialLocale}>
       <body>
-        <I18nProvider initialLocale={initialLocale}>{children}</I18nProvider>
+        <I18nProvider initialLocale={initialLocale}>
+          {children}
+          <LegalFooter />
+        </I18nProvider>
       </body>
     </html>
   );

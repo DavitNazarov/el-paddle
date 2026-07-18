@@ -5,11 +5,7 @@ type Bucket = { count: number; resetAt: number };
 
 const buckets = new Map<string, Bucket>();
 
-function clientKey(request: Request) {
-  const forwarded = request.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0]?.trim() || request.ip || 'unknown';
-  }
+export function clientKey(request: Request) {
   return request.ip || 'unknown';
 }
 

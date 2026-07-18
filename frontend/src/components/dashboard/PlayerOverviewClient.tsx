@@ -59,10 +59,10 @@ export function PlayerOverviewClient({ initialUser }: { initialUser: PublicUser 
       {error && !api.registerEvent ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label={player.stats[0][0]} value={user.stats.matchesPlayed} />
-        <Metric label={player.stats[1][0]} value={user.stats.wins} hint={winRate === null ? undefined : `${winRate}%`} />
-        <Metric label={player.mini.pending} value={registrationCounts.pending} />
-        <Metric label={player.pages.openEventsMetric} value={events.length} />
+        <Metric label={player.stats[0][0]} value={user.stats.matchesPlayed} tone="info" />
+        <Metric label={player.stats[1][0]} value={user.stats.wins} hint={winRate === null ? undefined : `${winRate}%`} tone="success" />
+        <Metric label={player.mini.pending} value={registrationCounts.pending} tone="warning" />
+        <Metric label={player.pages.openEventsMetric} value={events.length} tone="neutral" />
       </section>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">

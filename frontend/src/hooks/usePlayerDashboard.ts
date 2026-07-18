@@ -44,6 +44,16 @@ export function usePlayerDashboard(initialUser: PublicUser) {
   const user = data?.user ?? initialUser;
   const events = useMemo(() => data?.events ?? [], [data?.events]);
   const registrations = useMemo(() => data?.registrations ?? [], [data?.registrations]);
+  const clubMembers = useMemo(() => data?.clubMembers ?? [], [data?.clubMembers]);
+  const clubMembershipRole = data?.clubMembershipRole ?? null;
+  const personalRegistrations = useMemo(
+    () =>
+      registrations.filter(
+        (registration) =>
+          registration.owner.id === user.id || registration.teammate.id === user.id,
+      ),
+    [registrations, user.id],
+  );
 
   const registrationCounts = useMemo(
     () => ({
@@ -60,28 +70,22 @@ export function usePlayerDashboard(initialUser: PublicUser) {
     [registrations],
   );
 
-  /** One entry per event — any category counts as already registered. */
+  /** A club can submit one team per event, regardless of which members participate. */
   const registeredEventIds = useMemo(
     () => new Set(registrations.map((item) => item.event.id)),
     [registrations],
   );
 
-  /** Distinct past teammates from entries where the current user was the owner. */
-  const savedTeammates = useMemo(() => {
-    const byId = new Map<string, SavedTeammate>();
-    for (const entry of registrations) {
-      if (entry.owner.id !== user.id) continue;
-      if (entry.teammate.id === user.id) continue;
-      if (byId.has(entry.teammate.id)) continue;
-      byId.set(entry.teammate.id, {
-        id: entry.teammate.id,
-        email: entry.teammate.email,
-        fullName: entry.teammate.fullName || entry.teammate.email,
-        phone: entry.teammatePhone || '',
-      });
-    }
-    return [...byId.values()].sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [registrations, user.id]);
+  const savedTeammates = useMemo(
+    () =>
+      clubMembers.map((member) => ({
+        id: member.id,
+        email: member.email,
+        fullName: member.fullName || member.email,
+        phone: member.phone,
+      })),
+    [clubMembers],
+  );
 
   const nextEvent = events[0] ?? null;
   const winRate =
@@ -120,7 +124,7 @@ export function usePlayerDashboard(initialUser: PublicUser) {
       ...current,
       [eventId]: {
         categoryId: current[eventId]?.categoryId ?? '',
-        ownerPhone: current[eventId]?.ownerPhone ?? '',
+        ownerPhone: current[eventId]?.ownerPhone ?? user.phone,
         teammateEmail: current[eventId]?.teammateEmail ?? '',
         teammatePhone: current[eventId]?.teammatePhone ?? '',
         savedTeammateId: current[eventId]?.savedTeammateId ?? '',
@@ -135,7 +139,7 @@ export function usePlayerDashboard(initialUser: PublicUser) {
       ...current,
       [eventId]: {
         categoryId: current[eventId]?.categoryId ?? '',
-        ownerPhone: current[eventId]?.ownerPhone ?? '',
+        ownerPhone: current[eventId]?.ownerPhone ?? user.phone,
         savedTeammateId: teammate?.id ?? '',
         teammateEmail: teammate?.email ?? '',
         teammatePhone: teammate?.phone ?? '',
@@ -148,7 +152,7 @@ export function usePlayerDashboard(initialUser: PublicUser) {
       ...current,
       [eventId]: {
         categoryId: current[eventId]?.categoryId ?? '',
-        ownerPhone: current[eventId]?.ownerPhone ?? '',
+        ownerPhone: current[eventId]?.ownerPhone ?? user.phone,
         teammatePhone: current[eventId]?.teammatePhone ?? '',
         savedTeammateId: '',
         teammateEmail: email,
@@ -161,7 +165,10 @@ export function usePlayerDashboard(initialUser: PublicUser) {
     setError('');
     setForms((current) => ({
       ...current,
-      [event.id]: emptyForm(event, current[event.id]),
+      [event.id]: {
+        ...emptyForm(event, current[event.id]),
+        ownerPhone: current[event.id]?.ownerPhone ?? user.phone,
+      },
     }));
     setRegisterEvent(event);
   }
@@ -169,6 +176,8 @@ export function usePlayerDashboard(initialUser: PublicUser) {
   async function submitRegistration(formEvent: FormEvent<HTMLFormElement>, onSuccess?: () => void) {
     formEvent.preventDefault();
     if (!registerEvent) return;
+    const submitted = new FormData(formEvent.currentTarget);
+    const legalAccepted = submitted.get('participationLegalAccepted') === 'on';
     const form = eventForm(registerEvent);
     setSavingEventId(registerEvent.id);
     setMessage('');
@@ -183,6 +192,9 @@ export function usePlayerDashboard(initialUser: PublicUser) {
         ownerPhone: form.ownerPhone,
         teammateEmail: form.teammateEmail,
         teammatePhone: form.teammatePhone,
+        participationTermsAccepted: legalAccepted,
+        refundPolicyAcknowledged: legalAccepted,
+        riskAcknowledged: legalAccepted,
       }),
     });
     const result = (await response.json()) as { error?: string };
@@ -213,10 +225,13 @@ export function usePlayerDashboard(initialUser: PublicUser) {
     user,
     events,
     registrations,
+    personalRegistrations,
     registrationCounts,
     registrationKeys,
     registeredEventIds,
     savedTeammates,
+    clubMembers,
+    clubMembershipRole,
     nextEvent,
     winRate,
     loading,

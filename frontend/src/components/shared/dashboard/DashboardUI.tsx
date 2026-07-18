@@ -90,7 +90,7 @@ type SurfaceCardProps = {
 } & React.HTMLAttributes<HTMLDivElement>;
 
 export const formControlClassName =
-  'min-h-11 border-[rgba(88,16,16,0.14)] bg-[var(--padel-ivory)] text-[var(--padel-ink)] placeholder:text-[rgba(88,16,16,0.42)] focus-visible:ring-[var(--padel-focus-ring)]';
+  'dashboard-form-control min-h-11 min-w-0 border-[rgba(88,16,16,0.14)] bg-[var(--padel-ivory)] text-[var(--padel-ink)] placeholder:text-[rgba(88,16,16,0.42)] focus-visible:ring-[var(--padel-focus-ring)]';
 
 export const selectControlClassName = cn(
   formControlClassName,
@@ -101,7 +101,7 @@ export const softButtonClassName = 'dash-soft-btn border';
 
 /** Outline control for parchment dialogs / light surfaces */
 export const modalSoftButtonClassName =
-  'border-[rgba(88,16,16,0.12)] bg-[var(--padel-ivory)] text-[var(--padel-ink)] hover:bg-[var(--padel-ivory)]';
+  'dashboard-modal-soft-button border-[#c8d5e3] bg-white text-[#19324d] hover:border-[#9eb2c8] hover:bg-[#f1f5fa] hover:text-[#19324d] focus-visible:ring-[#2f6fed]/35';
 
 export const sidebarTabTriggerClassName =
   'dash-sidebar-link justify-start focus-visible:ring-1 focus-visible:ring-[rgba(213,201,177,0.46)] focus-visible:ring-offset-0';
@@ -219,7 +219,10 @@ export function DashboardShell({
                   </p>
                 </motion.div>
                 <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                  <LanguageSwitcher tone="dark" />
+                  <LanguageSwitcher
+                    tone="light"
+                    className="border-[var(--dash-border)] bg-white shadow-[0_1px_2px_rgba(25,50,77,0.04)]"
+                  />
                   {actions}
                 </div>
               </div>
@@ -276,10 +279,10 @@ export function StatCard({
   delay = 0,
 }: StatCardProps) {
   const toneClass = {
-    neutral: 'bg-[rgba(213,201,177,0.08)] text-[rgba(213,201,177,0.7)]',
-    success: 'bg-emerald-500/15 text-emerald-300',
-    warning: 'bg-[rgba(213,201,177,0.12)] text-[var(--padel-gold)]',
-    danger: 'bg-[rgba(134,0,12,0.12)] text-[var(--padel-red)]',
+    neutral: 'dash-tone-icon--neutral',
+    success: 'dash-tone-icon--success',
+    warning: 'dash-tone-icon--warning',
+    danger: 'dash-tone-icon--danger',
   }[tone];
 
   const content = (
@@ -290,7 +293,7 @@ export function StatCard({
           <p className="dash-metric__value mt-2">{value}</p>
         </div>
         {Icon ? (
-          <span className={cn('inline-flex h-9 w-9 items-center justify-center rounded-md', toneClass)}>
+          <span className={cn('dash-tone-icon inline-flex h-9 w-9 items-center justify-center rounded-md', toneClass)}>
             <Icon className="h-4 w-4" />
           </span>
         ) : null}
@@ -358,14 +361,12 @@ export function DashboardField({
   children: ReactNode;
 }) {
   return (
-    <div className="dash-field space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <Label htmlFor={id} className="text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(88,16,16,0.62)]">
-          {label}
-        </Label>
-        {hint ? <span className="text-xs text-[rgba(88,16,16,0.46)]">{hint}</span> : null}
-      </div>
+    <div className="dash-field min-w-0 space-y-2">
+      <Label htmlFor={id} className="dashboard-field-label block text-xs font-semibold uppercase leading-5 tracking-[0.16em] text-[#4d6178]">
+        {label}
+      </Label>
       {children}
+      {hint ? <p className="dashboard-field-hint text-xs leading-5 text-[#6b7f95]">{hint}</p> : null}
     </div>
   );
 }
@@ -460,7 +461,7 @@ export function DashboardModal({
   size = 'lg',
   className,
 }: DashboardModalProps) {
-  const sizeClass = size === 'xl' ? 'max-w-3xl' : size === 'md' ? 'max-w-lg' : 'max-w-2xl';
+  const sizeClass = size === 'xl' ? 'sm:max-w-4xl' : size === 'md' ? 'sm:max-w-lg' : 'sm:max-w-2xl';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -469,7 +470,9 @@ export function DashboardModal({
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="dashboard-dialog-scroll min-h-0 flex-1 overscroll-contain overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+          {children}
+        </div>
         {footer ? <DialogFooter>{footer}</DialogFooter> : null}
       </DialogContent>
     </Dialog>
@@ -479,38 +482,25 @@ export function DashboardModal({
 export function RegistrationStatusBadge({
   status,
 }: {
-  status: 'PENDING' | 'APPROVED' | 'DECLINED';
+  status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'NEEDS_CHANGES' | 'WAITLISTED' | 'WITHDRAWN' | 'CANCELLED';
 }) {
   const { t } = useI18n();
-
-  if (status === 'APPROVED') {
-    return (
-      <Badge className="border-emerald-400/25 bg-emerald-500/10 text-emerald-300">
-        {t('dashboard.status.APPROVED')}
-      </Badge>
-    );
-  }
-
-  if (status === 'DECLINED') {
-    return (
-      <Badge className="border-red-400/25 bg-red-500/10 text-red-300">
-        {t('dashboard.status.DECLINED')}
-      </Badge>
-    );
-  }
-
+  const translated = status === 'APPROVED' || status === 'DECLINED' || status === 'PENDING'
+    ? t(`dashboard.status.${status}`)
+    : status.replaceAll('_', ' ');
   return (
-    <Badge className="border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.06)] text-[rgba(213,201,177,0.75)]">
-      {t('dashboard.status.PENDING')}
+    <Badge className={cn('dash-status', `dash-status--${status.toLowerCase().replaceAll('_', '-')}`)}>
+      {translated}
     </Badge>
   );
 }
 
 export function PremiumButton({
   className,
-  dark = false,
+  dark: _dark = false,
   ...props
 }: React.ComponentPropsWithoutRef<typeof Button> & { dark?: boolean }) {
+  void _dark;
   return <Button className={cn(className)} {...props} />;
 }
 
@@ -518,13 +508,15 @@ export function Metric({
   label,
   value,
   hint,
+  tone = 'neutral',
 }: {
   label: string;
   value: ReactNode;
   hint?: string;
+  tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 }) {
   return (
-    <div className="dash-metric">
+    <div className="dash-metric" data-tone={tone}>
       <p className="dash-metric__label">{label}</p>
       <p className="dash-metric__value">{value}</p>
       {hint ? <p className="text-xs text-[rgba(213,201,177,0.42)]">{hint}</p> : null}

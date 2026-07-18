@@ -22,18 +22,22 @@ import {
   createVerificationCode,
   hashSecret,
   hashToken,
+  passwordValidationError,
   timingSafeEqualString,
 } from '../../common/security.js';
 import { prisma } from '../../database/prisma.js';
 import {
   clearOAuthStateCookie,
+  clearOAuthLegalCookie,
   clearSessionCookie,
   getCurrentUser,
   OAUTH_STATE_COOKIE,
+  OAUTH_LEGAL_COOKIE,
   requireUser,
   revokeUserSessions,
   roleForEmail,
   setOAuthStateCookie,
+  setOAuthLegalCookie,
   setSessionCookie,
   toPublicUser,
 } from './auth.service.js';
@@ -43,6 +47,11 @@ import { clubInclude } from '../../common/includes.js';
 import { assertNotDisqualified, isDisqualified } from '../users/users.service.js';
 import { rateLimit } from '../../common/rateLimit.js';
 import { auditLog, requestIp } from '../../common/audit.js';
+import {
+  ACCOUNT_TERMS_VERSION,
+  PRIVACY_POLICY_VERSION,
+  requireAccountLegalAcceptance,
+} from '../../common/legal.js';
 
 export const authRouter = Router();
 
@@ -76,6 +85,7 @@ type GoogleTokenResponse = {
 type GoogleProfile = {
   id: string;
   email: string;
+  verified_email?: boolean;
   given_name?: string;
   family_name?: string;
   name?: string;
@@ -100,7 +110,7 @@ authRouter.post('/api/admin/bootstrap', bootstrapLimit, asyncHandler(async (requ
   const body = typeof request.body === 'object' && request.body !== null
     ? (request.body as Record<string, unknown>)
     : {};
-  const token = cleanString(request.get('x-bootstrap-token') ?? body.bootstrapToken);
+  const token = cleanString(request.get('x-bootstrap-token'));
   const email = cleanEmail(body.email);
   const name = cleanString(body.name);
   const surname = cleanString(body.surname);
@@ -118,7 +128,8 @@ authRouter.post('/api/admin/bootstrap', bootstrapLimit, asyncHandler(async (requ
   }
   if (!isValidEmail(email)) jsonError('Enter a valid email.');
   if (!name || !surname) jsonError('Name and surname are required.');
-  if (password.length < 8) jsonError('Password must be at least 8 characters.');
+  const passwordError = passwordValidationError(password);
+  if (passwordError) jsonError(passwordError);
 
   const passwordHash = await hashSecret(password);
   const result = await prisma.$transaction(async (tx) => {
@@ -180,10 +191,16 @@ authRouter.post('/api/auth/register', authBurstLimit, asyncHandler(async (reques
   const phone = cleanString(request.body.phone);
   const password = cleanString(request.body.password);
 
+  requireAccountLegalAcceptance({
+    legalAccepted: request.body.legalAccepted,
+    eligibilityConfirmed: request.body.eligibilityConfirmed,
+  });
+
   if (!isValidEmail(email)) jsonError('Enter a valid email.');
   if (!name || !surname) jsonError('Name and surname are required.');
   if (phone.length < 5) jsonError('Phone number is required.');
-  if (password.length < 8) jsonError('Password must be at least 8 characters.');
+  const passwordError = passwordValidationError(password);
+  if (passwordError) jsonError(passwordError);
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing?.status === UserStatus.ACTIVE && existing.passwordHash) {
@@ -195,6 +212,7 @@ authRouter.post('/api/auth/register', authBurstLimit, asyncHandler(async (reques
     existing?.role === UserRole.ADMIN ? UserRole.ADMIN : UserRole.USER;
 
   const passwordHash = await hashSecret(password);
+  const acceptedAt = new Date();
   const user = existing
     ? await prisma.user.update({
         where: { id: existing.id },
@@ -205,6 +223,11 @@ authRouter.post('/api/auth/register', authBurstLimit, asyncHandler(async (reques
           passwordHash,
           role,
           status: UserStatus.PENDING_VERIFICATION,
+          termsAcceptedAt: acceptedAt,
+          termsVersion: ACCOUNT_TERMS_VERSION,
+          privacyAcknowledgedAt: acceptedAt,
+          privacyVersion: PRIVACY_POLICY_VERSION,
+          eligibilityConfirmedAt: acceptedAt,
         },
       })
     : await prisma.user.create({
@@ -216,6 +239,11 @@ authRouter.post('/api/auth/register', authBurstLimit, asyncHandler(async (reques
           passwordHash,
           role,
           status: UserStatus.PENDING_VERIFICATION,
+          termsAcceptedAt: acceptedAt,
+          termsVersion: ACCOUNT_TERMS_VERSION,
+          privacyAcknowledgedAt: acceptedAt,
+          privacyVersion: PRIVACY_POLICY_VERSION,
+          eligibilityConfirmedAt: acceptedAt,
         },
       });
 
@@ -305,8 +333,15 @@ authRouter.post('/api/auth/login', authStrictLimit, asyncHandler(async (request,
       },
     },
   });
+  const dummyPasswordHash = '$2b$12$z/h1scIxzol03OmOW9jXjuFQJsKy5gJoC63nzQMqnimKqCKneaeQC';
+  const ok = await compareSecret(password, user?.passwordHash ?? dummyPasswordHash);
   if (!user?.passwordHash) {
     auditLog({ event: 'auth.login', outcome: 'failure', email, ip, detail: 'unknown_user' });
+    jsonError('Invalid email or password.', 401);
+  }
+
+  if (!ok) {
+    auditLog({ event: 'auth.login', outcome: 'failure', email, ip, detail: 'bad_password' });
     jsonError('Invalid email or password.', 401);
   }
 
@@ -320,10 +355,9 @@ authRouter.post('/api/auth/login', authStrictLimit, asyncHandler(async (request,
     jsonError('Finish your invited account setup first.', 403);
   }
 
-  const ok = await compareSecret(password, user.passwordHash);
-  if (!ok) {
-    auditLog({ event: 'auth.login', outcome: 'failure', email, ip, detail: 'bad_password' });
-    jsonError('Invalid email or password.', 401);
+  if (user.status === UserStatus.INACTIVE) {
+    auditLog({ event: 'auth.login', outcome: 'denied', email, ip, detail: 'inactive' });
+    jsonError('This account is inactive.', 403);
   }
 
   auditLog({ event: 'auth.login', outcome: 'success', userId: user.id, email, ip });
@@ -359,9 +393,15 @@ authRouter.post('/api/auth/invite/complete', asyncHandler(async (request, respon
   const password = cleanString(request.body.password);
   const clubId = cleanString(request.body.clubId);
 
+  requireAccountLegalAcceptance({
+    legalAccepted: request.body.legalAccepted,
+    eligibilityConfirmed: request.body.eligibilityConfirmed,
+  });
+
   if (!token) jsonError('Invite token is required.');
   if (!name || !surname) jsonError('Name and surname are required.');
-  if (password.length < 8) jsonError('Password must be at least 8 characters.');
+  const passwordError = passwordValidationError(password);
+  if (passwordError) jsonError(passwordError);
 
   const invite = await prisma.inviteToken.findFirst({
     where: {
@@ -389,6 +429,7 @@ authRouter.post('/api/auth/invite/complete', asyncHandler(async (request, respon
   }
 
   const user = await prisma.$transaction(async (tx) => {
+    const acceptedAt = new Date();
     await tx.inviteToken.update({
       where: { id: invite.id },
       data: { usedAt: new Date() },
@@ -403,6 +444,11 @@ authRouter.post('/api/auth/invite/complete', asyncHandler(async (request, respon
         emailVerifiedAt: new Date(),
         role,
         sessionVersion: { increment: 1 },
+        termsAcceptedAt: acceptedAt,
+        termsVersion: ACCOUNT_TERMS_VERSION,
+        privacyAcknowledgedAt: acceptedAt,
+        privacyVersion: PRIVACY_POLICY_VERSION,
+        eligibilityConfirmedAt: acceptedAt,
       },
       include: {
         clubMemberships: {
@@ -444,6 +490,7 @@ authRouter.post('/api/auth/invite/complete', asyncHandler(async (request, respon
 authRouter.post('/api/account/club', asyncHandler(async (request, response) => {
   const current = await requireUser(request);
   if (current.role === UserRole.ADMIN) jsonError('Admins do not belong to clubs.', 400);
+  if (current.role === UserRole.JUDGE) jsonError('Judges do not belong to clubs.', 400);
   if (current.club) jsonError('Club is already set.', 409);
   assertNotDisqualified({
     disqualifiedUntil: current.disqualifiedUntil ? new Date(current.disqualifiedUntil) : null,
@@ -460,6 +507,7 @@ authRouter.post('/api/account/club', asyncHandler(async (request, response) => {
 authRouter.post('/api/account/club/mate', asyncHandler(async (request, response) => {
   const current = await requireUser(request);
   if (current.role === UserRole.ADMIN) jsonError('Admins do not belong to clubs.', 400);
+  if (current.role === UserRole.JUDGE) jsonError('Judges do not belong to clubs.', 400);
   if (!current.club) jsonError('Create your club first.', 400);
   assertNotDisqualified({
     disqualifiedUntil: current.disqualifiedUntil ? new Date(current.disqualifiedUntil) : null,
@@ -553,6 +601,8 @@ authRouter.get('/api/auth/google', (request, response) => {
   }
 
   const state = crypto.randomUUID();
+  const legalAccepted = cleanString(request.query.legalAccepted) === 'true';
+  const eligibilityConfirmed = cleanString(request.query.eligibilityConfirmed) === 'true';
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.searchParams.set('client_id', config.googleClientId);
   url.searchParams.set('redirect_uri', config.googleRedirectUri);
@@ -562,6 +612,7 @@ authRouter.get('/api/auth/google', (request, response) => {
   url.searchParams.set('state', state);
 
   setOAuthStateCookie(response, state);
+  if (legalAccepted && eligibilityConfirmed) setOAuthLegalCookie(response);
   response.redirect(url.toString());
 });
 
@@ -569,8 +620,10 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
   const code = cleanString(request.query.code);
   const state = cleanString(request.query.state);
   const storedState = request.cookies?.[OAUTH_STATE_COOKIE] as string | undefined;
+  const legalAccepted = request.cookies?.[OAUTH_LEGAL_COOKIE] === 'accepted';
 
   clearOAuthStateCookie(response);
+  clearOAuthLegalCookie(response);
 
   if (!code || !state || !storedState || !timingSafeEqualString(state, storedState)) {
     response.redirect(frontendRedirect('/login?error=google-state'));
@@ -592,6 +645,7 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
       grant_type: 'authorization_code',
       redirect_uri: config.googleRedirectUri,
     }),
+    signal: AbortSignal.timeout(10_000),
   });
   const tokenData = (await tokenResponse.json()) as GoogleTokenResponse;
 
@@ -602,10 +656,11 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
 
   const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { authorization: `Bearer ${tokenData.access_token}` },
+    signal: AbortSignal.timeout(10_000),
   });
   const profile = (await profileResponse.json()) as GoogleProfile;
 
-  if (!profileResponse.ok || !profile.email) {
+  if (!profileResponse.ok || !profile.email || profile.verified_email !== true) {
     response.redirect(frontendRedirect('/login?error=google-profile'));
     return;
   }
@@ -625,6 +680,10 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
     });
 
     if (account) {
+      if (account.user.status === UserStatus.INACTIVE) {
+        response.redirect(frontendRedirect('/login?error=account-inactive'));
+        return null;
+      }
       return tx.user.update({
         where: { id: account.userId },
         data: {
@@ -638,6 +697,16 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
     }
 
     const existing = await tx.user.findUnique({ where: { email } });
+    if (existing?.status === UserStatus.INACTIVE) {
+      response.redirect(frontendRedirect('/login?error=account-inactive'));
+      return null;
+    }
+    const accountNeedsAcceptance = !existing || existing.status === UserStatus.INVITED;
+    if (accountNeedsAcceptance && !legalAccepted) {
+      response.redirect(frontendRedirect('/register?error=legal-consent-required'));
+      return null;
+    }
+    const acceptedAt = accountNeedsAcceptance ? new Date() : undefined;
     const nextUser = existing
       ? await tx.user.update({
           where: { id: existing.id },
@@ -647,6 +716,13 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
             role: roleForEmail(email, existing.role, { emailVerified: true }),
             name: existing.name ?? names.name,
             surname: existing.surname ?? names.surname,
+            ...(acceptedAt ? {
+              termsAcceptedAt: acceptedAt,
+              termsVersion: ACCOUNT_TERMS_VERSION,
+              privacyAcknowledgedAt: acceptedAt,
+              privacyVersion: PRIVACY_POLICY_VERSION,
+              eligibilityConfirmedAt: acceptedAt,
+            } : {}),
           },
         })
       : await tx.user.create({
@@ -657,6 +733,11 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
             status: UserStatus.ACTIVE,
             emailVerifiedAt: new Date(),
             role: roleForEmail(email, undefined, { emailVerified: true }),
+            termsAcceptedAt: acceptedAt,
+            termsVersion: ACCOUNT_TERMS_VERSION,
+            privacyAcknowledgedAt: acceptedAt,
+            privacyVersion: PRIVACY_POLICY_VERSION,
+            eligibilityConfirmedAt: acceptedAt,
           },
         });
 
@@ -671,14 +752,17 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
     return nextUser;
   });
 
+  if (!user) return;
+
   setSessionCookie(response, user);
-  const isAdmin = roleForEmail(user.email, user.role, { emailVerified: true }) === UserRole.ADMIN;
-  if (!isAdmin) {
+  const role = roleForEmail(user.email, user.role, { emailVerified: true });
+  const isStaff = role === UserRole.ADMIN || role === UserRole.JUDGE;
+  if (!isStaff) {
     const membership = await prisma.clubMember.findUnique({ where: { userId: user.id } });
     if (!membership) {
       response.redirect(frontendRedirect('/complete-club'));
       return;
     }
   }
-  response.redirect(frontendRedirect(isAdmin ? '/admin' : '/dashboard'));
+  response.redirect(frontendRedirect(role === UserRole.ADMIN ? '/admin' : role === UserRole.JUDGE ? '/judge' : '/dashboard'));
 }));

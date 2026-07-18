@@ -10,6 +10,9 @@ import {
   ListChecks,
   LogOut,
   Settings,
+  Bell,
+  Building2,
+  History,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -46,6 +49,7 @@ export function PlayerShell({
 
   const items = [
     { href: '/dashboard', label: player.sidebar.overview, icon: LayoutDashboard, exact: true },
+    { href: '/dashboard/club', label: player.sidebar.club, icon: Building2 },
     { href: '/dashboard/events', label: player.sidebar.events, icon: CalendarDays },
     {
       href: '/dashboard/entries',
@@ -53,6 +57,8 @@ export function PlayerShell({
       icon: ListChecks,
       badge: pendingCount || undefined,
     },
+    { href: '/dashboard/matches', label: 'Match history', icon: History },
+    { href: '/notifications', label: 'Notifications', icon: Bell },
     { href: '/dashboard/settings', label: player.sidebar.settings, icon: Settings },
   ];
 

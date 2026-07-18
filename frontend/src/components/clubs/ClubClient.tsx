@@ -13,6 +13,7 @@ export type ClubClientDto = {
   description: string;
   members: {
     id: string;
+    membershipRole: 'LEADER' | 'MEMBER';
     roleTitle: string;
     user: {
       fullName: string;
@@ -55,7 +56,10 @@ export function ClubClient({ club }: { club: ClubClientDto }) {
               <Card key={member.id} className="rounded-sm border-[var(--padel-line)] bg-[var(--padel-red)]/14 text-[var(--padel-ivory)]">
                 <CardContent className="p-5">
                   <p className="font-display text-2xl font-semibold">{member.user.fullName}</p>
-                  {member.roleTitle ? <Badge variant="gold" className="mt-4">{member.roleTitle}</Badge> : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {member.membershipRole === 'LEADER' ? <Badge variant="gold">Leader</Badge> : null}
+                    {member.roleTitle ? <Badge variant="gold">{member.roleTitle}</Badge> : null}
+                  </div>
                 </CardContent>
               </Card>
             ))}

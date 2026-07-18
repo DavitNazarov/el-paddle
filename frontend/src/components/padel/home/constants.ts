@@ -23,26 +23,24 @@ export const padelVars = {
 } as CSSProperties;
 
 export const navItems = [
-  { key: 'history', href: '#history' },
-  { key: 'courts', href: '#courts' },
-  { key: 'competition', href: '#competition' },
-  { key: 'sponsors', href: '#sponsors' },
-  { key: 'registration', href: '#registration' },
-  { key: 'contact', href: '#contact' },
+  { key: 'home', href: '/' },
+  { key: 'event', href: '/events' },
+  { key: 'players', href: '/players' },
+  { key: 'clubs', href: '/clubs' },
 ] as const;
 
 export const snapStops = [
   { id: 'top', key: 'intro' },
   { id: 'history', key: 'history' },
   { id: 'courts', key: 'courts' },
+  { id: 'visit', key: 'visit' },
   { id: 'competition', key: 'event' },
   { id: 'features', key: 'format' },
   { id: 'sponsors', key: 'sponsors' },
-  { id: 'visit', key: 'visit' },
   { id: 'registration', key: 'register' },
   { id: 'contact', key: 'contact' },
 ] as const;
 
 export type SnapStopId = (typeof snapStops)[number]['id'];
 
-export const navSectionIds = navItems.map((item) => item.href.slice(1));
+export const navSectionIds = snapStops.map((item) => item.id);

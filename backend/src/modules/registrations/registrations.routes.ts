@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { RegistrationStatus, UserRole } from '../../generated/prisma/client.js';
-import { requireAdmin, requireUser } from '../auth/auth.service.js';
+import { Capability, RegistrationStatus, UserRole } from '../../generated/prisma/client.js';
+import { requireUser } from '../auth/auth.service.js';
 import {
   asyncHandler,
   cleanEmail,
@@ -10,10 +10,16 @@ import {
   requireParamId,
 } from '../../common/http.js';
 import { auditLog, requestIp } from '../../common/audit.js';
-import { serializeRegistration } from '../../common/serializers.js';
+import { requireParticipationLegalAcceptance } from '../../common/legal.js';
+import { requireCapability } from '../../common/capabilities.js';
+import { requireCommandId } from '../../common/commands.js';
+import { serializeEvent, serializePublicRegistrationTeam, serializeRegistration } from '../../common/serializers.js';
 import {
   createRegistration,
   listAdminRegistrations,
+  listPublicRegistrationRoster,
+  replaceRegistrationPlayer,
+  updateRegistrationRosterPublication,
   updateRegistrationStatus,
 } from './registrations.service.js';
 
@@ -38,6 +44,11 @@ registrationsRouter.post('/api/registrations', asyncHandler(async (request, resp
   if (teammateEmail === currentUser.email) {
     jsonError('Teammate email must be different from your email.');
   }
+  requireParticipationLegalAcceptance({
+    participationTermsAccepted: request.body.participationTermsAccepted,
+    refundPolicyAcknowledged: request.body.refundPolicyAcknowledged,
+    riskAcknowledged: request.body.riskAcknowledged,
+  });
 
   await createRegistration({
     userId: currentUser.id,
@@ -46,19 +57,45 @@ registrationsRouter.post('/api/registrations', asyncHandler(async (request, resp
     ownerPhone,
     teammatePhone,
     teammateEmail,
+    legalAcceptedAt: new Date(),
   });
 
   response.status(201).json({ ok: true });
 }));
 
+registrationsRouter.patch('/api/registrations/:id/lineup', asyncHandler(async (request, response) => {
+  const currentUser = await requireUser(request);
+  if (currentUser.role !== UserRole.USER) {
+    jsonError('Only club players can manage a registered team.', 403);
+  }
+  const slot = cleanString(request.body.slot);
+  if (slot !== 'owner' && slot !== 'teammate') {
+    jsonError('Choose the player position to replace.');
+  }
+  const expectedVersion = Number(request.body.expectedVersion);
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+    jsonError('A valid registration version is required.');
+  }
+
+  const registration = await replaceRegistrationPlayer({
+    registrationId: requireParamId(request.params.id, 'registration id'),
+    actorId: currentUser.id,
+    slot,
+    replacementUserId: requireParamId(request.body.replacementUserId, 'replacement user id'),
+    expectedVersion,
+    commandId: requireCommandId(request.body.commandId),
+  });
+  response.json({ registration: serializeRegistration(registration) });
+}));
+
 registrationsRouter.get('/api/admin/registrations', asyncHandler(async (request, response) => {
-  await requireAdmin(request);
+  await requireCapability(request, Capability.REGISTRATION_REVIEW);
   const registrations = await listAdminRegistrations();
   response.json({ registrations: registrations.map(serializeRegistration) });
 }));
 
 registrationsRouter.patch('/api/admin/registrations/:id', asyncHandler(async (request, response) => {
-  const admin = await requireAdmin(request);
+  const admin = await requireCapability(request, Capability.REGISTRATION_REVIEW);
   const status = cleanString(request.body.status).toUpperCase();
   const declineReason = cleanString(request.body.declineReason);
 
@@ -82,5 +119,49 @@ registrationsRouter.patch('/api/admin/registrations/:id', asyncHandler(async (re
     detail: `${registration.id}:${status}`,
   });
 
+  response.json({ registration: serializeRegistration(registration) });
+}));
+
+registrationsRouter.get('/api/admin/events/:eventId/registrations', asyncHandler(async (request, response) => {
+  await requireCapability(request, Capability.REGISTRATION_REVIEW);
+  const eventId = requireParamId(request.params.eventId, 'event id');
+  const registrations = await listAdminRegistrations(eventId);
+  response.json({ registrations: registrations.map(serializeRegistration) });
+}));
+
+registrationsRouter.patch('/api/admin/events/:eventId/registration-roster-publication', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.EVENT_PUBLISH);
+  if (typeof request.body.published !== 'boolean') jsonError('Published must be a boolean.');
+  const event = await updateRegistrationRosterPublication({
+    eventId: requireParamId(request.params.eventId, 'event id'),
+    actorId: admin.id,
+    published: request.body.published === true,
+    expectedVersion: Number(request.body.expectedVersion),
+    commandId: requireCommandId(request.body.commandId),
+  });
+  response.json({ event: serializeEvent(event) });
+}));
+
+registrationsRouter.get('/api/public/events/:eventId/registered-teams', asyncHandler(async (request, response) => {
+  const registrations = await listPublicRegistrationRoster(requireParamId(request.params.eventId, 'event id'));
+  response.json({ teams: registrations.map(serializePublicRegistrationTeam) });
+}));
+
+registrationsRouter.patch('/api/admin/events/:eventId/registrations/:id/status', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.REGISTRATION_REVIEW);
+  const status = cleanString(request.body.status).toUpperCase();
+  if (!isRegistrationStatus(status)) jsonError('Invalid registration status.');
+  const registration = await updateRegistrationStatus(
+    requireParamId(request.params.id),
+    status,
+    cleanString(request.body.publicReason),
+    admin.id,
+    {
+      eventId: requireParamId(request.params.eventId, 'event id'),
+      internalNote: cleanString(request.body.internalNote),
+      expectedVersion: Number(request.body.expectedVersion),
+      commandId: requireCommandId(request.body.commandId),
+    },
+  );
   response.json({ registration: serializeRegistration(registration) });
 }));

@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { requireAdmin } from '../auth/auth.service.js';
+import { Capability } from '../../generated/prisma/client.js';
+import { requireCapability } from '../../common/capabilities.js';
 import {
   asyncHandler,
   cleanString,
@@ -22,7 +23,7 @@ categoriesRouter.get('/api/categories', asyncHandler(async (_request, response) 
 }));
 
 categoriesRouter.post('/api/categories', asyncHandler(async (request, response) => {
-  const admin = await requireAdmin(request);
+  const admin = await requireCapability(request, Capability.CATEGORY_MANAGE);
   const name = cleanString(request.body.name);
   const description = cleanString(request.body.description);
 
@@ -33,7 +34,7 @@ categoriesRouter.post('/api/categories', asyncHandler(async (request, response) 
 }));
 
 categoriesRouter.patch('/api/categories/:id', asyncHandler(async (request, response) => {
-  await requireAdmin(request);
+  await requireCapability(request, Capability.CATEGORY_MANAGE);
   const name = cleanString(request.body.name);
   const description = cleanString(request.body.description);
 
@@ -44,7 +45,7 @@ categoriesRouter.patch('/api/categories/:id', asyncHandler(async (request, respo
 }));
 
 categoriesRouter.delete('/api/categories/:id', asyncHandler(async (request, response) => {
-  await requireAdmin(request);
+  await requireCapability(request, Capability.CATEGORY_MANAGE);
   await deleteCategory(requireParamId(request.params.id));
   response.json({ ok: true });
 }));

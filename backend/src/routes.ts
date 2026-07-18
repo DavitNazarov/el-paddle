@@ -7,6 +7,12 @@ import { eventsRouter } from './modules/events/events.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { registrationsRouter } from './modules/registrations/registrations.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
+import { notificationsRouter } from './modules/notifications/notifications.routes.js';
+import { opponentRequestsRouter } from './modules/opponent-requests/opponent-requests.routes.js';
+import { bracketsRouter } from './modules/brackets/brackets.routes.js';
+import { schedulingRouter } from './modules/scheduling/scheduling.routes.js';
+import { matchesRouter } from './modules/matches/matches.routes.js';
+import { operationsRouter } from './modules/operations/operations.routes.js';
 
 export const router = Router();
 
@@ -18,3 +24,9 @@ router.use(dashboardRouter);
 router.use(registrationsRouter);
 router.use(clubsRouter);
 router.use(usersRouter);
+router.use(notificationsRouter);
+router.use(opponentRequestsRouter);
+router.use(bracketsRouter);
+router.use(schedulingRouter);
+router.use(matchesRouter);
+router.use(operationsRouter);

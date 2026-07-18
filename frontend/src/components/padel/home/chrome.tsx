@@ -6,6 +6,8 @@ import {
   useState,
 } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   AnimatePresence,
   motion,
@@ -33,10 +35,9 @@ import {
   SheetContent,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { navItems, navSectionIds } from './constants';
+import { navItems } from './constants';
 import { useCoarsePointer } from './device';
 import { Magnetic } from './motion';
-import { useActiveSection } from './scroll';
 
 export function useSessionUser() {
   const [user, setUser] = useState<PublicUser | null>(null);
@@ -239,7 +240,7 @@ export function MobileMenu({
 
         <nav aria-label={a11y.mobileNavigation} className="mt-4 flex flex-1 flex-col justify-center gap-1">
           {navItems.map((item, index) => (
-            <a
+            <Link
               key={item.href}
               href={item.href}
               onClick={onClose}
@@ -249,7 +250,7 @@ export function MobileMenu({
                 {`0${index + 1}`}
               </span>
               {nav[item.key]}
-            </a>
+            </Link>
           ))}
         </nav>
 
@@ -259,10 +260,10 @@ export function MobileMenu({
           size="lg"
           className="btn-premium mt-6 min-h-12 w-full rounded-full text-base"
         >
-          <a href={entryHref} onClick={onClose}>
+          <Link href={entryHref} onClick={onClose}>
             {entryLabel}
             <ArrowRight className="h-5 w-5" />
-          </a>
+          </Link>
         </Button>
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--padel-line)] pt-4 text-sm font-medium text-[var(--padel-muted)]">
@@ -292,13 +293,13 @@ export function MobileMenu({
 
 export function PadelNav() {
   const { scrollY } = useScroll();
+  const pathname = usePathname();
   const { dictionary } = useI18n();
   const user = useSessionUser();
   const nav = dictionary.home.nav;
   const a11y = dictionary.home.a11y;
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const active = useActiveSection(navSectionIds);
   const entryHref = authEntryHref(user);
   const entryLabel = user ? dictionary.common.dashboard : dictionary.common.register;
 
@@ -321,8 +322,8 @@ export function PadelNav() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
         className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 rounded-full border border-[var(--padel-line)] px-3 text-[var(--padel-ivory)] md:h-16 md:px-4 nav-shell"
       >
-        <a
-          href="#top"
+        <Link
+          href="/"
           aria-label={dictionary.home.hero.ariaHome}
           className="flex min-h-11 items-center gap-2.5 rounded-full pl-1 pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
         >
@@ -337,13 +338,13 @@ export function PadelNav() {
           <span className="gold-ink font-display hidden text-[0.82rem] font-semibold uppercase tracking-[0.34em] sm:inline">
             El Padel
           </span>
-        </a>
+        </Link>
 
         <nav aria-label={a11y.primaryNavigation} className="hidden items-center gap-1 xl:flex">
           {navItems.map((item) => {
-            const isActive = active === item.href.slice(1);
+            const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
             return (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 aria-current={isActive ? 'true' : undefined}
@@ -365,7 +366,7 @@ export function PadelNav() {
                     transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                   />
                 ) : null}
-              </a>
+              </Link>
             );
           })}
         </nav>
@@ -378,10 +379,10 @@ export function PadelNav() {
               variant="gold"
               className="btn-premium group hidden min-h-11 rounded-full px-4 sm:inline-flex md:px-5"
             >
-              <a href={entryHref}>
+              <Link href={entryHref}>
                 {entryLabel}
                 <ArrowRight className="transition-transform duration-200 group-hover:translate-x-0.5" />
-              </a>
+              </Link>
             </Button>
           </Magnetic>
 
@@ -405,7 +406,7 @@ export function PadelNav() {
 }
 
 export function SiteFooter() {
-  const { dictionary } = useI18n();
+  const { dictionary, locale } = useI18n();
   const nav = dictionary.home.nav;
   const footer = dictionary.home.footer;
   const year = new Date().getFullYear();
@@ -424,13 +425,13 @@ export function SiteFooter() {
               className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-[var(--padel-muted)]"
             >
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.href}
                   href={item.href}
                   className="footer-link transition-colors duration-200 hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"
                 >
                   {nav[item.key]}
-                </a>
+                </Link>
               ))}
             </nav>
             <Magnetic strength={0.3}>
@@ -449,6 +450,12 @@ export function SiteFooter() {
           <span>© {year} El Padel Tournament Tbilisi</span>
           <span className="hidden md:inline">{footer.motto}</span>
           <div className="flex items-center gap-5">
+            <nav aria-label={locale === 'ka' ? 'იურიდიული დოკუმენტები' : 'Legal documents'} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Link href="/legal/privacy" className="footer-link hover:text-[var(--padel-gold)]">{locale === 'ka' ? 'კონფიდენციალურობა' : 'Privacy'}</Link>
+              <Link href="/legal/terms" className="footer-link hover:text-[var(--padel-gold)]">{locale === 'ka' ? 'პირობები' : 'Terms'}</Link>
+              <Link href="/legal/refunds" className="footer-link hover:text-[var(--padel-gold)]">{locale === 'ka' ? 'დაბრუნება' : 'Refunds'}</Link>
+              <Link href="/legal/cookies" className="footer-link hover:text-[var(--padel-gold)]">Cookie</Link>
+            </nav>
             <a
               href="https://www.instagram.com/elpadell/"
               className="footer-social inline-flex items-center gap-2 transition-colors duration-200 hover:text-[var(--padel-gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"

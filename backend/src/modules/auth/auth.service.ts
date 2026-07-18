@@ -4,9 +4,11 @@ import { UserRole, UserStatus, type User } from '../../generated/prisma/client.j
 import { config } from '../../config/env.js';
 import { ApiError } from '../../common/http.js';
 import { prisma } from '../../database/prisma.js';
+import { getPlayerStats } from '../users/player-stats.js';
 
 export const SESSION_COOKIE = 'elpadel_session';
 export const OAUTH_STATE_COOKIE = 'elpadel_oauth_state';
+export const OAUTH_LEGAL_COOKIE = 'elpadel_oauth_legal';
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export type PublicUser = {
@@ -80,6 +82,7 @@ export function roleForEmail(
   // Never elevate (or keep ADMIN_EMAILS elevation) until the address is proven.
   if (options?.emailVerified === false) return UserRole.USER;
   if (currentRole === UserRole.ADMIN) return UserRole.ADMIN;
+  if (currentRole === UserRole.JUDGE) return UserRole.JUDGE;
   return adminEmails().has(email.trim().toLowerCase())
     ? UserRole.ADMIN
     : UserRole.USER;
@@ -96,7 +99,7 @@ export function toPublicUser(user: UserWithOptionalClub): PublicUser {
       : null;
   const club = user.clubMemberships?.[0]?.club ?? null;
   const stats =
-    role === UserRole.ADMIN
+    role === UserRole.ADMIN || role === UserRole.JUDGE
       ? { matchesPlayed: 0, wins: 0, losses: 0 }
       : {
           matchesPlayed: user.matchesPlayed,
@@ -117,7 +120,7 @@ export function toPublicUser(user: UserWithOptionalClub): PublicUser {
     disqualifiedUntil,
     disqualificationReason: disqualifiedUntil ? (user.disqualificationReason ?? '') : '',
     isDisqualified: Boolean(disqualifiedUntil),
-    club: role === UserRole.ADMIN ? null : club,
+    club: role === UserRole.ADMIN || role === UserRole.JUDGE ? null : club,
     stats,
   };
 }
@@ -154,12 +157,23 @@ export function setOAuthStateCookie(response: Response, state: string) {
   });
 }
 
+export function setOAuthLegalCookie(response: Response) {
+  response.cookie(OAUTH_LEGAL_COOKIE, 'accepted', {
+    ...baseCookieOptions,
+    maxAge: 10 * 60 * 1000,
+  });
+}
+
 export function clearSessionCookie(response: Response) {
   response.clearCookie(SESSION_COOKIE, baseCookieOptions);
 }
 
 export function clearOAuthStateCookie(response: Response) {
   response.clearCookie(OAUTH_STATE_COOKIE, baseCookieOptions);
+}
+
+export function clearOAuthLegalCookie(response: Response) {
+  response.clearCookie(OAUTH_LEGAL_COOKIE, baseCookieOptions);
 }
 
 /** Bump sessionVersion so any outstanding JWTs for this user stop working. */
@@ -199,6 +213,7 @@ export async function getCurrentUser(request: Request) {
     },
   });
   if (!user) return null;
+  if (user.status === UserStatus.INACTIVE) return null;
 
   const tokenVersion = typeof payload.sv === 'number' ? payload.sv : 0;
   if (tokenVersion !== (user.sessionVersion ?? 0)) {
@@ -230,7 +245,13 @@ export async function getCurrentUser(request: Request) {
     await removeAdminAthleteLinks(current.id);
   }
 
-  return toPublicUser(current);
+  const publicUser = toPublicUser(current);
+  if (publicUser.role === UserRole.USER) {
+    const stats = await getPlayerStats([publicUser.id]);
+    publicUser.stats = stats.get(publicUser.id) ?? { matchesPlayed: 0, wins: 0, losses: 0 };
+  }
+
+  return publicUser;
 }
 
 export async function requireUser(request: Request) {

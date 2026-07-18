@@ -13,6 +13,14 @@ export async function compareSecret(secret: string, hash: string) {
   return bcrypt.compare(secret, hash);
 }
 
+export function passwordValidationError(password: string) {
+  if (password.length < 12) return 'Password must be at least 12 characters.';
+  if (Buffer.byteLength(password, 'utf8') > 72) {
+    return 'Password must be 72 bytes or fewer.';
+  }
+  return '';
+}
+
 export function createInviteToken() {
   return crypto.randomBytes(32).toString('hex');
 }

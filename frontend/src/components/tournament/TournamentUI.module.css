@@ -1,0 +1,406 @@
+.panel {
+  overflow: hidden;
+  border: 1px solid rgba(213, 201, 177, 0.13);
+  border-radius: 0.75rem;
+  background: rgba(213, 201, 177, 0.025);
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(213, 201, 177, 0.1);
+}
+
+.sectionTitle,
+.emptyTitle {
+  margin: 0;
+  color: var(--padel-ivory);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.sectionDescription,
+.emptyDetail {
+  max-width: 42rem;
+  margin: 0.25rem 0 0;
+  color: rgba(213, 201, 177, 0.58);
+  font-size: 0.8rem;
+  line-height: 1.35rem;
+}
+
+.sectionActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.statusLabel {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.55rem;
+  border: 1px solid rgba(213, 201, 177, 0.16);
+  border-radius: 999px;
+  color: rgba(246, 239, 225, 0.82);
+  font-size: 0.65rem;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.statusLabel svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.keyValueGrid {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid rgba(213, 201, 177, 0.1);
+  border-radius: 0.75rem;
+  background: rgba(213, 201, 177, 0.1);
+}
+
+.keyValueItem {
+  min-width: 0;
+  padding: 0.8rem 1rem;
+  background: var(--padel-ink);
+}
+
+.keyValueLabel {
+  color: rgba(213, 201, 177, 0.5);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.keyValueValue {
+  margin-top: 0.3rem;
+  overflow-wrap: anywhere;
+  color: var(--padel-ivory);
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+}
+
+.emptyState {
+  padding: 2.25rem 1.25rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(213, 201, 177, 0.12);
+  border-radius: 0.65rem;
+  color: rgba(213, 201, 177, 0.5);
+}
+
+.emptyIcon svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.emptyDetail {
+  margin-inline: auto;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(213, 201, 177, 0.15);
+  border-radius: 0.65rem;
+  color: rgba(246, 239, 225, 0.82);
+  font-size: 0.8rem;
+  line-height: 1.35rem;
+}
+
+.commandButton {
+  min-height: 2.75rem;
+  border-color: rgba(213, 201, 177, 0.2);
+  background: transparent;
+  color: var(--padel-ivory);
+}
+
+.commandButton:hover:not(:disabled) {
+  background: rgba(213, 201, 177, 0.08);
+  color: var(--padel-ivory);
+}
+
+.backLink {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.4rem;
+  color: rgba(246, 239, 225, 0.75);
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-underline-offset: 4px;
+}
+
+.backLink:hover {
+  color: var(--padel-ivory);
+  text-decoration: underline;
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--padel-focus-ring);
+  outline-offset: 2px;
+}
+
+.dataList {
+  max-width: 100%;
+}
+
+.dataList table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.8rem;
+}
+
+.dataList th {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(213, 201, 177, 0.12);
+  color: rgba(213, 201, 177, 0.55);
+  font-size: 0.65rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.dataList td {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(213, 201, 177, 0.08);
+  color: rgba(246, 239, 225, 0.82);
+  vertical-align: top;
+}
+
+.dataList tr:last-child td {
+  border-bottom: 0;
+}
+
+:global(.dash-app) .panel {
+  border-color: var(--dash-border);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 3px rgba(25, 50, 77, 0.04), 0 10px 30px rgba(25, 50, 77, 0.02);
+}
+
+:global(.dash-app) .sectionHeader {
+  border-color: var(--dash-border);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+:global(.dash-app) .sectionTitle,
+:global(.dash-app) .emptyTitle {
+  color: var(--dash-text);
+}
+
+:global(.dash-app) .sectionDescription,
+:global(.dash-app) .emptyDetail {
+  color: var(--dash-muted);
+}
+
+:global(.dash-app) .statusLabel {
+  border-color: var(--dash-border);
+  background: #f7f9fc;
+  color: var(--dash-muted);
+}
+
+:global(.dash-app) .statusLabel[data-tone='success'] {
+  border-color: rgba(22, 128, 106, 0.25);
+  background: var(--dash-teal-soft);
+  color: var(--dash-teal);
+}
+
+:global(.dash-app) .statusLabel[data-tone='info'] {
+  border-color: rgba(47, 111, 237, 0.25);
+  background: var(--dash-sky-soft);
+  color: var(--dash-sky);
+}
+
+:global(.dash-app) .statusLabel[data-tone='danger'] {
+  border-color: rgba(194, 65, 59, 0.25);
+  background: var(--dash-coral-soft);
+  color: var(--dash-coral);
+}
+
+:global(.dash-app) .keyValueGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-color: var(--dash-border);
+  background: var(--dash-border);
+}
+
+:global(.dash-app) .keyValueItem {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+:global(.dash-app) .keyValueLabel {
+  color: var(--dash-faint);
+}
+
+:global(.dash-app) .keyValueValue {
+  color: var(--dash-text);
+}
+
+:global(.dash-app) .emptyIcon {
+  border-color: rgba(47, 111, 237, 0.16);
+  background: var(--dash-sky-soft);
+  color: var(--dash-sky);
+}
+
+:global(.dash-app) .notice {
+  border-color: rgba(47, 111, 237, 0.22);
+  background: var(--dash-sky-soft);
+  color: var(--dash-text);
+}
+
+:global(.dash-app) .notice[data-kind='error'] {
+  border-color: rgba(194, 65, 59, 0.24);
+  background: var(--dash-coral-soft);
+}
+
+:global(.dash-app) .notice[data-kind='success'] {
+  border-color: rgba(22, 128, 106, 0.24);
+  background: var(--dash-teal-soft);
+}
+
+:global(.dash-app) .commandButton {
+  border-color: var(--dash-border);
+  background: transparent;
+  color: var(--dash-text);
+}
+
+:global(.dash-app) .commandButton:hover:not(:disabled) {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-sky-soft);
+  color: var(--dash-text);
+}
+
+:global(.dash-app) .commandButton[data-tone='primary'] {
+  border-color: var(--dash-sky);
+  background: var(--dash-sky);
+  color: #fff;
+}
+
+:global(.dash-app) .commandButton[data-tone='primary']:hover:not(:disabled) {
+  border-color: #245f9b;
+  background: #245f9b;
+  color: #fff;
+}
+
+:global(.dash-app) .commandButton[data-tone='danger'] {
+  border-color: rgba(194, 65, 59, 0.3);
+  background: var(--dash-coral-soft);
+  color: var(--dash-coral);
+}
+
+:global(.dash-app) .backLink {
+  color: var(--dash-muted);
+}
+
+:global(.dash-app) .backLink:hover {
+  color: var(--dash-text);
+}
+
+:global(.dash-app) .dataList th {
+  border-color: var(--dash-border);
+  background: #f8fafc;
+  color: var(--dash-faint);
+}
+
+:global(.dash-app) .dataList td {
+  border-color: var(--dash-border);
+  color: var(--dash-text);
+}
+
+@media (min-width: 40rem) {
+  .sectionHeader {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .keyValueGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .keyValueGrid,
+  :global(.dash-app) .keyValueGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .dataList table,
+  .dataList thead,
+  .dataList tbody,
+  .dataList tr,
+  .dataList td {
+    display: block;
+    width: 100%;
+  }
+
+  .dataList thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .dataList tbody {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .dataList tr {
+    overflow: hidden;
+    border: 1px solid rgba(213, 201, 177, 0.12);
+    border-radius: 0.65rem;
+  }
+
+  .dataList td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 0.75fr) minmax(0, 1.25fr);
+    gap: 0.75rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .dataList td::before {
+    color: rgba(213, 201, 177, 0.5);
+    content: attr(data-label);
+    font-size: 0.6rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  :global(.dash-app) .dataList tr {
+    border-color: var(--dash-border);
+    background: #fff;
+  }
+
+  :global(.dash-app) .dataList td::before {
+    color: var(--dash-faint);
+  }
+}

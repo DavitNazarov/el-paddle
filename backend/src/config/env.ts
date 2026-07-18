@@ -19,7 +19,7 @@ function loadEnvFile(filePath: string) {
   for (const [key, value] of Object.entries(parsed)) {
     if (typeof value !== 'string') continue;
     if (value.trim() === '') continue;
-    process.env[key] = value;
+    process.env[key] ??= value;
   }
 }
 
@@ -61,31 +61,60 @@ function requireDatabaseUrl() {
   if (!url) {
     throw new Error('DATABASE_URL is required.');
   }
+  if (isProduction && /postgres(?:ql)?:\/\/[^:]+:[^@]*(password|changeme|change-me|example)[^@]*@/i.test(url)) {
+    throw new Error('DATABASE_URL contains a placeholder password.');
+  }
   return url;
 }
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-if (isProduction && !process.env.RESEND_API_KEY?.trim()) {
-  console.warn(
-    '[config] RESEND_API_KEY is empty in production. Auth emails will fail until it is set.',
-  );
+function requireHttpsUrl(name: string, value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid URL.`);
+  }
+  if (isProduction && url.protocol !== 'https:') {
+    throw new Error(`${name} must use https:// in production.`);
+  }
+  return url.toString().replace(/\/$/, '');
 }
+
+function optionalStrongSecret(name: string, value: string) {
+  if (!value) return '';
+  if (value.length < 32) throw new Error(`${name} must be at least 32 characters when set.`);
+  return value;
+}
+
+if (isProduction && !process.env.RESEND_API_KEY?.trim()) {
+  throw new Error('RESEND_API_KEY is required in production so account emails fail closed at startup.');
+}
+
+const configuredPort = numberEnv('PORT', 4000);
+const configuredFrontendUrl =
+  process.env.FRONTEND_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+const configuredBackendUrl = process.env.BACKEND_URL ?? `http://localhost:${configuredPort}`;
+const configuredGoogleRedirectUri =
+  process.env.GOOGLE_REDIRECT_URI ??
+  `${requireHttpsUrl('BACKEND_URL', configuredBackendUrl)}/api/auth/google/callback`;
 
 export const config = {
   isProduction,
-  port: numberEnv('PORT', 4000),
-  frontendUrl: process.env.FRONTEND_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
-  backendUrl: process.env.BACKEND_URL ?? `http://localhost:${numberEnv('PORT', 4000)}`,
+  port: configuredPort,
+  frontendUrl: requireHttpsUrl('FRONTEND_URL', configuredFrontendUrl),
+  backendUrl: requireHttpsUrl('BACKEND_URL', configuredBackendUrl),
   databaseUrl: requireDatabaseUrl(),
   jwtSecret: requireJwtSecret(),
   adminEmails: process.env.ADMIN_EMAILS ?? '',
-  firstAdminBootstrapToken: process.env.FIRST_ADMIN_BOOTSTRAP_TOKEN ?? '',
+  firstAdminBootstrapToken: optionalStrongSecret(
+    'FIRST_ADMIN_BOOTSTRAP_TOKEN',
+    process.env.FIRST_ADMIN_BOOTSTRAP_TOKEN ?? '',
+  ),
   resendApiKey: process.env.RESEND_API_KEY?.trim() || '',
   resendFromEmail: process.env.RESEND_FROM_EMAIL ?? 'El Padel <onboarding@resend.dev>',
   googleClientId: process.env.GOOGLE_CLIENT_ID,
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  googleRedirectUri:
-    process.env.GOOGLE_REDIRECT_URI ??
-    `${process.env.BACKEND_URL ?? `http://localhost:${numberEnv('PORT', 4000)}`}/api/auth/google/callback`,
+  googleRedirectUri: requireHttpsUrl('GOOGLE_REDIRECT_URI', configuredGoogleRedirectUri),
 };

@@ -3,5 +3,6 @@ export {
   apiConnectionErrorMessage,
   apiFetch,
   apiUrl,
+  createCommandId,
   readApiJson,
 } from './client';

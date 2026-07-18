@@ -6,14 +6,19 @@ import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Building2,
+  CalendarClock,
   CalendarDays,
   ClipboardList,
+  GitBranch,
+  Handshake,
   Home,
   LayoutDashboard,
   LogOut,
   Settings,
   Tags,
+  Trophy,
   Users,
+  Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -40,22 +45,50 @@ type NavItem = {
   badge?: number;
 };
 
+function getEventId(pathname: string) {
+  return pathname.match(/^\/admin\/events\/([^/]+)/)?.[1];
+}
+
+function isNavItemActive(pathname: string, href: string) {
+  if (href === '/admin') return pathname === href;
+  if (href === '/admin/events') return pathname === href;
+  if (/^\/admin\/events\/[^/]+$/.test(href)) return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function AdminShell({ title, description, eyebrow, children }: AdminShellProps) {
   const pathname = usePathname();
   const { dictionary, t } = useI18n();
   const nav = dictionary.dashboard.admin.nav;
   const { counts } = useAdminCounts();
   const { logout } = useLogout();
+  const eventId = getEventId(pathname);
 
   const items: NavItem[] = [
     { href: '/admin', label: nav.overview, icon: LayoutDashboard },
     { href: '/admin/categories', label: nav.categories, icon: Tags, badge: counts.categories || undefined },
     { href: '/admin/events', label: nav.events, icon: CalendarDays, badge: counts.drafts || undefined },
     { href: '/admin/registrations', label: nav.registrations, icon: ClipboardList, badge: counts.pending || undefined },
+    { href: '/admin/brackets', label: nav.brackets, icon: GitBranch },
+    { href: '/admin/opponent-requests', label: nav.opponentRequests, icon: Handshake },
+    { href: '/admin/schedule', label: nav.schedule, icon: CalendarClock },
     { href: '/admin/clubs', label: nav.clubs, icon: Building2 },
     { href: '/admin/users', label: nav.users, icon: Users },
+    { href: '/notifications', label: nav.notifications, icon: Bell },
     { href: '/admin/settings', label: nav.settings, icon: Settings },
   ];
+
+  const eventItems: NavItem[] = eventId
+    ? [
+        { href: `/admin/events/${eventId}`, label: nav.eventWorkspace, icon: Trophy },
+        { href: `/admin/events/${eventId}/registrations`, label: nav.eventRegistrations, icon: ClipboardList },
+        { href: `/admin/events/${eventId}/opponent-requests`, label: nav.opponentRequests, icon: Handshake },
+        { href: `/admin/events/${eventId}/bracket`, label: nav.bracket, icon: GitBranch },
+        { href: `/admin/events/${eventId}/schedule`, label: nav.schedule, icon: CalendarClock },
+      ]
+    : [];
+
+  const mobileItems = eventItems.length ? [...eventItems, ...items] : items;
 
   return (
     <DashboardShell
@@ -72,9 +105,27 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
               icon={item.icon}
               label={item.label}
               badge={item.badge}
-              active={item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)}
+              active={isNavItemActive(pathname, item.href)}
             />
           ))}
+          {eventItems.length ? (
+            <div className="mt-4 border-t border-[rgba(213,201,177,0.1)] pt-3">
+              <p className="dash-sidebar-label mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(213,201,177,0.42)]">
+                {nav.eventTools}
+              </p>
+              <div className="grid gap-0.5">
+                {eventItems.map((item) => (
+                  <SidebarLink
+                    key={item.href}
+                    href={item.href}
+                    icon={item.icon}
+                    label={item.label}
+                    active={isNavItemActive(pathname, item.href)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       }
       sidebarFooter={
@@ -95,8 +146,8 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
       }
       mobileNavigation={
         <nav className="dash-mobile-nav" aria-label={nav.mobile}>
-          {items.map((item) => {
-            const active = item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href);
+          {mobileItems.map((item) => {
+            const active = isNavItemActive(pathname, item.href);
             return (
               <Link
                 key={item.href}

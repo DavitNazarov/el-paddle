@@ -9,8 +9,16 @@ export const eventInclude = {
 export const registrationInclude = {
   event: true,
   category: true,
-  owner: true,
-  teammate: true,
+  owner: {
+    include: {
+      clubMemberships: { include: { club: true }, take: 1 },
+    },
+  },
+  teammate: {
+    include: {
+      clubMemberships: { include: { club: true }, take: 1 },
+    },
+  },
   reviewedBy: true,
 } as const;
 

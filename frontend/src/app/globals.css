@@ -91,6 +91,23 @@ body {
     BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* Tournament operations use a quiet neutral canvas so status and score data lead. */
+.tournament-app {
+  --padel-ink: #151515;
+  --padel-red: #151515;
+  --padel-red-2: #101010;
+  --padel-red-3: #101010;
+  min-height: 100dvh;
+  background: #151515;
+  color: var(--padel-ivory);
+}
+
+.tournament-app > header a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+}
+
 .logo-tint {
   filter: brightness(0) saturate(100%) invert(87%) sepia(13%) saturate(412%)
     hue-rotate(359deg) brightness(90%) contrast(87%);
@@ -250,6 +267,58 @@ p {
      the separate `translate` property; a `transform` keyframe stacks on top and
      snaps when the animation ends (modal "bounce"). */
   animation: dashboard-dialog-content-in 200ms var(--padel-ease-out);
+}
+
+.dashboard-dialog-scroll {
+  background: #f7f9fc;
+  scrollbar-color: rgba(96, 116, 139, 0.42) transparent;
+  scrollbar-gutter: stable;
+}
+
+.dashboard-dialog-content .dashboard-form-control {
+  border-color: #cbd7e4;
+  background: #ffffff;
+  color: #19324d;
+  box-shadow: 0 1px 2px rgba(15, 35, 58, 0.035);
+}
+
+.dashboard-dialog-content .dashboard-form-control::placeholder {
+  color: #8293a7;
+}
+
+.dashboard-dialog-content .dashboard-form-control:hover:not(:disabled) {
+  border-color: #aebfd1;
+}
+
+.dashboard-dialog-content .dashboard-form-control:focus-visible {
+  border-color: #2f6fed;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.14);
+}
+
+.dashboard-dialog-content select.dashboard-form-control,
+.dashboard-dialog-content select.dashboard-form-control option {
+  background-color: #ffffff;
+  color: #19324d;
+}
+
+.dashboard-dialog-content input[type='date'],
+.dashboard-dialog-content input[type='datetime-local'] {
+  color-scheme: light;
+}
+
+.dashboard-dialog-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dashboard-dialog-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-dialog-scroll::-webkit-scrollbar-thumb {
+  background: rgba(96, 116, 139, 0.32);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
 }
 
 @keyframes dashboard-dialog-overlay-in {

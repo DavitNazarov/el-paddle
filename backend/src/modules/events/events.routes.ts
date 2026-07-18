@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { UserRole } from '../../generated/prisma/client.js';
-import { getCurrentUser, requireAdmin } from '../auth/auth.service.js';
+import { Capability, EventStatus, UserRole } from '../../generated/prisma/client.js';
+import { getCurrentUser } from '../auth/auth.service.js';
 import { parseOptionalDateTime } from '../../common/dates.js';
 import {
   asyncHandler,
@@ -12,11 +12,17 @@ import {
 } from '../../common/http.js';
 import { serializeEvent } from '../../common/serializers.js';
 import {
+  changeEventStatus,
   createEvent,
+  deleteEvent,
+  getEventById,
   listEvents,
   listPublicEvents,
   updateEvent,
+  updateTournamentPublication,
 } from './events.service.js';
+import { requireCapability, userHasCapability } from '../../common/capabilities.js';
+import { requireCommandId } from '../../common/commands.js';
 
 export const eventsRouter = Router();
 
@@ -106,8 +112,25 @@ eventsRouter.get('/api/events', asyncHandler(async (request, response) => {
   response.json({ events: events.map(serializeEvent) });
 }));
 
+eventsRouter.patch('/api/admin/events/:id/tournament-publication', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.EVENT_PUBLISH);
+  const event = await updateTournamentPublication({ eventId: requireParamId(request.params.id), actorId: admin.id, publicLiveScoringEnabled: typeof request.body.publicLiveScoringEnabled === 'boolean' ? request.body.publicLiveScoringEnabled : undefined, resultsPublished: typeof request.body.resultsPublished === 'boolean' ? request.body.resultsPublished : undefined, expectedVersion: Number(request.body.expectedVersion) });
+  response.json({ event: serializeEvent(event) });
+}));
+
+eventsRouter.get('/api/events/:id', asyncHandler(async (request, response) => {
+  const user = await getCurrentUser(request);
+  const event = await getEventById(requireParamId(request.params.id), user?.role === UserRole.ADMIN);
+  response.json({ event: serializeEvent(event) });
+}));
+
+eventsRouter.get('/api/public/events/:id', asyncHandler(async (request, response) => {
+  const event = await getEventById(requireParamId(request.params.id), false);
+  response.json({ event: serializeEvent(event) });
+}));
+
 eventsRouter.post('/api/events', asyncHandler(async (request, response) => {
-  const admin = await requireAdmin(request);
+  const admin = await requireCapability(request, Capability.EVENT_MANAGE);
   const details = parseEventDetails(request.body, { requireAll: true });
 
   const event = await createEvent({
@@ -127,7 +150,7 @@ eventsRouter.post('/api/events', asyncHandler(async (request, response) => {
 }));
 
 eventsRouter.patch('/api/events/:id', asyncHandler(async (request, response) => {
-  await requireAdmin(request);
+  await requireCapability(request, Capability.EVENT_MANAGE);
 
   const details = parseEventDetails(request.body, { requireAll: false });
   const data: Parameters<typeof updateEvent>[1] = {};
@@ -151,6 +174,28 @@ eventsRouter.patch('/api/events/:id', asyncHandler(async (request, response) => 
   }
 
   const event = await updateEvent(requireParamId(request.params.id), data);
+  response.json({ event: serializeEvent(event) });
+}));
+
+eventsRouter.delete('/api/events/:id', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.EVENT_MANAGE);
+  await deleteEvent(requireParamId(request.params.id), admin.id);
+  response.json({ ok: true });
+}));
+
+eventsRouter.patch('/api/admin/events/:id/status', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.EVENT_STATUS_MANAGE);
+  const status = cleanString(request.body.status).toUpperCase() as EventStatus;
+  if (!Object.values(EventStatus).includes(status)) jsonError('Invalid event status.');
+  const event = await changeEventStatus({
+    eventId: requireParamId(request.params.id),
+    status,
+    actorId: admin.id,
+    canRollbackCompleted: await userHasCapability(admin.id, admin.role, Capability.EVENT_STATE_CORRECT),
+    reason: cleanString(request.body.reason) || undefined,
+    expectedVersion: Number(request.body.expectedVersion),
+    commandId: requireCommandId(request.body.commandId),
+  });
   response.json({ event: serializeEvent(event) });
 }));
 

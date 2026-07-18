@@ -11,6 +11,7 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login?next=/dashboard');
   if (user.role === 'ADMIN') redirect('/admin');
+  if (user.role === 'JUDGE') redirect('/judge');
   if (!user.club) redirect('/complete-club');
 
   return <PlayerOverviewClient initialUser={user} />;

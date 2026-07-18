@@ -15,6 +15,12 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
+if (process.env.NODE_ENV === 'production' || process.env.ALLOW_DEVELOPMENT_SEED !== 'true') {
+  throw new Error(
+    'Refusing to run mock seed data. Set ALLOW_DEVELOPMENT_SEED=true outside production for local/demo databases.',
+  );
+}
+
 const seedPassword = 'Password123!';
 
 function hashToken(token: string) {
@@ -34,18 +40,12 @@ async function upsertUser({
   surname,
   role = UserRole.USER,
   status = UserStatus.ACTIVE,
-  matchesPlayed = 0,
-  wins = 0,
-  losses = 0,
 }: {
   email: string;
   name?: string;
   surname?: string;
   role?: UserRole;
   status?: UserStatus;
-  matchesPlayed?: number;
-  wins?: number;
-  losses?: number;
 }) {
   const passwordHash =
     status === UserStatus.INVITED ? null : await bcrypt.hash(seedPassword, 12);
@@ -59,9 +59,9 @@ async function upsertUser({
       status,
       passwordHash,
       emailVerifiedAt: status === UserStatus.ACTIVE ? new Date() : null,
-      matchesPlayed,
-      wins,
-      losses,
+      matchesPlayed: 0,
+      wins: 0,
+      losses: 0,
     },
     create: {
       email,
@@ -71,9 +71,9 @@ async function upsertUser({
       status,
       passwordHash,
       emailVerifiedAt: status === UserStatus.ACTIVE ? new Date() : null,
-      matchesPlayed,
-      wins,
-      losses,
+      matchesPlayed: 0,
+      wins: 0,
+      losses: 0,
     },
   });
 }
@@ -174,41 +174,26 @@ async function main() {
     email: 'nika.beridze@example.com',
     name: 'Nika',
     surname: 'Beridze',
-    matchesPlayed: 12,
-    wins: 8,
-    losses: 4,
   });
   const mariam = await upsertUser({
     email: 'mariam.lomidze@example.com',
     name: 'Mariam',
     surname: 'Lomidze',
-    matchesPlayed: 15,
-    wins: 10,
-    losses: 5,
   });
   const dato = await upsertUser({
     email: 'dato.kapanadze@example.com',
     name: 'Dato',
     surname: 'Kapanadze',
-    matchesPlayed: 9,
-    wins: 5,
-    losses: 4,
   });
   const salome = await upsertUser({
     email: 'salome.gelashvili@example.com',
     name: 'Salome',
     surname: 'Gelashvili',
-    matchesPlayed: 21,
-    wins: 14,
-    losses: 7,
   });
   const giorgi = await upsertUser({
     email: 'giorgi.tskitishvili@example.com',
     name: 'Giorgi',
     surname: 'Tskitishvili',
-    matchesPlayed: 7,
-    wins: 3,
-    losses: 4,
   });
   const lukaInvited = await upsertUser({
     email: 'luka.invited@example.com',

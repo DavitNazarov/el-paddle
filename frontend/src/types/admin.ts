@@ -18,18 +18,27 @@ export type EventDto = {
   bankAccountIban: string;
   bankAccountReceiver: string;
   isPublished: boolean;
+  status: 'REGISTRATION_OPEN' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
+  version: number;
+  timeZone: string;
+  registrationRosterPublishedAt: string | null;
+  schedulePublishedAt: string | null;
+  publicLiveScoringEnabled: boolean;
+  resultsPublishedAt: string | null;
   categories: CategoryDto[];
 };
 
 export type RegistrationDto = {
   id: string;
-  event: { title: string; date: string };
+  event: { id: string; title: string; date: string; location: string };
   category: CategoryDto;
   owner: PublicUser;
   teammate: PublicUser;
   ownerPhone: string;
   teammatePhone: string;
-  status: 'PENDING' | 'APPROVED' | 'DECLINED';
+  status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'NEEDS_CHANGES' | 'WAITLISTED' | 'WITHDRAWN' | 'CANCELLED';
+  version: number;
+  publicStatusReason: string;
   declineReason: string;
 };
 

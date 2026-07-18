@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Ban, Plus, Shield, Trash2, UserRound, Users } from 'lucide-react';
+import { Ban, Plus, Search, Shield, Trash2, Undo2, UserRound, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,6 @@ import {
   SurfaceCard,
   formControlClassName,
 } from '@/components/shared/dashboard/DashboardUI';
-import { Reveal } from '@/components/padel/home/motion';
 import { apiFetch } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
@@ -42,6 +41,7 @@ export function AdminUsersClient() {
   const [users, setUsers] = useState<AdminUserDto[]>([]);
   const [currentUserId, setCurrentUserId] = useState('');
   const [filter, setFilter] = useState<UserRoleFilter>('ALL');
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleting, setDeleting] = useState<AdminUserDto | null>(null);
@@ -83,9 +83,17 @@ export function AdminUsersClient() {
   );
 
   const visible = useMemo(() => {
-    if (filter === 'ALL') return users;
-    return users.filter((user) => user.role === filter);
-  }, [filter, users]);
+    const normalizedSearch = search.trim().toLocaleLowerCase();
+    return users.filter((user) => {
+      const matchesRole = filter === 'ALL' || user.role === filter;
+      const matchesSearch =
+        !normalizedSearch ||
+        [user.fullName, user.email, user.club?.name, user.role, user.status, user.isDisqualified ? 'disqualified' : '']
+          .filter(Boolean)
+          .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch));
+      return matchesRole && matchesSearch;
+    });
+  }, [filter, search, users]);
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -169,7 +177,7 @@ export function AdminUsersClient() {
   }
 
   function roleLabel(role: UserRole) {
-    return role === 'ADMIN' ? copy.roleAdmin : copy.rolePlayer;
+    return role === 'ADMIN' ? copy.roleAdmin : role === 'JUDGE' ? 'Judge' : copy.rolePlayer;
   }
 
   function statusLabel(user: AdminUserDto) {
@@ -209,7 +217,20 @@ export function AdminUsersClient() {
         </Button>
       </div>
 
-      <SectionHeading title={copy.listTitle} description={copy.listDescription} />
+      <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <SectionHeading title={copy.listTitle} description={copy.listDescription} />
+        <div className="relative w-full sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[rgba(213,201,177,0.45)]" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={copy.searchPlaceholder}
+            aria-label={copy.searchPlaceholder}
+            className="h-10 rounded-md border-[var(--dash-border)] bg-white pl-9 text-[var(--dash-text)] placeholder:text-[var(--dash-faint)] focus-visible:border-[var(--dash-sky)] focus-visible:ring-[var(--padel-focus-ring)]"
+          />
+        </div>
+      </div>
       <div className="mt-4 grid gap-4">
         {loading ? <EmptyState title={copy.loadingTitle} description={copy.loadingDescription} icon={Users} /> : null}
         {!loading && !visible.length ? (
@@ -225,97 +246,119 @@ export function AdminUsersClient() {
           />
         ) : null}
 
-        {visible.map((user, index) => (
-          <Reveal key={user.id} delay={Math.min(index * 0.04, 0.2)}>
-            <SurfaceCard>
-              <div className="p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-display text-xl font-semibold text-[var(--padel-ivory)]">
-                        {user.fullName}
-                      </h3>
-                      {user.id === currentUserId ? (
-                        <Badge className="border-[var(--padel-gold)]/30 bg-[var(--padel-gold)]/15 text-[var(--padel-gold-2)]">
-                          {copy.you}
+        {!loading && visible.length ? (
+          <SurfaceCard className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[850px] table-fixed border-collapse text-left">
+                <colgroup>
+                  <col className="w-[30%]" />
+                  <col className="w-[19%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[132px] 2xl:w-[340px]" />
+                </colgroup>
+                <thead className="bg-[#f8faff] text-xs uppercase tracking-[0.14em] text-[var(--dash-faint)]">
+                  <tr>
+                    <th scope="col" className="px-5 py-4 font-medium">{copy.columnUser}</th>
+                    <th scope="col" className="px-5 py-4 font-medium">{copy.columnClub}</th>
+                    <th scope="col" className="px-5 py-4 font-medium">{copy.columnRole}</th>
+                    <th scope="col" className="px-5 py-4 font-medium">{copy.columnStatus}</th>
+                    <th scope="col" className="sticky right-0 z-10 border-l border-[var(--dash-border)] bg-[#f8faff] px-5 py-4 text-right font-medium shadow-[-8px_0_14px_-10px_rgba(25,50,77,0.08)]">
+                      {copy.columnActions}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--dash-border)]">
+                  {visible.map((user) => (
+                    <tr key={user.id} className="group bg-white transition-colors hover:bg-[#f8fbff]">
+                      <td className="px-5 py-4 align-middle">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="truncate font-medium text-[var(--dash-text)]" title={user.fullName}>
+                            {user.fullName}
+                          </span>
+                          {user.id === currentUserId ? (
+                            <Badge className="shrink-0 border-[rgba(47,111,237,0.25)] bg-[var(--dash-sky-soft)] text-[var(--dash-sky)]">
+                              {copy.you}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 truncate text-sm text-[var(--dash-muted)]" title={user.email}>{user.email}</p>
+                      </td>
+                      <td className="px-5 py-4 align-middle text-sm text-[var(--dash-muted)]">
+                        <span className="block truncate" title={user.club?.name}>{user.club?.name ?? '—'}</span>
+                      </td>
+                      <td className="px-5 py-4 align-middle">
+                        <Badge className="border-[var(--dash-border)] bg-[#f8faff] text-[var(--dash-muted)]">
+                          {user.role === 'ADMIN' ? <Shield className="mr-1 h-3 w-3" /> : <UserRound className="mr-1 h-3 w-3" />}
+                          {roleLabel(user.role)}
                         </Badge>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 truncate text-sm text-[rgba(213,201,177,0.55)]">{user.email}</p>
-                    {user.club ? (
-                      <p className="mt-1 text-sm text-[rgba(213,201,177,0.45)]">{user.club.name}</p>
-                    ) : null}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge className="border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.05)] text-[rgba(213,201,177,0.75)]">
-                        {user.role === 'ADMIN' ? <Shield className="mr-1 h-3 w-3" /> : <UserRound className="mr-1 h-3 w-3" />}
-                        {roleLabel(user.role)}
-                      </Badge>
-                      <Badge
-                        className={
-                          user.isDisqualified
-                            ? 'border-[var(--padel-red)]/35 bg-[var(--padel-red)]/15 text-[var(--padel-red)]'
-                            : 'border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.05)] text-[rgba(213,201,177,0.75)]'
-                        }
-                      >
-                        {statusLabel(user)}
-                      </Badge>
-                    </div>
-                    {user.isDisqualified ? (
-                      <p className="mt-3 text-sm leading-6 text-[rgba(213,201,177,0.55)]">
-                        {copy.disqualifiedUntil.replace(
-                          '{date}',
-                          new Date(user.disqualifiedUntil!).toLocaleDateString(),
-                        )}
-                        {user.disqualificationReason
-                          ? ` — ${user.disqualificationReason}`
-                          : ''}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {user.role === 'USER' ? (
-                      user.isDisqualified ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-md border-[rgba(213,201,177,0.18)] bg-transparent text-[var(--padel-ivory)]"
-                          disabled={busy}
-                          onClick={() => {
-                            void clearDisqualification(user);
-                          }}
-                        >
-                          {copy.clearDisqualify}
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-md border-[rgba(213,201,177,0.18)] bg-transparent text-[var(--padel-ivory)]"
-                          onClick={() => {
-                            setDisqualifyForm({ until: '', reason: '' });
-                            setDisqualifying(user);
-                          }}
-                        >
-                          <Ban className="h-4 w-4" />
-                          {copy.disqualify}
-                        </Button>
-                      )
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="rounded-md border-[var(--padel-red)]/35 bg-transparent text-[var(--padel-red)]"
-                      onClick={() => setDeleting(user)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {copy.delete}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </SurfaceCard>
-          </Reveal>
-        ))}
+                      </td>
+                      <td className="px-5 py-4 align-middle">
+                        <Badge className={user.isDisqualified ? 'border-[rgba(194,65,59,0.25)] bg-[var(--dash-coral-soft)] text-[var(--dash-coral)]' : 'border-[var(--dash-border)] bg-[#f8faff] text-[var(--dash-muted)]'}>
+                          {statusLabel(user)}
+                        </Badge>
+                        {user.isDisqualified ? (
+                          <p className="mt-2 text-xs leading-5 text-[var(--dash-muted)]">
+                            {copy.disqualifiedUntil.replace('{date}', new Date(user.disqualifiedUntil!).toLocaleDateString())}
+                            {user.disqualificationReason ? ` — ${user.disqualificationReason}` : ''}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="sticky right-0 z-10 border-l border-[var(--dash-border)] bg-white px-5 py-4 align-middle shadow-[-8px_0_14px_-10px_rgba(25,50,77,0.08)] transition-colors group-hover:bg-[#f8fbff]">
+                        <div className="flex items-center justify-end gap-2">
+                          {user.role === 'USER' ? (
+                            user.isDisqualified ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#f8fbff]"
+                                aria-label={copy.clearDisqualify}
+                                title={copy.clearDisqualify}
+                                disabled={busy}
+                                onClick={() => {
+                                  void clearDisqualification(user);
+                                }}
+                              >
+                                <Undo2 className="h-4 w-4" />
+                                <span className="hidden 2xl:inline">{copy.clearDisqualify}</span>
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#f8fbff]"
+                                aria-label={copy.disqualify}
+                                title={copy.disqualify}
+                                onClick={() => {
+                                  setDisqualifyForm({ until: '', reason: '' });
+                                  setDisqualifying(user);
+                                }}
+                              >
+                                <Ban className="h-4 w-4" />
+                                <span className="hidden 2xl:inline">{copy.disqualify}</span>
+                              </Button>
+                            )
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-md border-[rgba(194,65,59,0.28)] bg-white text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]"
+                            aria-label={copy.delete}
+                            title={copy.delete}
+                            onClick={() => setDeleting(user)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span className="hidden 2xl:inline">{copy.delete}</span>
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SurfaceCard>
+        ) : null}
       </div>
 
       <DashboardModal
@@ -379,6 +422,7 @@ export function AdminUsersClient() {
               className={formControlClassName}
             >
               <option value="USER">{copy.rolePlayer}</option>
+              <option value="JUDGE">Judge</option>
               <option value="ADMIN">{copy.roleAdmin}</option>
             </select>
           </DashboardField>
@@ -484,7 +528,7 @@ export function AdminUsersClient() {
           />
         }
       >
-        <p className="text-sm leading-6 text-[rgba(213,201,177,0.65)]">{copy.deleteWarning}</p>
+        <p className="text-sm leading-6 text-[#60748b]">{copy.deleteWarning}</p>
       </DashboardModal>
     </AdminShell>
   );

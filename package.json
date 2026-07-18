@@ -1,6 +1,6 @@
 {
   "name": "el-paddle",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "private": true,
   "workspaces": [
     "frontend",
@@ -14,11 +14,13 @@
     "start:frontend": "npm run start --workspace frontend",
     "start:backend": "npm run start --workspace backend",
     "lint": "npm run lint --workspace frontend && npm run lint --workspace backend",
+    "test": "npm run test --workspace backend && npm run test --workspace frontend",
     "audit": "npm audit --audit-level=high",
     "prisma:generate": "npm run prisma:generate --workspace backend",
     "prisma:migrate": "npm run prisma:migrate --workspace backend",
     "prisma:studio": "npm run prisma:studio --workspace backend",
-    "db:seed": "npm run db:seed --workspace backend"
+    "db:seed": "npm run db:seed --workspace backend",
+    "readiness:check": "sh scripts/production-readiness-check.sh"
   },
   "devDependencies": {
     "concurrently": "^9.2.3"

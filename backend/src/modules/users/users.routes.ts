@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { UserRole } from '../../generated/prisma/client.js';
+import { Capability, UserRole } from '../../generated/prisma/client.js';
 import {
   asyncHandler,
   cleanEmail,
@@ -11,28 +11,71 @@ import {
 import { serializeAdminUser } from '../../common/serializers.js';
 import {
   clearSessionCookie,
-  requireAdmin,
   requireUser,
   revokeUserSessions,
 } from '../auth/auth.service.js';
 import { auditLog, requestIp } from '../../common/audit.js';
+import { passwordValidationError } from '../../common/security.js';
+import { requireCapability } from '../../common/capabilities.js';
 import {
   createUserByAdmin,
   deleteUserAccount,
+  getPublicPlayer,
+  listPublicPlayers,
   listUsers,
   setUserDisqualification,
+  setJudgeActive,
 } from './users.service.js';
 
 export const usersRouter = Router();
 
+type PublicPlayerRecord = Awaited<ReturnType<typeof listPublicPlayers>>[number];
+
+function serializePublicPlayer(player: PublicPlayerRecord) {
+  const clubMembership = player.clubMemberships[0] ?? null;
+  return {
+    id: player.id,
+    fullName: [player.name, player.surname].filter(Boolean).join(' ') || 'Player',
+    roleTitle: clubMembership?.roleTitle ?? '',
+    club: clubMembership?.club ?? null,
+    stats: player.stats,
+  };
+}
+
+usersRouter.get('/api/public/players', asyncHandler(async (_request, response) => {
+  const players = await listPublicPlayers();
+  response.json({
+    players: players.map(serializePublicPlayer),
+  });
+}));
+
+usersRouter.get('/api/public/players/:id', asyncHandler(async (request, response) => {
+  const player = await getPublicPlayer(requireParamId(request.params.id, 'player id'));
+  response.json({ player: serializePublicPlayer(player) });
+}));
+
 usersRouter.get('/api/admin/users', asyncHandler(async (request, response) => {
-  await requireAdmin(request);
+  await requireCapability(request, Capability.USER_MANAGE);
   const users = await listUsers();
   response.json({ users: users.map(serializeAdminUser) });
 }));
 
+usersRouter.get('/api/admin/judges', asyncHandler(async (request, response) => {
+  await requireCapability(request, Capability.JUDGE_MANAGE);
+  const users = await listUsers(UserRole.JUDGE);
+  response.json({ judges: users.map(serializeAdminUser) });
+}));
+
+for (const action of ['activate', 'deactivate'] as const) {
+  usersRouter.post(`/api/admin/judges/:id/${action}`, asyncHandler(async (request, response) => {
+    await requireCapability(request, Capability.JUDGE_MANAGE);
+    const judge = await setJudgeActive(requireParamId(request.params.id), action === 'activate');
+    response.json({ judge: serializeAdminUser(judge) });
+  }));
+}
+
 usersRouter.post('/api/admin/users', asyncHandler(async (request, response) => {
-  await requireAdmin(request);
+  await requireCapability(request, Capability.USER_MANAGE);
 
   const email = cleanEmail(request.body.email);
   const name = cleanString(request.body.name);
@@ -40,13 +83,12 @@ usersRouter.post('/api/admin/users', asyncHandler(async (request, response) => {
   const roleRaw = cleanString(request.body.role).toUpperCase();
   const password = cleanString(request.body.password);
   const clubId = cleanString(request.body.clubId);
-  const role = roleRaw === 'ADMIN' ? UserRole.ADMIN : UserRole.USER;
+  const role = roleRaw === 'ADMIN' ? UserRole.ADMIN : roleRaw === 'JUDGE' ? UserRole.JUDGE : UserRole.USER;
 
   if (!isValidEmail(email)) jsonError('Enter a valid email.');
   if (!name || !surname) jsonError('Name and surname are required.');
-  if (password && password.length < 8) {
-    jsonError('Password must be at least 8 characters.');
-  }
+  const passwordError = password ? passwordValidationError(password) : '';
+  if (passwordError) jsonError(passwordError);
   if (role === UserRole.USER && !clubId) jsonError('Club is required for players.');
 
   const result = await createUserByAdmin({
@@ -65,7 +107,7 @@ usersRouter.post('/api/admin/users', asyncHandler(async (request, response) => {
 }));
 
 usersRouter.delete('/api/admin/users/:id', asyncHandler(async (request, response) => {
-  const admin = await requireAdmin(request);
+  const admin = await requireCapability(request, Capability.USER_MANAGE);
   const targetId = requireParamId(request.params.id);
   const result = await deleteUserAccount(targetId, admin.id);
   auditLog({
@@ -80,7 +122,7 @@ usersRouter.delete('/api/admin/users/:id', asyncHandler(async (request, response
 }));
 
 usersRouter.post('/api/admin/users/:id/disqualify', asyncHandler(async (request, response) => {
-  const admin = await requireAdmin(request);
+  const admin = await requireCapability(request, Capability.USER_MANAGE);
 
   const untilRaw = cleanString(request.body.until);
   const reason = cleanString(request.body.reason);
@@ -103,7 +145,7 @@ usersRouter.post('/api/admin/users/:id/disqualify', asyncHandler(async (request,
 }));
 
 usersRouter.delete('/api/admin/users/:id/disqualify', asyncHandler(async (request, response) => {
-  const admin = await requireAdmin(request);
+  const admin = await requireCapability(request, Capability.USER_MANAGE);
   const targetId = requireParamId(request.params.id);
   const user = await setUserDisqualification(targetId, { until: null });
   auditLog({

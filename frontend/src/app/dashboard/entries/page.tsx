@@ -11,6 +11,7 @@ export default async function DashboardEntriesPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login?next=/dashboard/entries');
   if (user.role === 'ADMIN') redirect('/admin');
+  if (user.role === 'JUDGE') redirect('/judge');
   if (!user.club) redirect('/complete-club');
 
   return <PlayerEntriesClient initialUser={user} />;

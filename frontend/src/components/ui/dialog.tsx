@@ -17,7 +17,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'dashboard-dialog-overlay fixed inset-0 z-50 bg-[rgba(88,16,16,0.52)] backdrop-blur-[2px]',
+      'dashboard-dialog-overlay fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-[4px]',
       className,
     )}
     {...props}
@@ -34,14 +34,14 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'dashboard-dialog-content fixed left-1/2 top-[48%] z-50 flex w-[calc(100%-1.25rem)] max-h-[min(92dvh,52rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[rgba(88,16,16,0.1)] bg-[var(--padel-ivory)] text-[var(--padel-ink)] shadow-[0_28px_90px_rgba(88,16,16,0.28)] focus:outline-none',
+        'dashboard-dialog-content fixed inset-x-0 bottom-0 z-[51] flex max-h-[calc(100dvh-0.75rem)] w-full origin-bottom flex-col overflow-hidden rounded-t-2xl border border-b-0 border-[#d7e1ec] bg-white text-[#19324d] shadow-[0_28px_100px_rgba(15,35,58,0.28)] focus:outline-none sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[min(calc(100dvh-3rem),52rem)] sm:w-[calc(100%-3rem)] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:origin-center sm:rounded-xl sm:border-b',
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-[rgba(88,16,16,0.55)] transition-colors hover:bg-[rgba(88,16,16,0.06)] hover:text-[var(--padel-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]">
-        <X className="h-4 w-4" />
+      <DialogPrimitive.Close className="absolute right-2 top-2 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-[#60748b] transition-colors duration-200 hover:bg-[#edf3fa] hover:text-[#19324d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6fed]/35 sm:right-3 sm:top-3">
+        <X aria-hidden="true" className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
@@ -50,14 +50,14 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('shrink-0 border-b border-[rgba(88,16,16,0.08)] px-5 py-4 pr-12 sm:px-6', className)} {...props} />;
+  return <div className={cn('shrink-0 border-b border-[#e1e8f0] bg-white px-4 py-4 pr-14 sm:px-6 sm:py-5', className)} {...props} />;
 }
 
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        'shrink-0 border-t border-[rgba(88,16,16,0.08)] bg-[#d5c9b1]/80 px-5 py-4 sm:flex sm:flex-row sm:justify-end sm:gap-2 [&>button]:w-full sm:[&>button]:w-auto',
+        'flex shrink-0 flex-col gap-2 border-t border-[#e1e8f0] bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:flex-row sm:justify-end sm:px-6 sm:pb-4 [&>button]:min-h-11 [&>button]:w-full sm:[&>button]:w-auto',
         className,
       )}
       {...props}
@@ -71,7 +71,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-lg font-semibold leading-none tracking-normal text-[var(--padel-ink)]', className)}
+    className={cn('text-lg font-semibold leading-none tracking-normal text-[#19324d]', className)}
     {...props}
   />
 ));
@@ -83,7 +83,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('mt-2 text-sm leading-6 text-[rgba(88,16,16,0.6)]', className)}
+    className={cn('mt-2 max-w-2xl text-sm leading-6 text-[#60748b]', className)}
     {...props}
   />
 ));

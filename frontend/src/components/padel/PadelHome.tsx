@@ -4,7 +4,6 @@ import { padelVars } from './home/constants';
 import {
   CursorRing,
   FilmGrain,
-  PageProgress,
   PageSurface,
 } from './home/effects';
 import {
@@ -17,13 +16,8 @@ import {
   SponsorsSection,
   WeatherRouteSection,
 } from './home/lazy-sections';
+import { ViewportDeferredSection } from './home/scroll';
 import {
-  SnapScrollController,
-  ViewportDeferredSection,
-} from './home/scroll';
-import {
-  FloatingEntryBar,
-  BackToTop,
   PadelNav,
   SiteFooter,
 } from './home/chrome';
@@ -39,11 +33,7 @@ export function PadelHome() {
     >
       <CursorRing />
       <FilmGrain />
-      <PageProgress />
       <PadelNav />
-      <SnapScrollController />
-      <FloatingEntryBar />
-      <BackToTop />
       <main className="page-canvas relative">
         <PageSurface />
         <Hero />
@@ -54,6 +44,9 @@ export function PadelHome() {
         <ViewportDeferredSection id="courts">
           <CourtsSection />
         </ViewportDeferredSection>
+        <ViewportDeferredSection id="visit">
+          <WeatherRouteSection />
+        </ViewportDeferredSection>
         <ViewportDeferredSection id="competition">
           <CompetitionSection />
         </ViewportDeferredSection>
@@ -62,9 +55,6 @@ export function PadelHome() {
         </ViewportDeferredSection>
         <ViewportDeferredSection id="sponsors">
           <SponsorsSection />
-        </ViewportDeferredSection>
-        <ViewportDeferredSection id="visit">
-          <WeatherRouteSection />
         </ViewportDeferredSection>
         <ViewportDeferredSection id="registration">
           <RegistrationSection />

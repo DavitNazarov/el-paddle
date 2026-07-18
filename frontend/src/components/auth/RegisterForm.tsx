@@ -16,9 +16,9 @@ import { cn } from '@/lib/utils';
 
 type Step = 'account' | 'verify' | 'club' | 'mate';
 
-export function RegisterForm() {
+export function RegisterForm({ oauthError }: { oauthError?: string }) {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [step, setStep] = useState<Step>('account');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -35,6 +35,8 @@ export function RegisterForm() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [eligibilityConfirmed, setEligibilityConfirmed] = useState(false);
 
   const stepIndex = step === 'account' ? 0 : step === 'verify' ? 1 : step === 'club' ? 2 : 3;
   const stepLabels = [
@@ -54,7 +56,7 @@ export function RegisterForm() {
       const response = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, name, surname, phone, password }),
+        body: JSON.stringify({ email, name, surname, phone, password, legalAccepted, eligibilityConfirmed }),
       });
       const data = await readApiJson<{ error?: string; message?: string }>(response, {});
 
@@ -226,6 +228,9 @@ export function RegisterForm() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
+      {oauthError === 'legal-consent-required' ? (
+        <Alert variant="destructive"><AlertDescription>{locale === 'ka' ? 'Google-ით ახალი ანგარიშის შესაქმნელად ჯერ დაეთანხმეთ პირობებს და დაადასტურეთ ასაკი/მეურვის ნებართვა.' : 'To create a new account with Google, first accept the legal terms and confirm your age or guardian authorization.'}</AlertDescription></Alert>
+      ) : null}
       {message ? (
         <Alert>
           <AlertDescription>{message}</AlertDescription>
@@ -249,9 +254,19 @@ export function RegisterForm() {
             <Input id="phone" required type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className={authInputClassName} />
           </Field>
           <Field id="password" label={t('common.password')}>
-            <Input id="password" required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className={authInputClassName} />
+            <Input id="password" required minLength={12} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className={authInputClassName} />
           </Field>
-          <Button type="submit" variant="red" size="lg" disabled={loading} className="min-h-12 w-full">
+          <div className="space-y-3 rounded-lg border border-[var(--padel-ink)]/12 bg-[var(--padel-ink)]/[0.035] p-4 text-sm leading-6">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input className="mt-1 h-5 w-5 shrink-0 accent-[var(--padel-red)]" type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required />
+              <span>{locale === 'ka' ? 'ვეთანხმები ' : 'I agree to the '}<Link className="font-semibold underline underline-offset-4" href="/legal/terms" target="_blank">{locale === 'ka' ? 'გამოყენების პირობებს' : 'Terms of Use'}</Link>{locale === 'ka' ? ' და გავეცანი ' : ' and acknowledge the '}<Link className="font-semibold underline underline-offset-4" href="/legal/privacy" target="_blank">{locale === 'ka' ? 'კონფიდენციალურობის პოლიტიკას' : 'Privacy Policy'}</Link>.</span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input className="mt-1 h-5 w-5 shrink-0 accent-[var(--padel-red)]" type="checkbox" checked={eligibilityConfirmed} onChange={(event) => setEligibilityConfirmed(event.target.checked)} required />
+              <span>{locale === 'ka' ? 'ვადასტურებ, რომ ვარ სულ მცირე 18 წლის ან მაქვს მშობლის/კანონიერი მეურვის ნებართვა.' : 'I confirm that I am at least 18 or have authorization from a parent or legal guardian.'}</span>
+            </label>
+          </div>
+          <Button type="submit" variant="red" size="lg" disabled={loading || !legalAccepted || !eligibilityConfirmed} className="min-h-12 w-full">
             {loading ? t('forms.register.sending') : t('forms.register.continue')}
             <ArrowRight className="h-5 w-5" />
           </Button>
@@ -325,11 +340,11 @@ export function RegisterForm() {
 
       {step === 'account' || step === 'verify' ? (
         <>
-          <Button asChild variant="outline" size="lg" className="min-h-12 w-full border-[var(--padel-ink)]/20 bg-transparent text-[var(--padel-ink)] hover:bg-[var(--padel-ink)]/5 hover:text-[var(--padel-ink)]">
-            <a href={apiUrl('/api/auth/google')}>
+          <Button asChild={legalAccepted && eligibilityConfirmed} variant="outline" size="lg" disabled={!legalAccepted || !eligibilityConfirmed} className="min-h-12 w-full border-[var(--padel-ink)]/20 bg-transparent text-[var(--padel-ink)] hover:bg-[var(--padel-ink)]/5 hover:text-[var(--padel-ink)]">
+            {legalAccepted && eligibilityConfirmed ? <a href={apiUrl('/api/auth/google?legalAccepted=true&eligibilityConfirmed=true')}>
               <Mail className="h-5 w-5" />
               {t('forms.register.gmail')}
-            </a>
+            </a> : <span><Mail className="h-5 w-5" />{t('forms.register.gmail')}</span>}
           </Button>
           <p className="text-center text-sm text-[var(--padel-ink)]/65">
             {t('forms.register.alreadyRegistered')}{' '}

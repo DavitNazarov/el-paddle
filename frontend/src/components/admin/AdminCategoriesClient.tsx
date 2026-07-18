@@ -326,7 +326,7 @@ export function AdminCategoriesClient() {
           />
         }
       >
-        <p className="text-sm leading-6 text-[rgba(213,201,177,0.65)]">{copy.deleteWarning}</p>
+        <p className="text-sm leading-6 text-[#60748b]">{copy.deleteWarning}</p>
       </DashboardModal>
     </AdminShell>
   );

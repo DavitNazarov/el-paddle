@@ -10,22 +10,180 @@ datasource db {
 enum UserRole {
   USER
   ADMIN
+  JUDGE
 }
 
 enum UserStatus {
   PENDING_VERIFICATION
   ACTIVE
   INVITED
+  INACTIVE
 }
 
 enum RegistrationStatus {
   PENDING
   APPROVED
   DECLINED
+  NEEDS_CHANGES
+  WAITLISTED
+  WITHDRAWN
+  CANCELLED
+}
+
+enum EventStatus {
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  ONGOING
+  COMPLETED
+}
+
+enum Capability {
+  DASHBOARD_READ
+  EVENT_MANAGE
+  EVENT_STATUS_MANAGE
+  EVENT_STATE_CORRECT
+  EVENT_PUBLISH
+  CATEGORY_MANAGE
+  REGISTRATION_REVIEW
+  REGISTRATION_CORRECT
+  CLUB_MANAGE
+  USER_MANAGE
+  OPPONENT_REQUEST_MANAGE
+  OPPONENT_REQUEST_DECIDE
+  OPPONENT_REQUEST_OVERRIDE
+  BRACKET_MANAGE
+  BRACKET_PUBLISH
+  JUDGE_MANAGE
+  SCHEDULE_MANAGE
+  SCHEDULE_PUBLISH
+  MATCH_RESULT_ADMIN
+  MATCH_RESULT_CORRECT
+  AUDIT_READ
+  DELIVERY_MONITOR
+}
+
+enum CapabilityEffect {
+  ALLOW
+  DENY
+}
+
+enum OpponentRequestStatus {
+  PENDING_RESPONSE
+  ACCEPTED_BY_OPPONENT
+  REFUSED_BY_OPPONENT
+  WITHDRAWN_BY_REQUESTER
+  EXPIRED
+  CONFLICTED
+  APPROVED_BY_ADMIN
+  OVERRIDDEN_BY_ADMIN
+  REJECTED_BY_ADMIN
+  APPLIED_TO_BRACKET
+}
+
+enum BracketStatus {
+  DRAFT
+  LOCKED
+  COMPLETED
+}
+
+enum MatchRound {
+  ROUND_OF_16
+  QUARTERFINAL
+  SEMIFINAL
+  FINAL
+}
+
+enum MatchStatus {
+  PENDING
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MatchResultType {
+  NORMAL
+  BYE
+  WALKOVER
+  DISQUALIFICATION
+  WITHDRAWAL
+  ADMIN_DECISION
+}
+
+enum MatchSide {
+  A
+  B
+}
+
+enum ScoreAction {
+  INCREMENT
+  DECREMENT
+}
+
+enum ScheduleItemStatus {
+  TENTATIVE
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationType {
+  CLUB_JOIN_REQUEST_APPROVED
+  CLUB_JOIN_REQUEST_REJECTED
+  CLUB_MEMBERSHIP_REMOVED
+  REGISTRATION_PENDING
+  REGISTRATION_APPROVED
+  REGISTRATION_REJECTED
+  REGISTRATION_NEEDS_CHANGES
+  REGISTRATION_WAITLISTED
+  REGISTRATION_WITHDRAWN
+  REGISTRATION_CANCELLED
+  OPPONENT_REQUEST_CREATED
+  OPPONENT_REQUEST_ACCEPTED
+  OPPONENT_REQUEST_REFUSED
+  OPPONENT_REQUEST_WITHDRAWN
+  OPPONENT_REQUEST_EXPIRED
+  OPPONENT_REQUEST_APPROVED_BY_ADMIN
+  OPPONENT_REQUEST_REJECTED_BY_ADMIN
+  OPPONENT_REQUEST_OVERRIDDEN_BY_ADMIN
+  OPPONENT_REQUEST_APPLIED_TO_BRACKET
+  BRACKET_PUBLISHED
+  SCHEDULE_PUBLISHED
+  MATCH_SCHEDULED
+  MATCH_RESCHEDULED
+  MATCH_STARTED
+  MATCH_COMPLETED
+}
+
+enum DeliveryStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  SKIPPED
+  FAILED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
 }
 
 enum AccountProvider {
   GOOGLE
+}
+
+enum ClubMembershipRole {
+  LEADER
+  MEMBER
+}
+
+enum ClubJoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model User {
@@ -38,12 +196,19 @@ model User {
   role                   UserRole   @default(USER)
   status                 UserStatus @default(PENDING_VERIFICATION)
   emailVerifiedAt        DateTime?
+  termsAcceptedAt        DateTime?
+  termsVersion           String?
+  privacyAcknowledgedAt  DateTime?
+  privacyVersion         String?
+  eligibilityConfirmedAt DateTime?
   matchesPlayed          Int        @default(0)
   wins                   Int        @default(0)
   losses                 Int        @default(0)
   disqualifiedUntil      DateTime?
   disqualificationReason String?
-  /** Bumped on logout / password change to invalidate outstanding JWTs. */
+  /**
+   * Bumped on logout / password change to invalidate outstanding JWTs.
+   */
   sessionVersion         Int        @default(0)
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
@@ -51,12 +216,19 @@ model User {
   accounts              OAuthAccount[]
   verificationCodes     EmailVerificationCode[]
   inviteTokens          InviteToken[]
-  ownedRegistrations    EventRegistration[]      @relation("RegistrationOwner")
-  teammateRegistrations EventRegistration[]      @relation("RegistrationTeammate")
-  reviewedRegistrations EventRegistration[]      @relation("RegistrationReviewer")
-  createdCategories     Category[]               @relation("CategoryCreator")
-  createdEvents         Event[]                  @relation("EventCreator")
+  ownedRegistrations    EventRegistration[]     @relation("RegistrationOwner")
+  teammateRegistrations EventRegistration[]     @relation("RegistrationTeammate")
+  reviewedRegistrations EventRegistration[]     @relation("RegistrationReviewer")
+  createdCategories     Category[]              @relation("CategoryCreator")
+  createdEvents         Event[]                 @relation("EventCreator")
   clubMemberships       ClubMember[]
+  clubJoinRequests      ClubJoinRequest[]
+  capabilityGrants      UserCapabilityGrant[]
+  judgeAssignments      CourtJudgeAssignment[]
+  scoreEvents           ScoreEvent[]
+  notifications         Notification[]
+
+  @@index([role, status, name, surname, createdAt, id])
 }
 
 model OAuthAccount {
@@ -107,65 +279,110 @@ model Category {
 }
 
 model Event {
-  id               String    @id @default(cuid())
-  title            String
-  date             DateTime
-  location         String
-  description      String?
-  arrivalTime      DateTime?
+  id                       String      @id @default(cuid())
+  title                    String
+  date                     DateTime
+  location                 String
+  description              String?
+  arrivalTime              DateTime?
   /// Team participation fee in GEL (whole lari).
-  participationFee Int
+  participationFee         Int
   /// Georgian IBAN for fee transfers (GE…).
-  bankAccountIban  String
+  bankAccountIban          String
   /// Account holder / money receiver name shown to players.
-  bankAccountReceiver String
-  isPublished      Boolean   @default(false)
-  createdById      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  bankAccountReceiver      String
+  isPublished              Boolean     @default(false)
+  status                   EventStatus @default(REGISTRATION_OPEN)
+  version                  Int         @default(0)
+  timeZone                 String      @default("Asia/Tbilisi")
+  registrationClosedAt          DateTime?
+  registrationRosterPublishedAt DateTime?
+  startedAt                     DateTime?
+  completedAt                   DateTime?
+  schedulePublishedAt           DateTime?
+  publicLiveScoringEnabled      Boolean     @default(false)
+  resultsPublishedAt            DateTime?
+  createdById                   String?
+  createdAt                     DateTime    @default(now())
+  updatedAt                     DateTime    @updatedAt
 
-  createdBy     User?               @relation("EventCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  categories    EventCategory[]
-  registrations EventRegistration[]
+  createdBy        User?                @relation("EventCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  categories       EventCategory[]
+  registrations    EventRegistration[]
+  statusHistory    EventStatusHistory[]
+  opponentRequests OpponentRequest[]
+  brackets         Bracket[]
+  courts           Court[]
+  notifications    Notification[]
 
   @@index([date, isPublished])
+  @@index([isPublished, date, id])
 }
 
 model EventCategory {
-  eventId    String
-  categoryId String
+  eventId                  String
+  categoryId               String
+  opponentRequestsOpenedAt DateTime?
+  opponentRequestsClosedAt DateTime?
+  opponentRequestDeadline  DateTime?
+  opponentRequestVersion   Int       @default(0)
 
-  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  event            Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category         Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  opponentRequests OpponentRequest[]
+  brackets         Bracket[]
 
   @@id([eventId, categoryId])
 }
 
 model EventRegistration {
-  id             String             @id @default(cuid())
-  eventId        String
-  categoryId     String
-  ownerId        String
-  teammateId     String
-  teammateEmail  String
-  ownerPhone     String
-  teammatePhone  String?
-  status         RegistrationStatus @default(PENDING)
-  declineReason  String?
-  reviewedById   String?
-  reviewedAt     DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  clubId             String?
+  eventId            String
+  categoryId         String
+  ownerId            String
+  teammateId         String
+  teammateEmail      String
+  ownerPhone         String
+  teammatePhone      String?
+  status             RegistrationStatus @default(PENDING)
+  declineReason      String?
+  publicStatusReason String?
+  internalReviewNote String?
+  version            Int                @default(0)
+  withdrawnAt        DateTime?
+  participationTermsAcceptedAt DateTime?
+  participationTermsVersion    String?
+  refundPolicyAcknowledgedAt   DateTime?
+  refundPolicyVersion          String?
+  riskAcknowledgedAt           DateTime?
+  reviewedById       String?
+  reviewedAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
-  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  category   Category @relation(fields: [categoryId], references: [id])
-  owner      User     @relation("RegistrationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  teammate   User     @relation("RegistrationTeammate", fields: [teammateId], references: [id], onDelete: Cascade)
-  reviewedBy User?    @relation("RegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  club                     Club?                       @relation(fields: [clubId], references: [id], onDelete: SetNull)
+  event                    Event                       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category                 Category                    @relation(fields: [categoryId], references: [id])
+  owner                    User                        @relation("RegistrationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  teammate                 User                        @relation("RegistrationTeammate", fields: [teammateId], references: [id], onDelete: Cascade)
+  reviewedBy               User?                       @relation("RegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  statusHistory            RegistrationStatusHistory[]
+  sentOpponentRequests     OpponentRequest[]           @relation("RequestingEntry")
+  receivedOpponentRequests OpponentRequest[]           @relation("TargetEntry")
+  matchesAsA               Match[]                     @relation("MatchEntryA")
+  matchesAsB               Match[]                     @relation("MatchEntryB")
+  matchesWon               Match[]                     @relation("MatchWinner")
+  matchesLost              Match[]                     @relation("MatchLoser")
 
   @@unique([eventId, ownerId])
   @@unique([eventId, teammateId])
+  @@unique([eventId, clubId])
   @@index([eventId, status])
+  @@index([clubId, status, createdAt])
+  @@index([eventId, status, createdAt, id])
+  @@index([ownerId, createdAt, id])
+  @@index([teammateId, createdAt, id])
   @@index([teammateEmail])
 }
 
@@ -178,18 +395,389 @@ model Club {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  members ClubMember[]
+  members      ClubMember[]
+  joinRequests ClubJoinRequest[]
+  registrations EventRegistration[]
 }
 
 model ClubMember {
-  id        String   @id @default(cuid())
-  clubId    String
-  userId    String   @unique
-  roleTitle String?
-  createdAt DateTime @default(now())
+  id             String             @id @default(cuid())
+  clubId         String
+  userId         String             @unique
+  membershipRole ClubMembershipRole @default(MEMBER)
+  roleTitle      String?
+  createdAt      DateTime           @default(now())
 
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([clubId])
+}
+
+model ClubJoinRequest {
+  id          String                @id @default(cuid())
+  clubId      String
+  userId      String
+  status      ClubJoinRequestStatus @default(PENDING)
+  respondedAt DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@index([clubId, status, createdAt])
+  @@index([userId, status])
+}
+
+model UserCapabilityGrant {
+  id          String           @id @default(cuid())
+  userId      String
+  capability  Capability
+  effect      CapabilityEffect
+  grantedById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, capability])
+}
+
+model EventStatusHistory {
+  id         String      @id @default(cuid())
+  eventId    String
+  fromStatus EventStatus
+  toStatus   EventStatus
+  actorId    String
+  reason     String?
+  commandId  String
+  createdAt  DateTime    @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([actorId, commandId])
+  @@index([eventId, createdAt])
+}
+
+model RegistrationStatusHistory {
+  id             String             @id @default(cuid())
+  registrationId String
+  fromStatus     RegistrationStatus
+  toStatus       RegistrationStatus
+  actorId        String
+  publicReason   String?
+  internalNote   String?
+  commandId      String
+  createdAt      DateTime           @default(now())
+
+  registration EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@unique([actorId, commandId])
+  @@index([registrationId, createdAt])
+}
+
+model OpponentRequest {
+  id                    String                @id @default(cuid())
+  eventId               String
+  categoryId            String
+  requestingEntryId     String
+  targetEntryId         String
+  requestedByUserId     String
+  status                OpponentRequestStatus @default(PENDING_RESPONSE)
+  requestMessage        String?
+  responseReason        String?
+  respondedByUserId     String?
+  respondedAt           DateTime?
+  adminDecisionByUserId String?
+  adminDecisionAt       DateTime?
+  adminPublicReason     String?
+  adminInternalNote     String?
+  canonicalPairKey      String
+  version               Int                   @default(0)
+  expiresAt             DateTime?
+  appliedMatchId        String?               @unique
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventCategory   EventCategory     @relation(fields: [eventId, categoryId], references: [eventId, categoryId], onDelete: Cascade)
+  requestingEntry EventRegistration @relation("RequestingEntry", fields: [requestingEntryId], references: [id], onDelete: Restrict)
+  targetEntry     EventRegistration @relation("TargetEntry", fields: [targetEntryId], references: [id], onDelete: Restrict)
+  appliedMatch    Match?            @relation("AppliedOpponentRequest", fields: [appliedMatchId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, categoryId, status])
+  @@index([requestingEntryId, status])
+  @@index([targetEntryId, status])
+  @@index([canonicalPairKey, status])
+  @@index([status, expiresAt, id])
+}
+
+model Bracket {
+  id             String        @id @default(cuid())
+  eventId        String
+  categoryId     String
+  size           Int           @default(16)
+  status         BracketStatus @default(DRAFT)
+  generation     Int           @default(1)
+  generationSeed String?
+  version        Int           @default(0)
+  lockedAt       DateTime?
+  lockedById     String?
+  publishedAt    DateTime?
+  publishedById  String?
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventCategory EventCategory @relation(fields: [eventId, categoryId], references: [eventId, categoryId], onDelete: Cascade)
+  matches       Match[]
+
+  @@unique([eventId, categoryId, generation])
+  @@index([eventId, status])
+}
+
+model Match {
+  id                  String           @id @default(cuid())
+  bracketId           String
+  round               MatchRound
+  roundPosition       Int
+  matchNumber         Int
+  participantAEntryId String?
+  participantBEntryId String?
+  scoreA              Int              @default(0)
+  scoreB              Int              @default(0)
+  winnerEntryId       String?
+  loserEntryId        String?
+  nextMatchId         String?
+  nextMatchSlot       MatchSide?
+  status              MatchStatus      @default(PENDING)
+  resultType          MatchResultType?
+  resultReason        String?
+  version             Int              @default(0)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  bracket                Bracket                    @relation(fields: [bracketId], references: [id], onDelete: Cascade)
+  participantA           EventRegistration?         @relation("MatchEntryA", fields: [participantAEntryId], references: [id], onDelete: Restrict)
+  participantB           EventRegistration?         @relation("MatchEntryB", fields: [participantBEntryId], references: [id], onDelete: Restrict)
+  winner                 EventRegistration?         @relation("MatchWinner", fields: [winnerEntryId], references: [id], onDelete: Restrict)
+  loser                  EventRegistration?         @relation("MatchLoser", fields: [loserEntryId], references: [id], onDelete: Restrict)
+  nextMatch              Match?                     @relation("MatchProgression", fields: [nextMatchId], references: [id], onDelete: SetNull)
+  sourceMatches          Match[]                    @relation("MatchProgression")
+  appliedOpponentRequest OpponentRequest?           @relation("AppliedOpponentRequest")
+  scheduleItem           ScheduleItem?
+  scoreEvents            ScoreEvent[]
+  snapshots              MatchParticipantSnapshot[]
+
+  @@unique([bracketId, round, roundPosition])
+  @@unique([bracketId, matchNumber])
+  @@index([status, startedAt])
+  @@index([status, completedAt, id])
+  @@index([participantAEntryId, completedAt])
+  @@index([participantBEntryId, completedAt])
+}
+
+model MatchParticipantSnapshot {
+  id             String    @id @default(cuid())
+  matchId        String
+  side           MatchSide
+  entryId        String
+  ownerUserId    String
+  ownerName      String
+  teammateUserId String
+  teammateName   String
+  clubId         String
+  clubName       String
+  createdAt      DateTime  @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, side])
+  @@index([ownerUserId, createdAt])
+  @@index([teammateUserId, createdAt])
+  @@index([clubId, createdAt])
+}
+
+model Court {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  location    String?
+  description String?
+  active      Boolean  @default(true)
+  version     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event            Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  judgeAssignments CourtJudgeAssignment[]
+  scheduleItems    ScheduleItem[]
+
+  @@unique([eventId, name])
+  @@index([eventId, active])
+}
+
+model CourtJudgeAssignment {
+  id           String    @id @default(cuid())
+  courtId      String
+  judgeUserId  String
+  startsAt     DateTime
+  endsAt       DateTime
+  assignedById String
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  court Court @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  judge User  @relation(fields: [judgeUserId], references: [id], onDelete: Restrict)
+
+  @@index([judgeUserId, startsAt, endsAt])
+  @@index([courtId, startsAt])
+}
+
+model ScheduleItem {
+  id              String             @id @default(cuid())
+  matchId         String             @unique
+  courtId         String
+  assignedJudgeId String?
+  queuePosition   Int
+  plannedStartAt  DateTime?
+  plannedEndAt    DateTime?
+  status          ScheduleItemStatus @default(TENTATIVE)
+  version         Int                @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  court Court @relation(fields: [courtId], references: [id], onDelete: Restrict)
+
+  @@unique([courtId, queuePosition])
+  @@index([assignedJudgeId, plannedStartAt])
+}
+
+model ScoreEvent {
+  id           String      @id @default(cuid())
+  matchId      String
+  judgeUserId  String
+  action       ScoreAction
+  side         MatchSide
+  scoreABefore Int
+  scoreAAfter  Int
+  scoreBBefore Int
+  scoreBAfter  Int
+  matchVersion Int
+  commandId    String
+  createdAt    DateTime    @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  judge User  @relation(fields: [judgeUserId], references: [id], onDelete: Restrict)
+
+  @@unique([judgeUserId, commandId])
+  @@index([matchId, createdAt])
+}
+
+model Notification {
+  id               String           @id @default(cuid())
+  recipientUserId  String
+  type             NotificationType
+  title            String
+  message          String
+  entityType       String
+  entityId         String
+  eventId          String?
+  actionPath       String
+  metadata         Json?
+  readAt           DateTime?
+  expiresAt        DateTime?
+  deduplicationKey String           @unique
+  createdAt        DateTime         @default(now())
+
+  recipient       User            @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  event           Event?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  emailDeliveries EmailDelivery[]
+
+  @@index([recipientUserId, readAt, createdAt])
+  @@index([recipientUserId, createdAt, id])
+  @@index([eventId, createdAt])
+}
+
+model EmailDelivery {
+  id                String         @id @default(cuid())
+  notificationId    String?
+  recipientEmail    String
+  template          String
+  payload           Json
+  status            DeliveryStatus @default(QUEUED)
+  providerMessageId String?
+  attemptCount      Int            @default(0)
+  lastError         String?
+  nextAttemptAt     DateTime       @default(now())
+  queuedAt          DateTime       @default(now())
+  sentAt            DateTime?
+  failedAt          DateTime?
+  deduplicationKey  String         @unique
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  notification Notification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+}
+
+model OutboxMessage {
+  id               String       @id @default(cuid())
+  topic            String
+  aggregateType    String
+  aggregateId      String
+  payload          Json
+  status           OutboxStatus @default(PENDING)
+  attemptCount     Int          @default(0)
+  availableAt      DateTime     @default(now())
+  lockedAt         DateTime?
+  lockedBy         String?
+  processedAt      DateTime?
+  lastError        String?
+  deduplicationKey String       @unique
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([status, availableAt])
+  @@index([status, availableAt, createdAt, id])
+}
+
+model CommandReceipt {
+  id          String    @id @default(cuid())
+  actorId     String
+  commandId   String
+  action      String
+  payloadHash String
+  response    Json?
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+
+  @@unique([actorId, action, commandId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  action         String
+  actorId        String?
+  eventId        String?
+  entityType     String
+  entityId       String
+  before         Json?
+  after          Json?
+  publicReason   String?
+  internalReason String?
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  @@index([eventId, action, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
 }

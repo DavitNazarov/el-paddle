@@ -8,13 +8,13 @@ export const metadata: Metadata = {
   title: 'Create Account — El Padel',
 };
 
-export default async function RegisterPage() {
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const user = await getCurrentUser();
-  if (user) redirect(user.role === 'ADMIN' ? '/admin' : '/dashboard');
+  if (user) redirect(user.role === 'ADMIN' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
 
   return (
     <AuthShell variant="register">
-      <RegisterForm />
+      <RegisterForm oauthError={(await searchParams).error} />
     </AuthShell>
   );
 }

@@ -1,5 +1,5 @@
-export type UserRole = 'USER' | 'ADMIN';
-export type UserStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'INVITED';
+export type UserRole = 'USER' | 'ADMIN' | 'JUDGE';
+export type UserStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'INVITED' | 'INACTIVE';
 
 export type UserClub = {
   id: string;

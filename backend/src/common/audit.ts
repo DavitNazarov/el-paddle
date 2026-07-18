@@ -22,10 +22,6 @@ export function auditLog(fields: AuditFields) {
   console.info('[audit]', JSON.stringify(line));
 }
 
-export function requestIp(request: { headers: Record<string, unknown>; ip?: string }) {
-  const forwarded = request.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0]?.trim() || request.ip || null;
-  }
+export function requestIp(request: { ip?: string }) {
   return request.ip || null;
 }

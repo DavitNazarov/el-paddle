@@ -5,11 +5,13 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   CalendarDays,
   CalendarPlus,
+  ClipboardList,
   Eye,
   EyeOff,
   MapPin,
   Pencil,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,7 +38,9 @@ import { AdminShell } from './AdminShell';
 import type { CategoryDto, EventDto } from '@/types/admin';
 import { toDatetimeLocalValue } from '@/lib/utils/dates';
 
-type EventFilter = 'ALL' | 'PUBLISHED' | 'DRAFT';
+type EventFilter = 'ALL' | 'UPCOMING' | 'COMPLETED' | 'DRAFT';
+
+type EventBucket = Exclude<EventFilter, 'ALL'>;
 
 type EventFormState = {
   title: string;
@@ -90,6 +94,27 @@ function isEventFormReady(form: EventFormState) {
   );
 }
 
+function eventBucket(event: EventDto): EventBucket {
+  if (event.status === 'COMPLETED') return 'COMPLETED';
+  if (!event.isPublished) return 'DRAFT';
+  return 'UPCOMING';
+}
+
+function compareEvents(a: EventDto, b: EventDto) {
+  const bucketOrder: Record<EventBucket, number> = {
+    UPCOMING: 0,
+    DRAFT: 1,
+    COMPLETED: 2,
+  };
+  const aBucket = eventBucket(a);
+  const bBucket = eventBucket(b);
+  const bucketDifference = bucketOrder[aBucket] - bucketOrder[bBucket];
+  if (bucketDifference) return bucketDifference;
+
+  const dateDifference = new Date(a.date).getTime() - new Date(b.date).getTime();
+  return aBucket === 'COMPLETED' ? -dateDifference : dateDifference;
+}
+
 export function AdminEventsClient() {
   const { dictionary, t, formatDate } = useI18n();
   const admin = dictionary.dashboard.admin;
@@ -99,6 +124,7 @@ export function AdminEventsClient() {
   const [filter, setFilter] = useState<EventFilter>('ALL');
   const [createOpen, setCreateOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventDto | null>(null);
+  const [deletingEvent, setDeletingEvent] = useState<EventDto | null>(null);
   const [eventForm, setEventForm] = useState<EventFormState>(emptyEventForm);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -106,16 +132,18 @@ export function AdminEventsClient() {
   const [busy, setBusy] = useState<string | null>(null);
 
   const filteredEvents = useMemo(() => {
-    if (filter === 'PUBLISHED') return events.filter((event) => event.isPublished);
-    if (filter === 'DRAFT') return events.filter((event) => !event.isPublished);
-    return events;
+    const matchingEvents = filter === 'ALL'
+      ? events
+      : events.filter((event) => eventBucket(event) === filter);
+    return [...matchingEvents].sort(compareEvents);
   }, [events, filter]);
 
   const counts = useMemo(
     () => ({
       all: events.length,
-      published: events.filter((event) => event.isPublished).length,
-      draft: events.filter((event) => !event.isPublished).length,
+      upcoming: events.filter((event) => eventBucket(event) === 'UPCOMING').length,
+      completed: events.filter((event) => eventBucket(event) === 'COMPLETED').length,
+      draft: events.filter((event) => eventBucket(event) === 'DRAFT').length,
     }),
     [events],
   );
@@ -231,6 +259,25 @@ export function AdminEventsClient() {
     await load();
   }
 
+  async function confirmDeleteEvent() {
+    if (!deletingEvent) return;
+    setError('');
+    setMessage('');
+    const busyKey = `delete-${deletingEvent.id}`;
+    setBusy(busyKey);
+    const response = await apiFetch(`/api/events/${deletingEvent.id}`, { method: 'DELETE' });
+    const result = (await response.json()) as { error?: string };
+    setBusy(null);
+    if (!response.ok) {
+      setError(result.error ?? admin.messages.actionFailed);
+      setDeletingEvent(null);
+      return;
+    }
+    setMessage(admin.messages.eventDeleted);
+    setDeletingEvent(null);
+    await load();
+  }
+
   return (
     <AdminShell title={copy.title} description={copy.description} eyebrow={copy.eyebrow}>
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
@@ -255,11 +302,14 @@ export function AdminEventsClient() {
           <FilterChip active={filter === 'ALL'} count={counts.all} onClick={() => setFilter('ALL')}>
             {copy.filterAll}
           </FilterChip>
-          <FilterChip active={filter === 'PUBLISHED'} count={counts.published} onClick={() => setFilter('PUBLISHED')}>
-            {admin.events.published}
+          <FilterChip active={filter === 'UPCOMING'} count={counts.upcoming} onClick={() => setFilter('UPCOMING')}>
+            {copy.filterUpcoming}
+          </FilterChip>
+          <FilterChip active={filter === 'COMPLETED'} count={counts.completed} onClick={() => setFilter('COMPLETED')}>
+            {copy.filterCompleted}
           </FilterChip>
           <FilterChip active={filter === 'DRAFT'} count={counts.draft} onClick={() => setFilter('DRAFT')}>
-            {admin.events.draft}
+            {copy.filterDrafts}
           </FilterChip>
         </div>
         <Button variant="red" className="rounded-md" onClick={openCreate} disabled={!categories.length}>
@@ -299,6 +349,20 @@ export function AdminEventsClient() {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          className={cn(
+                            'border-transparent',
+                            event.status === 'COMPLETED'
+                              ? 'bg-slate-600 text-white'
+                              : event.status === 'ONGOING'
+                                ? 'bg-amber-500 text-[var(--padel-ink)]'
+                                : event.status === 'REGISTRATION_CLOSED'
+                                  ? 'bg-orange-700 text-white'
+                                  : 'bg-emerald-700 text-white',
+                          )}
+                        >
+                          {admin.events.statuses[event.status]}
+                        </Badge>
                         <Badge
                           className={
                             event.isPublished
@@ -348,6 +412,15 @@ export function AdminEventsClient() {
                       ) : null}
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+                      <Button asChild variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
+                        <Link href={`/admin/events/${event.id}/registrations`}>
+                          <ClipboardList className="h-4 w-4" />
+                          {copy.registrations}
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
+                        <Link href={`/admin/events/${event.id}`}>Manage tournament</Link>
+                      </Button>
                       <Button
                         variant="outline"
                         className={cn(softButtonClassName, 'rounded-md')}
@@ -377,6 +450,14 @@ export function AdminEventsClient() {
                           {publishBusy ? admin.messages.saving : admin.events.publish}
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        className="shrink-0 rounded-md border-red-900/70 bg-transparent text-red-400 hover:border-red-800 hover:bg-red-950/50 hover:text-red-300 lg:mt-2"
+                        onClick={() => setDeletingEvent(event)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {copy.delete}
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -531,10 +612,10 @@ export function AdminEventsClient() {
                   <label
                     key={category.id}
                     className={cn(
-                      'flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 text-sm font-medium',
+                      'flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 text-sm font-medium transition-colors',
                       selected
-                        ? 'border-[var(--padel-red)] bg-[var(--padel-red)]/7 text-[var(--padel-red)]'
-                        : 'border-[rgba(88,16,16,0.12)] bg-[var(--padel-ivory)]',
+                        ? 'border-[#2f6fed] bg-[#eaf1ff] text-[#1f55b5]'
+                        : 'border-[#d3deea] bg-white text-[#334b65] hover:border-[#aebfd1] hover:bg-[#f4f7fb]',
                     )}
                   >
                     <input
@@ -550,6 +631,39 @@ export function AdminEventsClient() {
             </div>
           </fieldset>
         </form>
+      </DashboardModal>
+
+      <DashboardModal
+        open={Boolean(deletingEvent)}
+        onOpenChange={(open) => {
+          if (!open) setDeletingEvent(null);
+        }}
+        title={copy.deleteTitle}
+        description={
+          deletingEvent
+            ? copy.deleteDescription.replace('{name}', deletingEvent.title)
+            : copy.deleteDescription
+        }
+        size="md"
+        footer={
+          <ModalFormFooter
+            onCancel={() => setDeletingEvent(null)}
+            cancelLabel={t('common.cancel')}
+            busy={Boolean(deletingEvent && busy === `delete-${deletingEvent.id}`)}
+            submitType="button"
+            submitVariant="destructive"
+            onSubmitClick={() => {
+              void confirmDeleteEvent();
+            }}
+            submitLabel={
+              deletingEvent && busy === `delete-${deletingEvent.id}`
+                ? admin.messages.saving
+                : copy.confirmDelete
+            }
+          />
+        }
+      >
+        <p className="text-sm leading-6 text-[#60748b]">{copy.deleteWarning}</p>
       </DashboardModal>
     </AdminShell>
   );

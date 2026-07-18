@@ -30,6 +30,9 @@ export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProp
     if (oauthError === 'google-not-configured') {
       return t('forms.login.googleConfig');
     }
+    if (oauthError === 'legal-consent-required') {
+      return t('forms.login.googleError');
+    }
     if (oauthError) return t('forms.login.googleError');
     return '';
   }, [oauthError, t]);
@@ -55,6 +58,8 @@ export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProp
       const destination =
         data.user?.role === 'ADMIN'
           ? '/admin'
+          : data.user?.role === 'JUDGE'
+            ? '/judge'
           : data.user?.club
             ? nextPath
             : '/complete-club';

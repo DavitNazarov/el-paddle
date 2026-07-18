@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -13,12 +14,14 @@ import { authInputClassName } from '@/constants/form-styles';
 
 export function InviteForm({ token }: { token: string }) {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [eligibilityConfirmed, setEligibilityConfirmed] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -29,16 +32,16 @@ export function InviteForm({ token }: { token: string }) {
       const response = await apiFetch('/api/auth/invite/complete', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token, name, surname, password }),
+        body: JSON.stringify({ token, name, surname, password, legalAccepted, eligibilityConfirmed }),
       });
-      const data = await readApiJson<{ error?: string; user?: { club?: unknown } }>(response, {});
+      const data = await readApiJson<{ error?: string; user?: { club?: unknown; role?: string } }>(response, {});
 
       if (!response.ok) {
         setError(data.error ?? t('forms.invite.error'));
         return;
       }
 
-      router.push(data.user?.club ? '/dashboard' : '/complete-club');
+      router.push(data.user?.role === 'JUDGE' ? '/judge' : data.user?.club ? '/dashboard' : '/complete-club');
       router.refresh();
     } catch {
       setError(t('forms.apiConnectionError', { url: API_BASE_URL }));
@@ -75,9 +78,19 @@ export function InviteForm({ token }: { token: string }) {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">{t('common.password')}</Label>
-        <Input id="password" required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} className={authInputClassName} />
+        <Input id="password" required minLength={12} type="password" value={password} onChange={(event) => setPassword(event.target.value)} className={authInputClassName} />
       </div>
-      <Button type="submit" variant="red" size="lg" disabled={loading} className="min-h-12 w-full">
+      <div className="space-y-3 rounded-lg border border-[var(--padel-ink)]/12 bg-[var(--padel-ink)]/[0.035] p-4 text-sm leading-6">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input className="mt-1 h-5 w-5 shrink-0 accent-[var(--padel-red)]" type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required />
+          <span>{locale === 'ka' ? 'ვეთანხმები ' : 'I agree to the '}<Link className="font-semibold underline underline-offset-4" href="/legal/terms" target="_blank">{locale === 'ka' ? 'გამოყენების პირობებს' : 'Terms of Use'}</Link>{locale === 'ka' ? ' და გავეცანი ' : ' and acknowledge the '}<Link className="font-semibold underline underline-offset-4" href="/legal/privacy" target="_blank">{locale === 'ka' ? 'კონფიდენციალურობის პოლიტიკას' : 'Privacy Policy'}</Link>.</span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-3">
+          <input className="mt-1 h-5 w-5 shrink-0 accent-[var(--padel-red)]" type="checkbox" checked={eligibilityConfirmed} onChange={(event) => setEligibilityConfirmed(event.target.checked)} required />
+          <span>{locale === 'ka' ? 'ვადასტურებ, რომ ვარ სულ მცირე 18 წლის ან მაქვს მშობლის/კანონიერი მეურვის ნებართვა.' : 'I confirm that I am at least 18 or have authorization from a parent or legal guardian.'}</span>
+        </label>
+      </div>
+      <Button type="submit" variant="red" size="lg" disabled={loading || !legalAccepted || !eligibilityConfirmed} className="min-h-12 w-full">
         {loading ? t('forms.invite.saving') : t('forms.invite.complete')}
         <ArrowRight className="h-5 w-5" />
       </Button>

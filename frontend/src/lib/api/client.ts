@@ -17,13 +17,33 @@ export async function readApiJson<T>(response: Response, fallback: T) {
   }
 }
 
-export function apiFetch(path: string, init: RequestInit = {}) {
+let csrfToken = '';
+
+async function getCsrfToken() {
+  if (csrfToken) return csrfToken;
+  const response = await fetch(apiUrl('/api/auth/csrf'), { credentials: 'include', cache: 'no-store' });
+  const data = response.ok ? await response.json() as { token?: string } : {};
+  csrfToken = data.token ?? '';
+  return csrfToken;
+}
+
+export async function apiFetch(path: string, init: RequestInit = {}) {
+  const method = (init.method ?? 'GET').toUpperCase();
+  const token = ['GET', 'HEAD', 'OPTIONS'].includes(method) ? '' : await getCsrfToken();
   return fetch(apiUrl(path), {
     ...init,
     credentials: 'include',
     headers: {
       ...(init.body ? { 'content-type': 'application/json' } : {}),
+      ...(token ? { 'x-csrf-token': token } : {}),
       ...init.headers,
     },
   });
+}
+
+export function createCommandId(scope: string) {
+  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${scope}:${random}`;
 }
