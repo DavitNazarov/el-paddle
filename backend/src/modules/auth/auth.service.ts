@@ -52,7 +52,15 @@ type SessionPayload = JwtPayload & {
 const baseCookieOptions = {
   httpOnly: true,
   sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
+  secure: config.isProduction,
+  path: '/',
+  ...(config.cookieDomain ? { domain: config.cookieDomain } : {}),
+};
+
+const hostOnlyCookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: config.isProduction,
   path: '/',
 };
 
@@ -60,6 +68,11 @@ const cookieOptions = {
   ...baseCookieOptions,
   maxAge: SESSION_MAX_AGE_SECONDS * 1000,
 };
+
+function clearLegacyHostOnlyCookie(response: Response, name: string) {
+  if (!config.cookieDomain) return;
+  response.clearCookie(name, hostOnlyCookieOptions);
+}
 
 function getSessionSecret() {
   return config.jwtSecret;
@@ -147,10 +160,12 @@ export function createSessionToken(user: Pick<User, 'id' | 'sessionVersion'>) {
 }
 
 export function setSessionCookie(response: Response, user: Pick<User, 'id' | 'sessionVersion'>) {
+  clearLegacyHostOnlyCookie(response, SESSION_COOKIE);
   response.cookie(SESSION_COOKIE, createSessionToken(user), cookieOptions);
 }
 
 export function setOAuthStateCookie(response: Response, state: string) {
+  clearLegacyHostOnlyCookie(response, OAUTH_STATE_COOKIE);
   response.cookie(OAUTH_STATE_COOKIE, state, {
     ...baseCookieOptions,
     maxAge: 10 * 60 * 1000,
@@ -158,6 +173,7 @@ export function setOAuthStateCookie(response: Response, state: string) {
 }
 
 export function setOAuthLegalCookie(response: Response) {
+  clearLegacyHostOnlyCookie(response, OAUTH_LEGAL_COOKIE);
   response.cookie(OAUTH_LEGAL_COOKIE, 'accepted', {
     ...baseCookieOptions,
     maxAge: 10 * 60 * 1000,
@@ -166,14 +182,17 @@ export function setOAuthLegalCookie(response: Response) {
 
 export function clearSessionCookie(response: Response) {
   response.clearCookie(SESSION_COOKIE, baseCookieOptions);
+  clearLegacyHostOnlyCookie(response, SESSION_COOKIE);
 }
 
 export function clearOAuthStateCookie(response: Response) {
   response.clearCookie(OAUTH_STATE_COOKIE, baseCookieOptions);
+  clearLegacyHostOnlyCookie(response, OAUTH_STATE_COOKIE);
 }
 
 export function clearOAuthLegalCookie(response: Response) {
   response.clearCookie(OAUTH_LEGAL_COOKIE, baseCookieOptions);
+  clearLegacyHostOnlyCookie(response, OAUTH_LEGAL_COOKIE);
 }
 
 /** Bump sessionVersion so any outstanding JWTs for this user stop working. */

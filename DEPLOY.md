@@ -369,4 +369,4 @@ Set this Vercel environment variable:
 NEXT_PUBLIC_API_URL=https://api.example.com
 ```
 
-For auth cookies, prefer deploying the frontend and API on sibling subdomains of the same parent domain, for example `app.example.com` and `api.example.com`. If the frontend remains on a `*.vercel.app` domain while the API is on another domain, browser cookie rules can block session cookies on API requests.
+For auth cookies, deploy the frontend and API on sibling hosts of the same parent domain, for example `elpadell.com` and `api.elpadell.com`. The backend then sets `Domain=.elpadell.com` (auto-derived, or override with `COOKIE_DOMAIN`) so Next.js SSR on the site origin can read the session cookie. If the frontend remains on a `*.vercel.app` domain while the API is on another domain, browser cookie rules can block session cookies on API requests.

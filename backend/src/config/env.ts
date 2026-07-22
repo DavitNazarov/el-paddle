@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveSharedCookieDomain } from '../common/cookie-domain.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const backendRoot = path.resolve(here, '../..');
@@ -115,6 +116,8 @@ const configuredGoogleRedirectUri =
   process.env.GOOGLE_REDIRECT_URI ??
   `${requireHttpsUrl('BACKEND_URL', configuredBackendUrl)}/api/auth/google/callback`;
 
+const configuredBackendUrlNormalized = requireHttpsUrl('BACKEND_URL', configuredBackendUrl);
+
 export const config = {
   isProduction,
   port: configuredPort,
@@ -122,7 +125,17 @@ export const config = {
   frontendUrl: configuredFrontendUrls[0],
   /** All browser origins allowed by CORS / CSRF / Socket.IO. */
   frontendUrls: configuredFrontendUrls,
-  backendUrl: requireHttpsUrl('BACKEND_URL', configuredBackendUrl),
+  backendUrl: configuredBackendUrlNormalized,
+  /**
+   * Shared cookie Domain for split site/API hosts (e.g. `.elpadell.com`).
+   * Required so Next.js SSR on the site origin can read the API session cookie.
+   * Auto-derived when FRONTEND_URL and BACKEND_URL share a parent; override with COOKIE_DOMAIN.
+   */
+  cookieDomain: resolveSharedCookieDomain({
+    cookieDomain: process.env.COOKIE_DOMAIN,
+    frontendUrls: configuredFrontendUrls,
+    backendUrl: configuredBackendUrlNormalized,
+  }),
   databaseUrl: requireDatabaseUrl(),
   jwtSecret: requireJwtSecret(),
   adminEmails: process.env.ADMIN_EMAILS ?? '',

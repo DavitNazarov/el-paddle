@@ -6,7 +6,23 @@ export const CSRF_COOKIE = 'elpadel_csrf';
 
 export function issueCsrfToken(_request: Request, response: Response) {
   const token = crypto.randomBytes(32).toString('base64url');
-  response.cookie(CSRF_COOKIE, token, { httpOnly: false, sameSite: 'lax', secure: config.isProduction, path: '/', maxAge: 24 * 60 * 60 * 1000 });
+  const cookieOptions = {
+    httpOnly: false,
+    sameSite: 'lax' as const,
+    secure: config.isProduction,
+    path: '/',
+    maxAge: 24 * 60 * 60 * 1000,
+    ...(config.cookieDomain ? { domain: config.cookieDomain } : {}),
+  };
+  if (config.cookieDomain) {
+    response.clearCookie(CSRF_COOKIE, {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: config.isProduction,
+      path: '/',
+    });
+  }
+  response.cookie(CSRF_COOKIE, token, cookieOptions);
   response.json({ token });
 }
 

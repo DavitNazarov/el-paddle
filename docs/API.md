@@ -6,7 +6,8 @@ This document lists the API surface by domain. The route source remains authorit
 
 - API base URL: `http://localhost:4000` in local development.
 - JSON requests use `Content-Type: application/json`.
-- Authentication uses an HTTP-only session cookie.
+- Authentication uses an HTTP-only session cookie (`elpadel_session`).
+- When the site and API use sibling hosts (for example `elpadell.com` and `api.elpadell.com`), the cookie `Domain` is the shared parent so SSR and browser requests share the session.
 - Unsafe requests require a CSRF cookie and matching `x-csrf-token` header.
 - Tournament commands commonly require `commandId` and `expectedVersion`.
 - Validation errors use `400`, authorization failures `401` or `403`, missing resources `404`, and version/state conflicts `409`.
