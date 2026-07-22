@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { apiFetch, apiUrl, readApiJson } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { authInputClassName } from '@/constants/form-styles';
+import { friendlyError } from '@/lib/utils/errors';
 
 
 type LoginFormProps = {
@@ -51,7 +52,7 @@ export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProp
       const data = await readApiJson<{ error?: string; user?: { role?: string; club?: unknown } }>(response, {});
 
       if (!response.ok) {
-        setError(data.error ?? t('forms.login.loginError'));
+        setError(friendlyError(data.error, t('forms.login.loginError'), t('forms.apiConnectionError')));
         return;
       }
 

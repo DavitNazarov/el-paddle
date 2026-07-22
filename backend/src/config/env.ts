@@ -82,6 +82,20 @@ function requireHttpsUrl(name: string, value: string) {
   return url.toString().replace(/\/$/, '');
 }
 
+function parseFrontendUrls(raw: string) {
+  const parts = raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) {
+    throw new Error('FRONTEND_URL is required.');
+  }
+  const urls = parts.map((value, index) =>
+    requireHttpsUrl(parts.length === 1 ? 'FRONTEND_URL' : `FRONTEND_URL[${index}]`, value),
+  );
+  return [...new Set(urls)];
+}
+
 function optionalStrongSecret(name: string, value: string) {
   if (!value) return '';
   if (value.length < 32) throw new Error(`${name} must be at least 32 characters when set.`);
@@ -93,8 +107,9 @@ if (isProduction && !process.env.RESEND_API_KEY?.trim()) {
 }
 
 const configuredPort = numberEnv('PORT', 4000);
-const configuredFrontendUrl =
-  process.env.FRONTEND_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+const configuredFrontendUrls = parseFrontendUrls(
+  process.env.FRONTEND_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+);
 const configuredBackendUrl = process.env.BACKEND_URL ?? `http://localhost:${configuredPort}`;
 const configuredGoogleRedirectUri =
   process.env.GOOGLE_REDIRECT_URI ??
@@ -103,7 +118,10 @@ const configuredGoogleRedirectUri =
 export const config = {
   isProduction,
   port: configuredPort,
-  frontendUrl: requireHttpsUrl('FRONTEND_URL', configuredFrontendUrl),
+  /** Primary site origin used for email links and OAuth return redirects. */
+  frontendUrl: configuredFrontendUrls[0],
+  /** All browser origins allowed by CORS / CSRF / Socket.IO. */
+  frontendUrls: configuredFrontendUrls,
   backendUrl: requireHttpsUrl('BACKEND_URL', configuredBackendUrl),
   databaseUrl: requireDatabaseUrl(),
   jwtSecret: requireJwtSecret(),
@@ -117,4 +135,8 @@ export const config = {
   googleClientId: process.env.GOOGLE_CLIENT_ID,
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
   googleRedirectUri: requireHttpsUrl('GOOGLE_REDIRECT_URI', configuredGoogleRedirectUri),
+  isAllowedFrontendOrigin(origin: string | undefined) {
+    if (!origin) return false;
+    return configuredFrontendUrls.includes(origin);
+  },
 };

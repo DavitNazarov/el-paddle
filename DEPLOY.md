@@ -65,13 +65,12 @@ Bootstrap-only value:
 
 - `FIRST_ADMIN_BOOTSTRAP_TOKEN` - set temporarily to create the first production admin, then remove it after the admin exists.
 
-Example production domain setup:
-
-```dotenv
-FRONTEND_URL=https://app.example.com
-BACKEND_URL=https://api.example.com
-NEXT_PUBLIC_API_URL=https://api.example.com
-GOOGLE_REDIRECT_URI=https://api.example.com/api/auth/google/callback
+# Public URLs. Replace with your real domains.
+# FRONTEND_URL accepts a comma-separated list; the first entry is used for email/OAuth redirects.
+FRONTEND_URL=https://elpadell.com,https://www.elpadell.com
+BACKEND_URL=https://api.elpadell.com
+NEXT_PUBLIC_API_URL=https://api.elpadell.com
+GOOGLE_REDIRECT_URI=https://api.elpadell.com/api/auth/google/callback
 POSTGRES_USER=elpadel_app
 POSTGRES_PASSWORD=GENERATED_UNIQUE_PASSWORD
 POSTGRES_DB=elpadel_prod

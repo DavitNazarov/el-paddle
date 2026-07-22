@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { apiFetch, readApiJson } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { authInputClassName } from '@/constants/form-styles';
+import { friendlyError } from '@/lib/utils/errors';
 
 export function InviteForm({ token }: { token: string }) {
   const router = useRouter();
@@ -37,7 +38,7 @@ export function InviteForm({ token }: { token: string }) {
       const data = await readApiJson<{ error?: string; user?: { club?: unknown; role?: string } }>(response, {});
 
       if (!response.ok) {
-        setError(data.error ?? t('forms.invite.error'));
+        setError(friendlyError(data.error, t('forms.invite.error'), t('forms.apiConnectionError')));
         return;
       }
 

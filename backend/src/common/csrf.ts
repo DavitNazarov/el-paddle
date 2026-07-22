@@ -15,7 +15,7 @@ export function csrfGuard(request: Request, response: Response, next: NextFuncti
   const cookie = request.cookies?.[CSRF_COOKIE];
   const header = request.headers['x-csrf-token'];
   const origin = request.headers.origin;
-  if (origin && origin !== config.frontendUrl) {
+  if (origin && !config.isAllowedFrontendOrigin(origin)) {
     response.status(403).json({ error: 'Invalid request origin.' });
     return;
   }

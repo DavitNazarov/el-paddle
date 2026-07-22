@@ -115,7 +115,7 @@ async function canSubscribeToMatch(user: SocketUser | undefined, matchId: string
 
 export function createRealtimeGateway(server: HttpServer) {
   const io = new Server(server, {
-    cors: { origin: config.frontendUrl, credentials: true },
+    cors: { origin: config.frontendUrls, credentials: true },
     maxHttpBufferSize: 16 * 1024,
     transports: ['websocket', 'polling'],
   });

@@ -22,7 +22,13 @@ app.use(securityHeaders);
 app.use(compression({ threshold: 1024 }));
 app.use(
   cors({
-    origin: config.frontendUrl,
+    origin(origin, callback) {
+      if (!origin || config.isAllowedFrontendOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   }),
 );
