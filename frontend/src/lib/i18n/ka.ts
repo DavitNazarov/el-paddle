@@ -51,7 +51,7 @@ export const ka = {
     },
     forms: {
       databaseNotReady: 'მონაცემთა ბაზა ჯერ მზად არ არის. გაუშვი Docker Postgres და Prisma migration, შემდეგ სცადე თავიდან.',
-      apiConnectionError: 'API-სთან დაკავშირება ვერ მოხერხდა მისამართზე {url}. გაუშვი backend ბრძანებით npm run dev:backend და სცადე თავიდან.',
+      apiConnectionError: 'API-სთან დაკავშირება ვერ მოხერხდა. შეამოწმე, რომ backend გაშვებულია, და სცადე თავიდან.',
       register: {
         kicker: 'რეგისტრაცია',
         profileTitle: 'შენი მონაცემები',

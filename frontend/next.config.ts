@@ -1,6 +1,14 @@
 import type { NextConfig } from 'next';
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+function resolvePublicApiUrl() {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
+  if (!configured || !/^https?:\/\//i.test(configured)) {
+    return 'http://localhost:4000';
+  }
+  return configured;
+}
+
+const apiUrl = resolvePublicApiUrl();
 
 function websocketOrigin(value: string) {
   try {
@@ -36,10 +44,10 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-	          { key: 'X-Frame-Options', value: 'DENY' },
-	          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-	          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-	          { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Content-Security-Policy', value: contentSecurityPolicy },
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',

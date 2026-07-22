@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { API_BASE_URL, apiFetch, readApiJson } from '@/lib/api';
+import { apiFetch, readApiJson } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { authInputClassName } from '@/constants/form-styles';
 import { cn } from '@/lib/utils';
@@ -90,7 +90,7 @@ export function CompleteClubForm() {
       setPendingRequest(null);
       setStep('mate');
     } catch {
-      setError(t('forms.apiConnectionError', { url: API_BASE_URL }));
+      setError(t('forms.apiConnectionError'));
     } finally {
       setLoading(false);
     }
@@ -120,7 +120,7 @@ export function CompleteClubForm() {
       setPendingRequest(data.clubRequest);
       setStep('choice');
     } catch {
-      setError(t('forms.apiConnectionError', { url: API_BASE_URL }));
+      setError(t('forms.apiConnectionError'));
     } finally {
       setLoading(false);
     }
@@ -159,7 +159,7 @@ export function CompleteClubForm() {
     try {
       await refreshRequestStatus();
     } catch {
-      setError(t('forms.apiConnectionError', { url: API_BASE_URL }));
+      setError(t('forms.apiConnectionError'));
     } finally {
       setLoading(false);
     }
@@ -190,7 +190,7 @@ export function CompleteClubForm() {
       router.push('/dashboard/club');
       router.refresh();
     } catch {
-      setError(t('forms.apiConnectionError', { url: API_BASE_URL }));
+      setError(t('forms.apiConnectionError'));
     } finally {
       setLoading(false);
     }

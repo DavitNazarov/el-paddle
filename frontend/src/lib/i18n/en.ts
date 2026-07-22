@@ -51,7 +51,7 @@ export const en = {
     },
     forms: {
       databaseNotReady: 'Database is not ready yet. Start Docker Postgres and run the Prisma migration, then try again.',
-      apiConnectionError: 'Could not reach the API at {url}. Start the backend with npm run dev:backend and try again.',
+      apiConnectionError: 'Could not reach the API. Check that the backend is running and try again.',
       register: {
         kicker: 'Create account',
         profileTitle: 'Your details',
