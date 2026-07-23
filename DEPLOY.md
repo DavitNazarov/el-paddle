@@ -50,6 +50,7 @@ Required values:
 - `FRONTEND_URL`
 - `BACKEND_URL`
 - `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_SITE_URL` (canonical SEO origin; defaults to `https://elpadell.com` in Docker build if unset)
 - `JWT_SECRET`
 - `ADMIN_EMAILS`
 - `RESEND_API_KEY`
@@ -71,6 +72,9 @@ FRONTEND_URL=https://elpadell.com,https://www.elpadell.com
 BACKEND_URL=https://api.elpadell.com
 NEXT_PUBLIC_API_URL=https://api.elpadell.com
 GOOGLE_REDIRECT_URI=https://api.elpadell.com/api/auth/google/callback
+# Canonical public site origin for SEO (robots.txt Sitemap, sitemap.xml, Open Graph, canonical URLs).
+# Prefer this over FRONTEND_URL when www and apex both appear in FRONTEND_URL.
+NEXT_PUBLIC_SITE_URL=https://elpadell.com
 POSTGRES_USER=elpadel_app
 POSTGRES_PASSWORD=GENERATED_UNIQUE_PASSWORD
 POSTGRES_DB=elpadel_prod

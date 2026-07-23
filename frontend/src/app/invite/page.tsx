@@ -4,6 +4,8 @@ import { InviteForm, MissingInviteToken } from '@/components/auth/InviteForm';
 
 export const metadata: Metadata = {
   title: 'Teammate Invite — El Padel',
+  description: 'Accept a teammate invitation for an El Padel tournament entry.',
+  robots: { index: false, follow: false },
 };
 
 type InvitePageProps = {

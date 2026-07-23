@@ -6,6 +6,8 @@ import { getCurrentUser } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'Club Setup — El Padel',
+  description: 'Finish club setup for your El Padel player account.',
+  robots: { index: false, follow: false },
 };
 
 export default async function CompleteClubPage() {

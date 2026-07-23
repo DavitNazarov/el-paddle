@@ -6,6 +6,8 @@ import { getCurrentUser } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'Create Account — El Padel',
+  description: 'Create an El Padel Tournament Tbilisi player account to register for events.',
+  robots: { index: false, follow: false },
 };
 
 export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {

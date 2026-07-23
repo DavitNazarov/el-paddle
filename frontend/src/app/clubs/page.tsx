@@ -4,11 +4,16 @@ import { PublicClubsDirectory, type PublicClub } from '@/components/tournament/P
 import { apiUrl } from '@/lib/api';
 import { normalizeLocale } from '@/lib/i18n';
 import { tournamentCopy } from '@/lib/i18n/tournament';
+import { buildPageMetadata } from '@/lib/seo';
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = normalizeLocale((await cookies()).get('elpadel_locale')?.value);
   const copy = tournamentCopy[locale].directories.clubs;
-  return { title: `${copy.title} — El Padel`, description: copy.description };
+  return buildPageMetadata({
+    title: `${copy.title} — El Padel`,
+    description: copy.description,
+    path: '/clubs',
+  });
 }
 
 async function getClubs() {

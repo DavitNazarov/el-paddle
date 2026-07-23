@@ -96,6 +96,7 @@ export function Hero() {
           animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
           transition={lightweightMotion ? { duration: 0 } : { duration: 0.8, delay: 0.48, ease: easeOut }}
         >
+          <span className="sr-only">El Padel. </span>
           {hero.subtitle}
         </motion.h1>
         <motion.p

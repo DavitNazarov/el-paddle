@@ -294,6 +294,15 @@ export async function listPublicEvents() {
   return { upcoming: upcoming[0] ?? null, previous };
 }
 
+/** Lightweight published-event index for SEO sitemaps (not truncated like listPublicEvents). */
+export async function listPublishedEventsForSitemap() {
+  return prisma.event.findMany({
+    where: { isPublished: true },
+    select: { id: true, date: true, updatedAt: true },
+    orderBy: { date: 'desc' },
+  });
+}
+
 export async function updateTournamentPublication(input: {
   eventId: string;
   actorId: string;

@@ -18,6 +18,7 @@ import {
   getEventById,
   listEvents,
   listPublicEvents,
+  listPublishedEventsForSitemap,
   updateEvent,
   updateTournamentPublication,
 } from './events.service.js';
@@ -209,6 +210,25 @@ eventsRouter.get('/api/public/events', asyncHandler(async (_request, response) =
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
       response.json({ upcoming: null, previous: [], databaseUnavailable: true });
+      return;
+    }
+    throw error;
+  }
+}));
+
+eventsRouter.get('/api/public/sitemap-events', asyncHandler(async (_request, response) => {
+  try {
+    const events = await listPublishedEventsForSitemap();
+    response.json({
+      events: events.map((event) => ({
+        id: event.id,
+        date: event.date.toISOString(),
+        updatedAt: event.updatedAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    if (isDatabaseConnectionError(error)) {
+      response.json({ events: [], databaseUnavailable: true });
       return;
     }
     throw error;

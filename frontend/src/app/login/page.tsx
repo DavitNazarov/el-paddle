@@ -6,6 +6,8 @@ import { getCurrentUser } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'Log In — El Padel',
+  description: 'Sign in to your El Padel Tournament Tbilisi account.',
+  robots: { index: false, follow: false },
 };
 
 type LoginPageProps = {
