@@ -24,7 +24,7 @@
   border: 1px solid var(--dash-border);
   border-radius: 0.875rem;
   background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 1px 2px rgba(25, 50, 77, 0.04);
+  box-shadow: 0 1px 2px rgba(43, 26, 24, 0.04);
 }
 
 .overviewIntro {
@@ -43,10 +43,10 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(47, 111, 237, 0.18);
+  border: 1px solid rgba(164, 22, 26, 0.18);
   border-radius: 0.7rem;
-  background: var(--dash-sky-soft);
-  color: var(--dash-sky);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
 }
 
 .overviewIcon svg,
@@ -154,7 +154,7 @@
 }
 
 .categoryNav a:focus-visible {
-  outline: 2px solid var(--dash-sky);
+  outline: 2px solid var(--dash-primary);
   outline-offset: 2px;
 }
 
@@ -165,8 +165,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: var(--dash-sky-soft);
-  color: var(--dash-sky);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
   font-size: 0.65rem;
   font-variant-numeric: tabular-nums;
 }
@@ -182,7 +182,7 @@
   border: 1px solid var(--dash-border);
   border-radius: 0.875rem;
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 3px rgba(25, 50, 77, 0.045), 0 10px 30px rgba(25, 50, 77, 0.025);
+  box-shadow: 0 1px 3px rgba(43, 26, 24, 0.045), 0 10px 30px rgba(43, 26, 24, 0.025);
 }
 
 .bracketHeader {
@@ -229,7 +229,7 @@
   padding: 0 0.55rem;
   border: 1px solid var(--dash-border);
   border-radius: 999px;
-  background: #f7f9fc;
+  background: #faf6f3;
   color: var(--dash-muted);
   font-size: 0.625rem;
   font-weight: 750;
@@ -251,9 +251,9 @@
 }
 
 .metaPill[data-tone='info'] {
-  border-color: rgba(47, 111, 237, 0.22);
-  background: var(--dash-sky-soft);
-  color: var(--dash-sky);
+  border-color: rgba(164, 22, 26, 0.22);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
 }
 
 .headerAside {
@@ -277,7 +277,7 @@
 
 .headerActions button:hover:not(:disabled) {
   border-color: var(--dash-border-strong) !important;
-  background: var(--dash-sky-soft) !important;
+  background: var(--dash-primary-soft) !important;
 }
 
 .headerActions button:disabled {
@@ -286,8 +286,8 @@
 }
 
 .headerActions .primaryAction {
-  border-color: var(--dash-sky) !important;
-  background: var(--dash-sky) !important;
+  border-color: var(--dash-primary) !important;
+  background: var(--dash-primary) !important;
   color: #fff !important;
 }
 
@@ -368,7 +368,7 @@
 }
 
 .roundHeader > span {
-  color: var(--dash-sky);
+  color: var(--dash-primary);
   font-size: 0.625rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -402,21 +402,21 @@
 .matchCard {
   overflow: hidden;
   width: 100%;
-  border: 1px solid rgba(25, 50, 77, 0.13);
+  border: 1px solid rgba(43, 26, 24, 0.13);
   border-radius: 0.7rem;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(25, 50, 77, 0.045);
+  box-shadow: 0 1px 2px rgba(43, 26, 24, 0.045);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .matchCard:hover {
-  border-color: rgba(47, 111, 237, 0.28);
-  box-shadow: 0 5px 15px rgba(25, 50, 77, 0.07);
+  border-color: rgba(164, 22, 26, 0.28);
+  box-shadow: 0 5px 15px rgba(43, 26, 24, 0.07);
 }
 
 .matchCard[data-status='in_progress'] {
-  border-color: rgba(47, 111, 237, 0.35);
-  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.06);
+  border-color: rgba(164, 22, 26, 0.35);
+  box-shadow: 0 0 0 3px rgba(164, 22, 26, 0.06);
 }
 
 .matchCard[data-status='cancelled'] {
@@ -454,9 +454,9 @@
 
 .matchStatus[data-status='in_progress'],
 .matchStatus[data-status='ready'] {
-  border-color: rgba(47, 111, 237, 0.22);
-  background: var(--dash-sky-soft);
-  color: var(--dash-sky);
+  border-color: rgba(164, 22, 26, 0.22);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
 }
 
 .matchStatus[data-status='cancelled'] {
@@ -480,7 +480,7 @@
 }
 
 .participant + .participant {
-  border-top: 1px solid rgba(25, 50, 77, 0.08);
+  border-top: 1px solid rgba(43, 26, 24, 0.08);
 }
 
 .participant.winner {
@@ -692,7 +692,7 @@
     right: -1.55rem;
     width: 0.85rem;
     height: 0.85rem;
-    color: rgba(47, 111, 237, 0.5);
+    color: rgba(164, 22, 26, 0.5);
   }
 
   .matchAdvances::after {
@@ -701,7 +701,7 @@
     width: 1.2rem;
     height: 1px;
     content: '';
-    background: rgba(47, 111, 237, 0.2);
+    background: rgba(164, 22, 26, 0.2);
   }
 }
 

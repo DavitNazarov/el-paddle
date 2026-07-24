@@ -3,10 +3,14 @@ import { DeliveryStatus, NotificationType, OpponentRequestStatus, OutboxStatus, 
 import { prisma } from '../database/prisma.js';
 import { appUrl, emailButton, emailLayout, escapeHtml, sendEmail } from '../common/email.js';
 import { emitToRoom } from '../realtime/socket.js';
-import { queueNotification, queueOutbox, writeAudit } from '../common/domain-events.js';
+import { queueNotifications, queueOutbox, writeAudit } from '../common/domain-events.js';
 
 const workerId = `${os.hostname()}:${process.pid}`;
 let timer: NodeJS.Timeout | null = null;
+
+/** How often the background loop purges expired auth/command bookkeeping rows. */
+const RETENTION_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let lastRetentionCleanupAt = 0;
 
 type OutboxMode = 'all' | 'email' | 'realtime';
 
@@ -69,9 +73,43 @@ function outboxWhere(mode: OutboxMode): Prisma.OutboxMessageWhereInput {
   return base;
 }
 
+/**
+ * Delete bookkeeping rows that are safe to forget: command receipts past their
+ * TTL, plus consumed or expired email-verification codes and invite tokens.
+ * Without this these tables grow monotonically (DB-1).
+ */
+export async function runRetentionCleanup(now = new Date()) {
+  const [commandReceipts, verificationCodes, inviteTokens] = await prisma.$transaction([
+    prisma.commandReceipt.deleteMany({ where: { expiresAt: { lt: now } } }),
+    prisma.emailVerificationCode.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] } }),
+    prisma.inviteToken.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] } }),
+  ]);
+  return {
+    commandReceipts: commandReceipts.count,
+    verificationCodes: verificationCodes.count,
+    inviteTokens: inviteTokens.count,
+  };
+}
+
+async function runRetentionCleanupIfDue() {
+  const now = Date.now();
+  if (now - lastRetentionCleanupAt < RETENTION_CLEANUP_INTERVAL_MS) return;
+  lastRetentionCleanupAt = now;
+  try {
+    await runRetentionCleanup(new Date(now));
+  } catch (error) {
+    console.error('[retention]', error);
+  }
+}
+
 export async function processOutboxBatch(limit = 25, options: ProcessOutboxOptions = {}) {
   const mode = options.mode ?? 'all';
-  if (options.expireOpponentRequests ?? true) await expireOpponentRequests();
+  // Retention cleanup is throttled internally and pinned to the same process that
+  // owns opponent-request expiry, so it runs in exactly one place per deployment.
+  if (options.expireOpponentRequests ?? true) {
+    await expireOpponentRequests();
+    await runRetentionCleanupIfDue();
+  }
   await prisma.outboxMessage.updateMany({ where: { status: OutboxStatus.PROCESSING, lockedAt: { lt: new Date(Date.now() - 5 * 60_000) } }, data: { status: OutboxStatus.FAILED, lockedAt: null, lockedBy: null, availableAt: new Date(), lastError: 'Recovered expired worker lease.' } });
   const rows = await prisma.outboxMessage.findMany({ where: outboxWhere(mode), orderBy: { createdAt: 'asc' }, take: limit });
   for (const row of rows) {
@@ -93,13 +131,13 @@ export async function processOutboxBatch(limit = 25, options: ProcessOutboxOptio
   return rows.length;
 }
 
-async function expireOpponentRequests() {
+export async function expireOpponentRequests() {
   const expired = await prisma.opponentRequest.findMany({ where: { status: OpponentRequestStatus.PENDING_RESPONSE, expiresAt: { lte: new Date() } }, include: { requestingEntry: { include: { owner: true, teammate: true } }, targetEntry: { include: { owner: true, teammate: true } } }, take: 50 });
   for (const request of expired) {
     await prisma.$transaction(async (tx) => {
       const updated = await tx.opponentRequest.updateMany({ where: { id: request.id, status: OpponentRequestStatus.PENDING_RESPONSE, version: request.version }, data: { status: OpponentRequestStatus.EXPIRED, version: { increment: 1 } } });
       if (!updated.count) return;
-      for (const entry of [request.requestingEntry, request.targetEntry]) for (const user of [entry.owner, entry.teammate]) await queueNotification(tx, { recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.OPPONENT_REQUEST_EXPIRED, title: 'Opponent request expired', message: 'The opponent request deadline passed without a response.', entityType: 'OpponentRequest', entityId: request.id, eventId: request.eventId, actionPath: `/dashboard/events/${request.eventId}`, version: request.version + 1 });
+      await queueNotifications(tx, [request.requestingEntry, request.targetEntry].flatMap((entry) => [entry.owner, entry.teammate].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.OPPONENT_REQUEST_EXPIRED, title: 'Opponent request expired', message: 'The opponent request deadline passed without a response.', entityType: 'OpponentRequest', entityId: request.id, eventId: request.eventId, actionPath: `/dashboard/events/${request.eventId}`, version: request.version + 1 }))));
       await writeAudit(tx, { action: 'opponent-request.expired', eventId: request.eventId, entityType: 'OpponentRequest', entityId: request.id, before: { status: request.status }, after: { status: OpponentRequestStatus.EXPIRED } });
       await queueOutbox(tx, { topic: 'opponent-request.expired', aggregateType: 'OpponentRequest', aggregateId: request.id, payload: { eventId: request.eventId, requestId: request.id, version: request.version + 1 }, deduplicationKey: `opponent:${request.id}:expired:v${request.version + 1}` });
     });
@@ -113,9 +151,4 @@ export function startOutboxWorker(options: ProcessOutboxOptions = {}) {
     timer = setTimeout(tick, 2_000);
   };
   void tick();
-}
-
-export function stopOutboxWorker() {
-  if (timer) clearTimeout(timer);
-  timer = null;
 }

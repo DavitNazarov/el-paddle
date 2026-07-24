@@ -82,7 +82,7 @@ export function AdminSettingsClient() {
           />
         }
       >
-        <p className="text-sm leading-6 text-[#60748b]">{copy.deleteWarning}</p>
+        <p className="text-sm leading-6 text-[#6d5f5c]">{copy.deleteWarning}</p>
       </DashboardModal>
     </AdminShell>
   );

@@ -4,7 +4,6 @@ import { UserRole, UserStatus, type User } from '../../generated/prisma/client.j
 import { config } from '../../config/env.js';
 import { ApiError } from '../../common/http.js';
 import { prisma } from '../../database/prisma.js';
-import { getPlayerStats } from '../users/player-stats.js';
 
 export const SESSION_COOKIE = 'elpadel_session';
 export const OAUTH_STATE_COOKIE = 'elpadel_oauth_state';
@@ -239,48 +238,46 @@ export async function getCurrentUser(request: Request) {
     return null;
   }
 
+  // The read path is side-effect free. ADMIN_EMAILS-driven role drift is persisted
+  // (and athlete links cleaned) only at explicit authentication points via
+  // reconcileUserRole — a GET must never mutate roles or delete registrations (M-3).
+  const effectiveRole = roleForEmail(user.email, user.role, {
+    emailVerified: Boolean(user.emailVerifiedAt),
+  });
+
+  // Player win/loss stats come from the transactionally-maintained denormalized
+  // counters on User (see matches.service completeMatch/correctCompletedMatch),
+  // exposed by toPublicUser. This keeps a single source of truth and avoids a
+  // per-request match aggregation on the hot authenticated path. Point-in-time,
+  // publication-gated stats are computed on demand only by the public
+  // player/profile endpoints (see users.service getPlayerStats).
+  return toPublicUser(effectiveRole === user.role ? user : { ...user, role: effectiveRole });
+}
+
+/**
+ * Persist ADMIN_EMAILS-driven role drift and, on promotion to admin, drop the
+ * user's athlete (registration / club) links. Called at explicit authentication
+ * points only — never on the read path (M-3), so a session read can never delete
+ * tournament data.
+ */
+export async function reconcileUserRole(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, emailVerifiedAt: true },
+  });
+  if (!user) return;
   const nextRole = roleForEmail(user.email, user.role, {
     emailVerified: Boolean(user.emailVerifiedAt),
   });
-  const current =
-    nextRole === user.role
-      ? user
-      : await prisma.user.update({
-          where: { id: user.id },
-          data: { role: nextRole },
-          include: {
-            clubMemberships: {
-              include: {
-                club: {
-                  select: { id: true, name: true, slug: true },
-                },
-              },
-              take: 1,
-            },
-          },
-        });
-
+  if (nextRole === user.role) return;
+  await prisma.user.update({ where: { id: user.id }, data: { role: nextRole } });
   if (nextRole === UserRole.ADMIN) {
-    await removeAdminAthleteLinks(current.id);
+    await removeAdminAthleteLinks(user.id);
   }
-
-  const publicUser = toPublicUser(current);
-  if (publicUser.role === UserRole.USER) {
-    const stats = await getPlayerStats([publicUser.id]);
-    publicUser.stats = stats.get(publicUser.id) ?? { matchesPlayed: 0, wins: 0, losses: 0 };
-  }
-
-  return publicUser;
 }
 
 export async function requireUser(request: Request) {
   const user = await getCurrentUser(request);
   if (!user) throw new ApiError('Unauthorized', 401);
-  return user;
-}
-
-export async function requireAdmin(request: Request) {
-  const user = await requireUser(request);
-  if (user.role !== UserRole.ADMIN) throw new ApiError('Forbidden', 403);
   return user;
 }

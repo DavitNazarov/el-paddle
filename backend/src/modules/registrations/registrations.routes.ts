@@ -13,6 +13,7 @@ import { auditLog, requestIp } from '../../common/audit.js';
 import { requireParticipationLegalAcceptance } from '../../common/legal.js';
 import { requireCapability } from '../../common/capabilities.js';
 import { requireCommandId } from '../../common/commands.js';
+import { parseListRange } from '../../common/pagination.js';
 import { serializeEvent, serializePublicRegistrationTeam, serializeRegistration } from '../../common/serializers.js';
 import {
   createRegistration,
@@ -90,8 +91,8 @@ registrationsRouter.patch('/api/registrations/:id/lineup', asyncHandler(async (r
 
 registrationsRouter.get('/api/admin/registrations', asyncHandler(async (request, response) => {
   await requireCapability(request, Capability.REGISTRATION_REVIEW);
-  const registrations = await listAdminRegistrations();
-  response.json({ registrations: registrations.map(serializeRegistration) });
+  const page = await listAdminRegistrations(undefined, parseListRange(request.query));
+  response.json({ registrations: page.items.map(serializeRegistration), nextCursor: page.nextCursor });
 }));
 
 registrationsRouter.patch('/api/admin/registrations/:id', asyncHandler(async (request, response) => {
@@ -125,8 +126,8 @@ registrationsRouter.patch('/api/admin/registrations/:id', asyncHandler(async (re
 registrationsRouter.get('/api/admin/events/:eventId/registrations', asyncHandler(async (request, response) => {
   await requireCapability(request, Capability.REGISTRATION_REVIEW);
   const eventId = requireParamId(request.params.eventId, 'event id');
-  const registrations = await listAdminRegistrations(eventId);
-  response.json({ registrations: registrations.map(serializeRegistration) });
+  const page = await listAdminRegistrations(eventId, parseListRange(request.query));
+  response.json({ registrations: page.items.map(serializeRegistration), nextCursor: page.nextCursor });
 }));
 
 registrationsRouter.patch('/api/admin/events/:eventId/registration-roster-publication', asyncHandler(async (request, response) => {

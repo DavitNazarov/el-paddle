@@ -8,7 +8,7 @@ import {
 import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
-import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 
 export const opponentRequestInclude = {
   requestingEntry: { include: { owner: true, teammate: true, category: true } },
@@ -83,6 +83,16 @@ const activeStatuses = [
   OpponentRequestStatus.OVERRIDDEN_BY_ADMIN,
 ] as const;
 
+/**
+ * A pending opponent request auto-expires at its category's opponent-request
+ * deadline. The outbox worker transitions rows whose `expiresAt <= now` to
+ * EXPIRED, so this value MUST be persisted for the expiry workflow to run.
+ * `null` means no deadline is configured and the request never auto-expires.
+ */
+export function resolveOpponentRequestExpiry(link: { opponentRequestDeadline: Date | null }) {
+  return link.opponentRequestDeadline ?? null;
+}
+
 function canonicalPair(a: string, b: string) {
   return [a, b].sort().join(':');
 }
@@ -121,20 +131,18 @@ async function notifyEntry(
   entry: Awaited<ReturnType<typeof assertEligibleEntry>>,
   input: { type: NotificationType; title: string; message: string; requestId: string; eventId: string; version: number },
 ) {
-  for (const user of [entry.owner, entry.teammate]) {
-    await queueNotification(tx, {
-      recipientUserId: user.id,
-      recipientEmail: user.email,
-      type: input.type,
-      title: input.title,
-      message: input.message,
-      entityType: 'OpponentRequest',
-      entityId: input.requestId,
-      eventId: input.eventId,
-      actionPath: `/dashboard/events/${input.eventId}?request=${input.requestId}`,
-      version: input.version,
-    });
-  }
+  await queueNotifications(tx, [entry.owner, entry.teammate].map((user) => ({
+    recipientUserId: user.id,
+    recipientEmail: user.email,
+    type: input.type,
+    title: input.title,
+    message: input.message,
+    entityType: 'OpponentRequest',
+    entityId: input.requestId,
+    eventId: input.eventId,
+    actionPath: `/dashboard/events/${input.eventId}?request=${input.requestId}`,
+    version: input.version,
+  })));
 }
 
 export async function setOpponentRequestWindow(input: { eventId: string; categoryId: string; actorId: string; open: boolean; deadline?: Date; expectedVersion: number; commandId: string }) {
@@ -156,6 +164,13 @@ export async function setOpponentRequestWindow(input: { eventId: string; categor
         ? { opponentRequestsOpenedAt: now, opponentRequestsClosedAt: null, opponentRequestDeadline: input.deadline, opponentRequestVersion: { increment: 1 } }
         : { opponentRequestsClosedAt: now, opponentRequestVersion: { increment: 1 } },
     });
+    if (input.open) {
+      // Keep pending requests' auto-expiry aligned with the (possibly changed) deadline.
+      await tx.opponentRequest.updateMany({
+        where: { eventId: input.eventId, categoryId: input.categoryId, status: OpponentRequestStatus.PENDING_RESPONSE },
+        data: { expiresAt: input.deadline ?? null },
+      });
+    }
     await writeAudit(tx, { action: input.open ? 'opponent-request.window.opened' : 'opponent-request.window.closed', actorId: input.actorId, eventId: input.eventId, entityType: 'EventCategory', entityId: input.categoryId, after: { open: input.open, deadline: input.deadline?.toISOString() } });
     await queueOutbox(tx, { topic: 'opponent-request.window.updated', aggregateType: 'EventCategory', aggregateId: input.categoryId, payload: { eventId: input.eventId, categoryId: input.categoryId, open: input.open, version: updated.opponentRequestVersion }, deduplicationKey: `opponent-window:${input.eventId}:${input.categoryId}:v${updated.opponentRequestVersion}` });
     await saveCommandReceipt(tx, { actorId: input.actorId, action: `opponent.window.${input.open ? 'open' : 'close'}`, commandId: input.commandId, hash });
@@ -182,7 +197,7 @@ export async function createOpponentRequest(input: { userId: string; eventId: st
   return prisma.$transaction(async (tx) => {
     const replay = await findCommandReceipt(tx, input.userId, 'opponent.create', input.commandId, hash);
     if (replay) return tx.opponentRequest.findFirstOrThrow({ where: { requestingEntryId: input.requestingEntryId, canonicalPairKey: canonicalPair(input.requestingEntryId, input.targetEntryId) }, include: opponentRequestInclude });
-    await requireOpenWindow(tx, input.eventId, own.categoryId);
+    const link = await requireOpenWindow(tx, input.eventId, own.categoryId);
     const requester = await assertEligibleEntry(tx, own.id, input.eventId, own.categoryId);
     const target = await assertEligibleEntry(tx, input.targetEntryId, input.eventId, own.categoryId);
     const pairKey = canonicalPair(requester.id, target.id);
@@ -190,7 +205,9 @@ export async function createOpponentRequest(input: { userId: string; eventId: st
     if (existingPair) return existingPair;
     const outgoing = await tx.opponentRequest.findFirst({ where: { requestingEntryId: requester.id, status: { in: [...activeStatuses] } } });
     if (outgoing) jsonError('This entry already has an active opponent request.', 409);
-    const request = await tx.opponentRequest.create({ data: { eventId: input.eventId, categoryId: own.categoryId, requestingEntryId: requester.id, targetEntryId: target.id, requestedByUserId: input.userId, requestMessage: input.message || null, canonicalPairKey: pairKey }, include: opponentRequestInclude });
+    // Pending requests auto-expire at the category's opponent-request deadline so the
+    // outbox worker can transition them to EXPIRED (see workers/outbox.worker expireOpponentRequests).
+    const request = await tx.opponentRequest.create({ data: { eventId: input.eventId, categoryId: own.categoryId, requestingEntryId: requester.id, targetEntryId: target.id, requestedByUserId: input.userId, requestMessage: input.message || null, canonicalPairKey: pairKey, expiresAt: resolveOpponentRequestExpiry(link) }, include: opponentRequestInclude });
     await notifyEntry(tx, target, { type: NotificationType.OPPONENT_REQUEST_CREATED, title: 'Opponent request received', message: `${requester.owner.name ?? requester.owner.email} and their teammate requested your entry.`, requestId: request.id, eventId: input.eventId, version: request.version });
     await writeAudit(tx, { action: 'opponent-request.created', actorId: input.userId, eventId: input.eventId, entityType: 'OpponentRequest', entityId: request.id, after: { requestingEntryId: requester.id, targetEntryId: target.id, status: request.status } });
     await queueOutbox(tx, { topic: 'opponent-request.created', aggregateType: 'OpponentRequest', aggregateId: request.id, payload: { eventId: input.eventId, requestId: request.id, version: request.version }, deduplicationKey: `opponent:${request.id}:created:v${request.version}` });
@@ -208,9 +225,9 @@ export async function updateOpponentRequest(input: { userId: string; eventId: st
     if (!request || (request.requestingEntry.ownerId !== input.userId && request.requestingEntry.teammateId !== input.userId)) jsonError('Opponent request not found.', 404);
     if (request.status !== OpponentRequestStatus.PENDING_RESPONSE || request.version !== input.expectedVersion) jsonError('Request can no longer be changed.', 409);
     if (request.requestingEntryId === input.targetEntryId) jsonError('An entry cannot request itself.');
-    await requireOpenWindow(tx, request.eventId, request.categoryId);
+    const link = await requireOpenWindow(tx, request.eventId, request.categoryId);
     const target = await assertEligibleEntry(tx, input.targetEntryId, request.eventId, request.categoryId);
-    const updated = await tx.opponentRequest.update({ where: { id: request.id }, data: { targetEntryId: target.id, canonicalPairKey: canonicalPair(request.requestingEntryId, target.id), requestMessage: input.message || null, responseReason: null, version: { increment: 1 } }, include: opponentRequestInclude });
+    const updated = await tx.opponentRequest.update({ where: { id: request.id }, data: { targetEntryId: target.id, canonicalPairKey: canonicalPair(request.requestingEntryId, target.id), requestMessage: input.message || null, responseReason: null, expiresAt: resolveOpponentRequestExpiry(link), version: { increment: 1 } }, include: opponentRequestInclude });
     await notifyEntry(tx, target, { type: NotificationType.OPPONENT_REQUEST_CREATED, title: 'Opponent request received', message: 'An approved entry selected your team as a requested opponent.', requestId: request.id, eventId: request.eventId, version: updated.version });
     await writeAudit(tx, { action: 'opponent-request.updated', actorId: input.userId, eventId: request.eventId, entityType: 'OpponentRequest', entityId: request.id, before: { targetEntryId: request.targetEntryId }, after: { targetEntryId: target.id } });
     await queueOutbox(tx, { topic: 'opponent-request.updated', aggregateType: 'OpponentRequest', aggregateId: request.id, payload: { eventId: request.eventId, requestId: request.id, version: updated.version }, deduplicationKey: `opponent:${request.id}:updated:v${updated.version}` });

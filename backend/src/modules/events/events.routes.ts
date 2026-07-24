@@ -174,7 +174,12 @@ eventsRouter.patch('/api/events/:id', asyncHandler(async (request, response) => 
     jsonError('No valid event fields to update.');
   }
 
-  const event = await updateEvent(requireParamId(request.params.id), data);
+  const expectedVersion = Number(request.body.expectedVersion);
+  if (!Number.isInteger(expectedVersion)) {
+    jsonError('An event version is required to save changes. Refresh and try again.', 409);
+  }
+
+  const event = await updateEvent(requireParamId(request.params.id), data, expectedVersion);
   response.json({ event: serializeEvent(event) });
 }));
 

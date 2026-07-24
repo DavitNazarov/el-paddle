@@ -16,12 +16,17 @@ import { prisma } from '../../database/prisma.js';
 import { slugify, isSafeSlug } from '../../common/slug.js';
 import { roleForEmail } from '../auth/auth.service.js';
 import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { cursorArgs, toPage, type ListRange } from '../../common/pagination.js';
 
-export async function listAdminClubs() {
-  return prisma.club.findMany({
-    orderBy: { name: 'asc' },
+export async function listAdminClubs(range: ListRange = {}) {
+  const { take, pageSize, ...cursor } = cursorArgs(range);
+  const rows = await prisma.club.findMany({
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
     include: clubInclude,
+    take,
+    ...cursor,
   });
+  return toPage(rows, pageSize);
 }
 
 export async function listPublicClubs() {

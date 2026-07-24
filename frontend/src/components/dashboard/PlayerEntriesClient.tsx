@@ -130,7 +130,7 @@ export function PlayerEntriesClient({ initialUser }: { initialUser: PublicUser }
                   <p className="mt-1 text-sm text-[rgba(213,201,177,0.5)]">{registration.category.name}</p>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Badge className="border-[var(--dash-border)] bg-[#f7f9fc] text-[var(--dash-muted)]">
+                  <Badge className="border-[var(--dash-border)] bg-[#faf6f3] text-[var(--dash-muted)]">
                     {registration.owner.id === user.id || registration.teammate.id === user.id
                       ? copy.yourTeam
                       : copy.clubTeam}

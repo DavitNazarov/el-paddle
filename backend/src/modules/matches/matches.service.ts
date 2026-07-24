@@ -2,7 +2,7 @@ import { BracketStatus, MatchResultType, MatchRound, MatchSide, MatchStatus, Not
 import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
-import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 
 export const matchInclude = {
   bracket: { include: { event: true, eventCategory: { include: { category: true } } } },
@@ -93,7 +93,7 @@ export async function startMatch(input: { judgeId: string; matchId: string; expe
     const updated = await tx.match.findUniqueOrThrow({ where: { id: match.id }, include: matchInclude });
     await writeAudit(tx, { action: 'match.started', actorId: input.judgeId, eventId: match.bracket.eventId, entityType: 'Match', entityId: match.id, before: { status: match.status }, after: { status: updated.status } });
     await queueOutbox(tx, { topic: 'match.started', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, matchId: match.id, version: updated.version }, deduplicationKey: `match:${match.id}:started:v${updated.version}` });
-    for (const entry of [updated.participantA, updated.participantB]) for (const user of [entry!.owner, entry!.teammate]) await queueNotification(tx, { recipientUserId: user.id, type: NotificationType.MATCH_STARTED, title: 'Match started', message: 'Your match is now in progress.', entityType: 'Match', entityId: match.id, eventId: match.bracket.eventId, actionPath: `/matches/${match.id}`, version: updated.version });
+    await queueNotifications(tx, [updated.participantA, updated.participantB].flatMap((entry) => [entry!.owner, entry!.teammate].map((user) => ({ recipientUserId: user.id, type: NotificationType.MATCH_STARTED, title: 'Match started', message: 'Your match is now in progress.', entityType: 'Match', entityId: match.id, eventId: match.bracket.eventId, actionPath: `/matches/${match.id}`, version: updated.version }))));
     await saveCommandReceipt(tx, { actorId: input.judgeId, action: 'match.start', commandId: input.commandId, hash });
     return updated;
   });
@@ -149,7 +149,7 @@ async function completeMatch(
   if (match.round === MatchRound.FINAL) await tx.bracket.update({ where: { id: match.bracketId }, data: { status: BracketStatus.COMPLETED, completedAt: new Date(), version: { increment: 1 } } });
   await writeAudit(tx, { action: 'match.completed', actorId: input.actorId, eventId: match.bracket.eventId, entityType: 'Match', entityId: match.id, before: { status: match.status, scoreA: match.scoreA, scoreB: match.scoreB }, after: { status: MatchStatus.COMPLETED, winnerEntryId: input.winnerEntryId, resultType: input.resultType } , publicReason: input.reason });
   await queueOutbox(tx, { topic: 'match.completed', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, bracketId: match.bracketId, matchId: match.id, winnerEntryId: input.winnerEntryId, version: completed.version }, deduplicationKey: `match:${match.id}:completed:v${completed.version}` });
-  for (const entry of [winner, loser]) for (const user of [entry.owner, entry.teammate]) await queueNotification(tx, { recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.MATCH_COMPLETED, title: 'Match completed', message: `Final score: ${completed.scoreA}–${completed.scoreB}.`, entityType: 'Match', entityId: match.id, eventId: match.bracket.eventId, actionPath: `/matches/${match.id}`, version: completed.version });
+  await queueNotifications(tx, [winner, loser].flatMap((entry) => [entry.owner, entry.teammate].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.MATCH_COMPLETED, title: 'Match completed', message: `Final score: ${completed.scoreA}–${completed.scoreB}.`, entityType: 'Match', entityId: match.id, eventId: match.bracket.eventId, actionPath: `/matches/${match.id}`, version: completed.version }))));
   return completed;
 }
 

@@ -270,35 +270,35 @@ p {
 }
 
 .dashboard-dialog-scroll {
-  background: #f7f9fc;
-  scrollbar-color: rgba(96, 116, 139, 0.42) transparent;
+  background: #faf6f3;
+  scrollbar-color: rgba(120, 100, 96, 0.42) transparent;
   scrollbar-gutter: stable;
 }
 
 .dashboard-dialog-content .dashboard-form-control {
-  border-color: #cbd7e4;
+  border-color: #e0d4d0;
   background: #ffffff;
-  color: #19324d;
-  box-shadow: 0 1px 2px rgba(15, 35, 58, 0.035);
+  color: #2a1f1e;
+  box-shadow: 0 1px 2px rgba(43, 26, 24, 0.05);
 }
 
 .dashboard-dialog-content .dashboard-form-control::placeholder {
-  color: #8293a7;
+  color: #a2938f;
 }
 
 .dashboard-dialog-content .dashboard-form-control:hover:not(:disabled) {
-  border-color: #aebfd1;
+  border-color: #cdbdb8;
 }
 
 .dashboard-dialog-content .dashboard-form-control:focus-visible {
-  border-color: #2f6fed;
-  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.14);
+  border-color: #a4161a;
+  box-shadow: 0 0 0 3px rgba(164, 22, 26, 0.14);
 }
 
 .dashboard-dialog-content select.dashboard-form-control,
 .dashboard-dialog-content select.dashboard-form-control option {
   background-color: #ffffff;
-  color: #19324d;
+  color: #2a1f1e;
 }
 
 .dashboard-dialog-content input[type='date'],
@@ -315,7 +315,7 @@ p {
 }
 
 .dashboard-dialog-scroll::-webkit-scrollbar-thumb {
-  background: rgba(96, 116, 139, 0.32);
+  background: rgba(120, 100, 96, 0.32);
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;

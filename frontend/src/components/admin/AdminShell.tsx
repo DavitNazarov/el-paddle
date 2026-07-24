@@ -18,15 +18,9 @@ import {
   Tags,
   Trophy,
   Users,
-  Bell,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { useI18n } from '@/components/shared/I18nProvider';
-import {
-  DashboardShell,
-  SidebarLink,
-  softButtonClassName,
-} from '@/components/shared/dashboard/DashboardUI';
+import { DashboardShell, SidebarLink } from '@/components/shared/dashboard/DashboardUI';
 import { useAdminCounts } from '@/hooks/useAdminCounts';
 import { useLogout } from '@/hooks/useLogout';
 import { cn } from '@/lib/utils';
@@ -66,15 +60,10 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
 
   const items: NavItem[] = [
     { href: '/admin', label: nav.overview, icon: LayoutDashboard },
-    { href: '/admin/categories', label: nav.categories, icon: Tags, badge: counts.categories || undefined },
     { href: '/admin/events', label: nav.events, icon: CalendarDays, badge: counts.drafts || undefined },
-    { href: '/admin/registrations', label: nav.registrations, icon: ClipboardList, badge: counts.pending || undefined },
-    { href: '/admin/brackets', label: nav.brackets, icon: GitBranch },
-    { href: '/admin/opponent-requests', label: nav.opponentRequests, icon: Handshake },
-    { href: '/admin/schedule', label: nav.schedule, icon: CalendarClock },
+    { href: '/admin/categories', label: nav.categories, icon: Tags, badge: counts.categories || undefined },
     { href: '/admin/clubs', label: nav.clubs, icon: Building2 },
     { href: '/admin/users', label: nav.users, icon: Users },
-    { href: '/notifications', label: nav.notifications, icon: Bell },
     { href: '/admin/settings', label: nav.settings, icon: Settings },
   ];
 
@@ -109,8 +98,8 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
             />
           ))}
           {eventItems.length ? (
-            <div className="mt-4 border-t border-[rgba(213,201,177,0.1)] pt-3">
-              <p className="dash-sidebar-label mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(213,201,177,0.42)]">
+            <div className="mt-4 border-t border-[var(--dash-border)] pt-3">
+              <p className="dash-sidebar-label mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--dash-faint)]">
                 {nav.eventTools}
               </p>
               <div className="grid gap-0.5">
@@ -130,8 +119,8 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
       }
       sidebarFooter={
         <div className="space-y-3">
-          <div className="rounded-lg border border-[rgba(213,201,177,0.1)] bg-[rgba(213,201,177,0.03)] p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(213,201,177,0.42)]">
+          <div className="rounded-lg border border-[var(--dash-border)] bg-[var(--dash-tint)] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--dash-faint)]">
               {dictionary.dashboard.admin.shell.snapshot}
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -164,12 +153,13 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
           })}
         </nav>
       }
-      actions={
-        <Button variant="outline" className={cn(softButtonClassName, 'rounded-md')} onClick={logout}>
-          <LogOut className="h-4 w-4" />
-          {t('common.logout')}
-        </Button>
-      }
+      headerBell={{ href: '/notifications', label: nav.notifications }}
+      profile={{
+        items: [
+          { label: nav.settings, href: '/admin/settings', icon: Settings },
+          { label: t('common.logout'), onClick: logout, icon: LogOut, danger: true },
+        ],
+      }}
     >
       {children}
     </DashboardShell>
@@ -179,10 +169,10 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
 function SnapshotItem({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
   return (
     <div>
-      <p className={cn('text-lg font-semibold tabular-nums text-[var(--padel-ivory)]', highlight && 'text-[var(--padel-ivory)]')}>
+      <p className={cn('text-lg font-semibold tabular-nums text-[var(--dash-text)]', highlight && 'text-[var(--dash-primary)]')}>
         {value}
       </p>
-      <p className="mt-0.5 text-[10px] text-[rgba(213,201,177,0.42)]">{label}</p>
+      <p className="mt-0.5 text-[10px] text-[var(--dash-muted)]">{label}</p>
     </div>
   );
 }

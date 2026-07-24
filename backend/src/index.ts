@@ -1,43 +1,12 @@
-import express from 'express';
 import http from 'http';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
-import compression from 'compression';
 import { UserRole } from './generated/prisma/client.js';
 import { config } from './config/env.js';
-import { handleError } from './common/http.js';
-import { securityHeaders } from './common/securityHeaders.js';
 import { prisma } from './database/prisma.js';
-import { router } from './routes.js';
 import { createRealtimeGateway } from './realtime/gateway.js';
 import { startOutboxWorker } from './workers/outbox.worker.js';
-import { csrfGuard, issueCsrfToken } from './common/csrf.js';
+import { createApp } from './app.js';
 
-const app = express();
-
-app.disable('x-powered-by');
-app.set('trust proxy', 1);
-
-app.use(securityHeaders);
-app.use(compression({ threshold: 1024 }));
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || config.isAllowedFrontendOrigin(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(null, false);
-    },
-    credentials: true,
-  }),
-);
-app.use(express.json({ limit: '100kb' }));
-app.use(cookieParser());
-app.get('/api/auth/csrf', issueCsrfToken);
-app.use(csrfGuard);
-app.use(router);
-app.use(handleError);
+const app = createApp();
 
 async function assertBootstrapTokenSafe() {
   if (!config.firstAdminBootstrapToken) return;

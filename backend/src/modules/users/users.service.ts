@@ -11,6 +11,7 @@ import { prisma } from '../../database/prisma.js';
 import { roleForEmail } from '../auth/auth.service.js';
 import { requireClubId, setPlayerClub } from '../clubs/clubs.service.js';
 import { getPlayerStats } from './player-stats.js';
+import { cursorArgs, toPage, type ListRange } from '../../common/pagination.js';
 
 export { calculatePlayerStats as calculatePublicPlayerStats } from './player-stats.js';
 
@@ -60,29 +61,40 @@ async function publicPlayerStats(playerIds: string[]) {
   return getPlayerStats(playerIds, { publicOnly: true });
 }
 
-export async function listUsers(role?: UserRole) {
-  return prisma.user.findMany({
+export async function listUsers(role?: UserRole, range: ListRange = {}) {
+  const { take, pageSize, ...cursor } = cursorArgs(range);
+  const rows = await prisma.user.findMany({
     where: role ? { role } : undefined,
-    orderBy: [{ role: 'asc' }, { createdAt: 'desc' }],
+    orderBy: [{ role: 'asc' }, { createdAt: 'desc' }, { id: 'desc' }],
     include: userWithClubInclude,
+    take,
+    ...cursor,
   });
+  return toPage(rows, pageSize);
 }
 
-export async function listPublicPlayers() {
-  const players = await prisma.user.findMany({
+export async function listPublicPlayers(range: ListRange = {}) {
+  const { take, pageSize, ...cursor } = cursorArgs(range);
+  const rows = await prisma.user.findMany({
     where: {
       role: UserRole.USER,
       status: UserStatus.ACTIVE,
     },
-    orderBy: [{ name: 'asc' }, { surname: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [{ name: 'asc' }, { surname: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     select: publicPlayerSelect,
+    take,
+    ...cursor,
   });
 
-  const stats = await publicPlayerStats(players.map((player) => player.id));
-  return players.map((player) => ({
-    ...player,
-    stats: stats.get(player.id) ?? { matchesPlayed: 0, wins: 0, losses: 0 },
-  }));
+  const { items, nextCursor } = toPage(rows, pageSize);
+  const stats = await publicPlayerStats(items.map((player) => player.id));
+  return {
+    items: items.map((player) => ({
+      ...player,
+      stats: stats.get(player.id) ?? { matchesPlayed: 0, wins: 0, losses: 0 },
+    })),
+    nextCursor,
+  };
 }
 
 export async function getPublicPlayer(playerId: string) {

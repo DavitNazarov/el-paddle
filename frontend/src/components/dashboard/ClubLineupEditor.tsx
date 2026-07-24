@@ -138,7 +138,7 @@ export function ClubLineupEditor({
           </select>
         </DashboardField>
         {!candidates.length ? <p className="text-sm text-[#9f302b]">{copy.noCandidates}</p> : null}
-        <p className="rounded-lg border border-[#d7e1ec] bg-[#f7f9fc] px-3 py-2.5 text-sm leading-6 text-[#60748b]">
+        <p className="rounded-lg border border-[#e7dcd8] bg-[#faf6f3] px-3 py-2.5 text-sm leading-6 text-[#6d5f5c]">
           {copy.statusReset}
         </p>
       </div>

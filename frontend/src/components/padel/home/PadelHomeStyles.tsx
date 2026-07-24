@@ -450,34 +450,40 @@ export function PadelHomeStyles() {
         }
 
         @media (pointer: coarse) {
+          /* Blur is the expensive part on phones; the drift animation itself
+             is compositor work and stays on. */
           .aurora-orb--a,
           .aurora-orb--b {
             filter: none;
             opacity: 0.42;
           }
+        }
 
-          .page-surface__aurora::before,
-          .page-surface__aurora::after {
-            content: '';
-            position: absolute;
-            border-radius: 999px;
-            opacity: 0.42;
+        .aurora-orb--drift-a {
+          animation: aurora-drift-a 24s ease-in-out infinite;
+        }
+
+        .aurora-orb--drift-b {
+          animation: aurora-drift-b 30s ease-in-out infinite;
+        }
+
+        @keyframes aurora-drift-a {
+          0%,
+          100% {
+            transform: translate3d(0, 0, 0) scale(1);
           }
-
-          .page-surface__aurora::before {
-            top: -10%;
-            left: -6%;
-            height: 44rem;
-            width: 44rem;
-            background: radial-gradient(circle, rgba(134, 0, 12, 0.28), transparent 62%);
+          50% {
+            transform: translate3d(6rem, 4rem, 0) scale(1.14);
           }
+        }
 
-          .page-surface__aurora::after {
-            right: -10%;
-            bottom: -16%;
-            height: 40rem;
-            width: 40rem;
-            background: radial-gradient(circle, rgba(88, 16, 16, 0.32), transparent 60%);
+        @keyframes aurora-drift-b {
+          0%,
+          100% {
+            transform: translate3d(0, 0, 0) scale(1.05);
+          }
+          50% {
+            transform: translate3d(-5rem, -3rem, 0) scale(0.9);
           }
         }
 
@@ -677,6 +683,45 @@ export function PadelHomeStyles() {
 
         .mobile-menu__link {
           transition: color 0.25s ease, padding-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Staggered entrance when the menu sheet opens. */
+        .mobile-menu[data-state='open'] .mobile-menu__link {
+          animation: menu-link-in 420ms var(--padel-ease-out) both;
+        }
+
+        .mobile-menu[data-state='open'] .mobile-menu__link:nth-child(2) { animation-delay: 50ms; }
+        .mobile-menu[data-state='open'] .mobile-menu__link:nth-child(3) { animation-delay: 100ms; }
+        .mobile-menu[data-state='open'] .mobile-menu__link:nth-child(4) { animation-delay: 150ms; }
+        .mobile-menu[data-state='open'] .mobile-menu__link:nth-child(5) { animation-delay: 200ms; }
+        .mobile-menu[data-state='open'] .mobile-menu__link:nth-child(6) { animation-delay: 250ms; }
+        .mobile-menu[data-state='open'] .mobile-menu__link:nth-child(7) { animation-delay: 300ms; }
+        .mobile-menu[data-state='open'] .mobile-menu__link:nth-child(8) { animation-delay: 350ms; }
+
+        @keyframes menu-link-in {
+          from {
+            opacity: 0;
+            transform: translateY(14px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        /* Touch press feedback: hover states never fire on phones, so give
+           taps an immediate physical response instead. */
+        @media (hover: none) {
+          .btn-premium:active,
+          .back-to-top:active,
+          .floating-entry .btn-premium:active,
+          .mobile-menu__link:active {
+            transform: scale(0.97);
+          }
+
+          .mobile-menu__link:active {
+            color: var(--padel-gold);
+          }
         }
 
         .mobile-menu__link:hover,
@@ -1073,18 +1118,6 @@ export function PadelHomeStyles() {
           50% {
             transform: translate(18%, 12%);
           }
-        }
-
-        .marquee-band__track--static {
-          animation: none;
-          width: 100%;
-          justify-content: center;
-        }
-
-        .marquee-band__track--static .marquee-band__group {
-          flex-wrap: wrap;
-          justify-content: center;
-          row-gap: 0.35rem;
         }
 
         .premium-noise {
@@ -1867,6 +1900,17 @@ export function PadelHomeStyles() {
           }
           to {
             transform: translateX(-50%);
+          }
+        }
+
+        .marquee-band__track--animated {
+          animation: marquee-scroll 46s linear infinite;
+          will-change: transform;
+        }
+
+        @media (max-width: 900px) {
+          .marquee-band__track--animated {
+            animation-duration: 30s;
           }
         }
 
@@ -2792,6 +2836,57 @@ export function PadelHomeStyles() {
           rotate: 14deg;
         }
 
+        /* Ambient hero loops as CSS keyframes: they run on the compositor,
+           which keeps them smooth in Safari and cheap on phones. */
+        .hero-ambient__glow {
+          animation: hero-glow-pulse 8s ease-in-out infinite;
+        }
+
+        .hero-ambient__beam {
+          animation: hero-beam-pulse 6.4s ease-in-out infinite;
+        }
+
+        .hero-ambient__sweep {
+          animation: hero-sweep 9s ease-in-out infinite;
+        }
+
+        @keyframes hero-glow-pulse {
+          0%,
+          100% {
+            opacity: 0.2;
+            transform: scale(0.9);
+          }
+          50% {
+            opacity: 0.44;
+            transform: scale(1.08);
+          }
+        }
+
+        @keyframes hero-beam-pulse {
+          0%,
+          16% {
+            opacity: 0;
+            transform: scaleY(0);
+          }
+          58% {
+            opacity: 0.6;
+            transform: scaleY(1);
+          }
+          100% {
+            opacity: 0;
+            transform: scaleY(1);
+          }
+        }
+
+        @keyframes hero-sweep {
+          from {
+            transform: translateX(-140%);
+          }
+          to {
+            transform: translateX(140%);
+          }
+        }
+
         .hero-logo-stage {
           width: min(24rem, 88vw);
           min-height: 17rem;
@@ -2824,6 +2919,7 @@ export function PadelHomeStyles() {
           width: 17rem;
           border: 1px solid rgba(213, 201, 177, 0.2);
           border-left-color: transparent;
+          animation: orbit-spin 22s linear infinite;
         }
 
         .hero-logo-orbit--inner {
@@ -2831,6 +2927,39 @@ export function PadelHomeStyles() {
           width: 13.75rem;
           border: 1px dashed rgba(213, 201, 177, 0.17);
           border-right-color: transparent;
+          animation: orbit-spin-reverse 15s linear infinite;
+        }
+
+        .hero-logo-float {
+          animation: hero-logo-float 6.4s ease-in-out infinite;
+        }
+
+        @keyframes orbit-spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes orbit-spin-reverse {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(-360deg);
+          }
+        }
+
+        @keyframes hero-logo-float {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-8px);
+          }
         }
 
         .hero-logo-image {
@@ -3230,9 +3359,18 @@ export function PadelHomeStyles() {
           .floating-entry__pulse,
           .section-kicker__index,
           .live-badge__dot,
-          .hero-logo-orbit,
           .prize-tier--featured .prize-tier__shine {
             animation: none !important;
+          }
+
+          /* Orbit spin and the logo float are transform-only compositor work;
+             they stay on so the hero doesn't feel frozen on phones. */
+          .hero-logo-orbit--outer {
+            animation-duration: 26s;
+          }
+
+          .hero-logo-orbit--inner {
+            animation-duration: 19s;
           }
         }
 

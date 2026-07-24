@@ -89,7 +89,7 @@ export function MatchHistoryClient({ endpoint = '/api/matches', tone = 'brand' }
       <TournamentPanel
         className={cn(
           dashboardTone
-            ? 'rounded-xl border-[var(--dash-border)] bg-white shadow-[0_12px_32px_rgba(25,50,77,0.05)]'
+            ? 'rounded-xl border-[var(--dash-border)] bg-white shadow-[0_12px_32px_rgba(43,26,24,0.05)]'
             : 'rounded-sm border-[var(--padel-line)] bg-[var(--padel-red-2)]/40',
         )}
       >
@@ -112,7 +112,7 @@ export function MatchHistoryClient({ endpoint = '/api/matches', tone = 'brand' }
                 <Search
                   className={cn(
                     'pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2',
-                    dashboardTone ? 'text-[var(--dash-sky)]' : 'text-[var(--padel-gold)]',
+                    dashboardTone ? 'text-[var(--dash-primary)]' : 'text-[var(--padel-gold)]',
                   )}
                   aria-hidden="true"
                 />
@@ -124,7 +124,7 @@ export function MatchHistoryClient({ endpoint = '/api/matches', tone = 'brand' }
                   className={cn(
                     'min-h-11 w-full min-w-0 pl-10 sm:w-80',
                     dashboardTone
-                      ? 'rounded-lg border-[var(--dash-border)] bg-[#f8fafc] text-[var(--dash-text)] shadow-none placeholder:text-[var(--dash-faint)] hover:border-[var(--dash-border-strong)] focus-visible:border-[var(--dash-sky)] focus-visible:ring-[var(--padel-focus-ring)]'
+                      ? 'rounded-lg border-[var(--dash-border)] bg-[#faf6f3] text-[var(--dash-text)] shadow-none placeholder:text-[var(--dash-faint)] hover:border-[var(--dash-border-strong)] focus-visible:border-[var(--dash-primary)] focus-visible:ring-[var(--padel-focus-ring)]'
                       : 'rounded-full border-[var(--padel-line)] bg-[var(--padel-red)]/35 text-[var(--padel-ivory)] placeholder:text-[var(--padel-muted)]',
                   )}
                 />
@@ -158,13 +158,13 @@ function MatchResultCard({ match, tone }: { match: MatchDto; tone: 'brand' | 'da
       className={cn(
         'group block p-4 transition duration-200 focus-visible:outline-none focus-visible:ring-2 sm:p-5',
         dashboardTone
-          ? 'rounded-xl border border-[var(--dash-border)] bg-white shadow-[0_1px_2px_rgba(25,50,77,0.04)] hover:-translate-y-0.5 hover:border-[var(--dash-border-strong)] hover:shadow-[0_10px_24px_rgba(25,50,77,0.08)] focus-visible:ring-[var(--dash-sky)]'
+          ? 'rounded-xl border border-[var(--dash-border)] bg-white shadow-[0_1px_2px_rgba(43,26,24,0.04)] hover:-translate-y-0.5 hover:border-[var(--dash-border-strong)] hover:shadow-[0_10px_24px_rgba(43,26,24,0.08)] focus-visible:ring-[var(--dash-primary)]'
           : 'rounded-sm border border-[var(--padel-line)] bg-[var(--padel-red)]/24 hover:bg-[var(--padel-red)]/40 focus-visible:ring-[var(--padel-gold)]',
       )}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className={cn('text-xs font-semibold uppercase tracking-[0.18em]', dashboardTone ? 'text-[var(--dash-sky)]' : 'text-[var(--padel-gold)]')}>
+          <p className={cn('text-xs font-semibold uppercase tracking-[0.18em]', dashboardTone ? 'text-[var(--dash-primary)]' : 'text-[var(--padel-gold)]')}>
             {match.bracket?.event?.title ?? copy.history.eventFallback}
           </p>
           <h2 className={cn('mt-2 text-lg font-semibold', dashboardTone ? 'text-[var(--dash-text)]' : 'text-[var(--padel-ivory)]')}>
@@ -181,10 +181,10 @@ function MatchResultCard({ match, tone }: { match: MatchDto; tone: 'brand' | 'da
 
       <div className={cn('mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4', dashboardTone ? 'border-[var(--dash-border)]' : 'border-[var(--padel-line)]')}>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="gold" className={cn(dashboardTone && 'border-[var(--dash-border)] bg-[var(--dash-sky-soft)] text-[var(--dash-sky)]')}>{copy.common.match} {match.matchNumber}</Badge>
+          <Badge variant="gold" className={cn(dashboardTone && 'border-[var(--dash-border)] bg-[var(--dash-primary-soft)] text-[var(--dash-primary)]')}>{copy.common.match} {match.matchNumber}</Badge>
           {match.completedAt ? <Badge variant="gold" className={cn(dashboardTone && 'border-[var(--dash-border)] bg-[#f5f7fa] text-[var(--dash-muted)]')}>{formatDate(match.completedAt)}</Badge> : null}
         </div>
-        <span className={cn('inline-flex items-center gap-2 text-sm font-semibold', dashboardTone ? 'text-[var(--dash-sky)]' : 'text-[var(--padel-gold)]')}>
+        <span className={cn('inline-flex items-center gap-2 text-sm font-semibold', dashboardTone ? 'text-[var(--dash-primary)]' : 'text-[var(--padel-gold)]')}>
           {copy.history.details}
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </span>
@@ -204,8 +204,8 @@ function ResultSide({ side, snapshot, isBye, score, winner, tone }: { side: 'A' 
         'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border p-3',
         dashboardTone
           ? winner
-            ? 'rounded-lg border-[rgba(47,111,237,0.24)] bg-[var(--dash-sky-soft)]'
-            : 'rounded-lg border-[var(--dash-border)] bg-[#f8fafc]'
+            ? 'rounded-lg border-[rgba(164,22,26,0.24)] bg-[var(--dash-primary-soft)]'
+            : 'rounded-lg border-[var(--dash-border)] bg-[#faf6f3]'
           : 'rounded-sm border-[var(--padel-line)] bg-[var(--padel-red-2)]/30',
       )}
     >
@@ -213,7 +213,7 @@ function ResultSide({ side, snapshot, isBye, score, winner, tone }: { side: 'A' 
         <div className="flex flex-wrap items-center gap-2">
           <p className={cn('text-[0.65rem] font-semibold uppercase tracking-[0.18em]', dashboardTone ? 'text-[var(--dash-faint)]' : 'text-[var(--padel-muted)]')}>{side === 'A' ? copy.sideA : copy.sideB}</p>
           {winner ? (
-            <span className={cn('inline-flex items-center gap-1 text-[0.65rem] font-bold uppercase tracking-[0.08em]', dashboardTone ? 'text-[var(--dash-sky)]' : 'text-[var(--padel-gold)]')}>
+            <span className={cn('inline-flex items-center gap-1 text-[0.65rem] font-bold uppercase tracking-[0.08em]', dashboardTone ? 'text-[var(--dash-primary)]' : 'text-[var(--padel-gold)]')}>
               <Trophy className="h-3 w-3" aria-hidden="true" />
               {copy.winner}
             </span>

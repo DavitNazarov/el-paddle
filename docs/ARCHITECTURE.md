@@ -24,12 +24,12 @@ The API owns authorization and domain invariants. The frontend is a presentation
 
 The Next.js App Router application provides:
 
-- public landing, club, event, bracket, schedule, and match-history pages;
-- player dashboards for entries, events, opponent requests, notifications, and history;
+- a public marketing landing page plus club, player, event, bracket, schedule, and match-history pages with SEO metadata, sitemap, and structured data;
+- player dashboards for the club, entries, events, opponent requests, notifications, match history, and account settings;
 - judge assignment, court queue, and scoring screens;
-- administrative event, registration, bracket, schedule, user, club, category, and operations screens.
+- administrative screens for events, registrations, opponent requests, brackets, schedules, users, judges, clubs, categories, settings, and operations.
 
-The shared API client uses credentialed requests. Before unsafe requests it retrieves `/api/auth/csrf` and sends the token in `x-csrf-token`.
+The UI is bilingual (English and Georgian) via the shared i18n provider. The shared API client (`frontend/src/lib/api/`) sends credentialed requests and automatically retrieves `/api/auth/csrf` before unsafe requests, sending the token in `x-csrf-token`.
 
 ### API
 
@@ -37,80 +37,117 @@ Express mounts feature routers from `backend/src/routes.ts`. Route modules valid
 
 Important cross-cutting modules:
 
-- `common/capabilities.ts`: administrator capability authorization
-- `common/commands.ts`: idempotent command receipts and payload hashes
-- `common/csrf.ts`: token issuance and unsafe-request protection
-- `common/domain-events.ts`: audit, notifications, email delivery, and outbox enqueueing
-- `realtime/gateway.ts`: Socket.IO authentication and room authorization
+- `common/capabilities.ts`: capability authorization; admins hold every capability by default, and per-user `UserCapabilityGrant` rows (ALLOW/DENY) override the role default
+- `common/commands.ts`: idempotent command receipts keyed by actor, action, and command ID with payload hashes
+- `common/csrf.ts`: double-submit token issuance and unsafe-request protection
+- `common/domain-events.ts`: audit, in-app notifications, email delivery jobs, and outbox enqueueing inside domain transactions
+- `common/legal.ts`: versioned consent constants and validators for account and participation consent
+- `common/rateLimit.ts`: per-key request throttling for authentication endpoints
+- `common/serializers.ts`: allow-listed DTO serialization so raw Prisma records never leave the API
+- `realtime/gateway.ts`: Socket.IO authentication, room authorization, and socket rate limiting
+
+Sessions are stateless JWTs stored in an HTTP-only cookie. Each token embeds the user's `sessionVersion`; logout, password changes, disqualification, and judge deactivation bump the version so outstanding tokens stop working. When the site and API run on sibling hosts, the session cookie uses the shared parent domain so SSR can read it.
 
 ### Outbox worker
 
-Tournament transactions write an `OutboxMessage` in the same commit as the domain change. The worker leases pending records, performs email or realtime delivery, and records success or retry state.
+Tournament transactions write an `OutboxMessage` in the same commit as the domain change. The worker leases pending records, performs email or realtime delivery, and records success or exponential-backoff retry state. It also expires overdue opponent requests.
 
 This provides two important guarantees:
 
 - no notification is published for a transaction that rolled back;
-- transient delivery failures do not require repeating the domain command.
+- transient delivery failures never require repeating the domain command.
 
-Docker runs the worker separately with `RUN_OUTBOX_IN_API=false`. A local single-process API may run it in-process.
+In production, Docker runs the worker as a separate service (`RUN_OUTBOX_IN_API=false` on the API, which then only relays realtime topics). A local single-process API runs the full worker in-process. Email is delivered through Resend with retries capped at 8 attempts.
 
 ## Domain boundaries
 
 | Module | Responsibility |
 | --- | --- |
-| `auth` | registration, verification, login, logout, invitation completion, Google OAuth |
-| `users` | user and judge administration, activation, disqualification |
-| `clubs` | club directory, explicit leadership, roster changes, and membership requests |
+| `auth` | registration with email verification codes, login, logout, invite completion, Google OAuth, first-admin bootstrap, self-service club creation and club-mate invites |
+| `users` | user/judge administration, invites, disqualification, judge activation, public player directory, account deletion |
+| `clubs` | club directory, leader-managed rosters, join requests, and member removal with registration resolution |
 | `categories` | competition categories |
-| `events` | event configuration, lifecycle, and publication |
-| `registrations` | team entry and review history |
-| `opponent-requests` | first-round opponent negotiation and approval |
-| `brackets` | draw generation, locking, publication, and progression graph |
-| `scheduling` | courts, queues, judge assignments, timing, publication |
-| `matches` | start, scoring, completion, correction, snapshots, history |
+| `events` | event configuration (including fee and bank details), lifecycle, and publication controls |
+| `registrations` | club team entries, review workflow, lineup replacement, roster publication |
+| `opponent-requests` | first-round opponent negotiation windows, player responses, and admin decisions |
+| `brackets` | draw generation, locking, publication, and the single-elimination progression graph |
+| `scheduling` | courts, queues, judge assignments, timing, publication, judge queue reads |
+| `matches` | start, scoring, completion, correction, snapshots, history, and visibility rules |
 | `notifications` | in-app notification inbox and read state |
+| `dashboard` | player dashboard aggregate and admin summary counts |
 | `operations` | audit inspection and email-delivery retry |
+| `health` | process health |
+
+## The club model
+
+Clubs are central to participation:
+
+- every player belongs to exactly one club; a player without a club must create one (becoming its **leader**) or request to join an existing club before registering for events;
+- each club fields **one team per event** (`@@unique([eventId, clubId])`); the team is an owner/teammate pair from the same club;
+- the club leader can replace a registered player with another eligible club member (the entry returns to `PENDING` review) and reviews join requests;
+- removing a member requires explicitly resolving every unfinished registration that includes them (replace the player or withdraw the team); removal is blocked while an event is ongoing or a bracket is locked;
+- a leader cannot leave for another club, and the leader cannot be removed;
+- admins and judges never belong to clubs; promoting a user to admin removes their athlete links.
 
 ## Consistency patterns
 
 ### Optimistic concurrency
 
-Mutable tournament records carry a `version`. Clients submit `expectedVersion`; a mismatch returns a conflict and requires a refresh. This prevents one operator from silently overwriting another operator’s work.
+Mutable tournament records (events, registrations, requests, brackets, matches, courts, schedule items, request windows) carry a `version`. Clients submit `expectedVersion`; a mismatch returns `409` and requires a refresh. Critical transitions additionally use conditional `updateMany` writes so the row must still match its expected state inside the transaction.
 
 ### Command idempotency
 
-State-changing tournament commands accept `commandId`. The server hashes the command payload and stores a receipt. Repeating the same ID and payload returns the existing result; reusing the ID with a different payload is rejected.
+State-changing tournament commands accept `commandId`. The server hashes the payload and stores a `CommandReceipt`. Repeating the same ID with the same payload returns the existing result; reusing an ID with a different payload is rejected.
+
+### Advisory locks
+
+Registration creation, lineup replacement, and member removal serialize on PostgreSQL advisory locks keyed by event/player and event/club, closing race windows that unique constraints alone cannot express.
 
 ### Historical snapshots
 
-Matches store participant snapshots alongside registration references. Names and clubs shown in historical results therefore remain stable if profile or club data changes later.
+Locking a bracket creates `MatchParticipantSnapshot` rows (player names, club) for each first-round side, and winners' snapshots are copied forward round by round. Historical results therefore remain stable even if profiles, rosters, or clubs change later.
 
 ### Audit history
 
-Privileged transitions create append-only audit records. Registration and event lifecycle changes also maintain specific status histories for operational review.
+Privileged transitions create append-only `AuditLog` records with actor, before/after state, and public/internal reasons. Registration and event lifecycle changes also maintain dedicated status-history tables.
 
 ## Authorization
 
-Roles are `USER`, `JUDGE`, and `ADMIN`.
+Roles are `USER` (player), `JUDGE`, and `ADMIN`.
 
-- Public users receive only explicitly published event, bracket, schedule, live-score, and result data.
-- Players receive their own registration/request data plus published tournament data.
-- Judges receive assigned court queues and matches.
-- Administrators require the relevant capability for privileged operations.
+- Public users receive only explicitly published event, roster, bracket, schedule, live-score, and result data.
+- Players receive their own club/registration/request data plus published tournament data.
+- Judges receive court queues and matches only for courts with an active, unrevoked time-boxed assignment.
+- Administrators require the specific capability for each privileged operation; capabilities can be individually granted or denied per user.
+- `ADMIN_EMAILS` elevation applies only after the email address is verified.
 
-Realtime subscriptions use the same boundaries. Authentication alone is insufficient to join an unpublished event or match room.
+Realtime subscriptions use the same boundaries: authentication alone is insufficient to join an unpublished event or match room.
+
+## Event lifecycle
+
+```text
+REGISTRATION_OPEN → REGISTRATION_CLOSED → ONGOING → COMPLETED
+                                             ↑          │
+                                             └──────────┘  (explicit reopen,
+                                                            EVENT_STATE_CORRECT)
+```
+
+The lifecycle moves forward through explicit transitions. Reopening a completed event is the single backward transition and requires the `EVENT_STATE_CORRECT` capability; completed events are otherwise read-only (no edits, deletions, bracket, schedule, registration, or correction changes).
+
+Guards: an event cannot start until at least one bracket is locked, and cannot complete while any match is neither completed nor cancelled.
 
 ## Publication model
 
-Publication is deliberately separated:
+Publication is deliberately separated per surface:
 
-- event page visibility;
-- bracket publication;
+- event page visibility (`isPublished`);
+- registration roster publication (approved team names only);
+- bracket publication (per bracket, only after locking);
 - schedule publication;
-- public live-scoring enablement;
-- completed result publication.
+- public live-scoring enablement (only while ongoing);
+- final result publication (only after completion).
 
-This lets administrators prepare later stages privately without exposing drafts.
+This lets administrators prepare later stages privately without exposing drafts. Completed-match details are redacted for the public until results are published.
 
 ## Deployment topology
 

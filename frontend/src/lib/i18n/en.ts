@@ -431,6 +431,8 @@ export const en = {
           club: 'My club',
           events: 'Events',
           entries: 'Entries',
+          matches: 'History',
+          notifications: 'Notifications',
           settings: 'Settings',
           publicSite: 'Public site',
         },
@@ -584,7 +586,7 @@ export const en = {
         },
         overview: {
           title: 'Overview',
-          description: 'Queues and counts — jump straight to what needs action.',
+          description: 'What needs action, at a glance.',
           workflowTitle: 'Quick setup',
           workflowDescription: 'Categories → events → approvals.',
           steps: [

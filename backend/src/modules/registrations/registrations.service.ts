@@ -23,8 +23,9 @@ import { prisma } from '../../database/prisma.js';
 import { roleForEmail } from '../auth/auth.service.js';
 import { assertNotDisqualified, isDisqualified } from '../users/users.service.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
-import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { PARTICIPATION_TERMS_VERSION, REFUND_POLICY_VERSION } from '../../common/legal.js';
+import { cursorArgs, toPage, type ListRange } from '../../common/pagination.js';
 
 type CreateRegistrationInput = {
   userId: string;
@@ -264,12 +265,16 @@ export async function createRegistration(input: CreateRegistrationInput) {
   }
 }
 
-export async function listAdminRegistrations(eventId?: string) {
-  return prisma.eventRegistration.findMany({
+export async function listAdminRegistrations(eventId?: string, range: ListRange = {}) {
+  const { take, pageSize, ...cursor } = cursorArgs(range);
+  const rows = await prisma.eventRegistration.findMany({
     where: eventId ? { eventId } : undefined,
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     include: registrationInclude,
+    take,
+    ...cursor,
   });
+  return toPage(rows, pageSize);
 }
 
 export async function listPublicRegistrationRoster(eventId: string) {
@@ -471,25 +476,23 @@ export async function replaceRegistrationPlayer(input: {
       publicReason: 'Club leader changed the registered team.',
     });
 
-    for (const player of [updated.owner, updated.teammate]) {
-      await queueNotification(tx, {
-        recipientUserId: player.id,
-        recipientEmail: player.email,
-        type: NotificationType.REGISTRATION_PENDING,
-        title: 'Club team updated',
-        message: `Your club changed the team for ${updated.event.title}. The entry is pending administrator review.`,
-        entityType: 'EventRegistration',
-        entityId: updated.id,
-        eventId: updated.eventId,
-        actionPath: `/dashboard/entries?entry=${updated.id}`,
-        version: updated.version,
-        metadata: {
-          previousStatus: registration.status,
-          status: updated.status,
-          replacementUserId: replacementMembership.userId,
-        },
-      });
-    }
+    await queueNotifications(tx, [updated.owner, updated.teammate].map((player) => ({
+      recipientUserId: player.id,
+      recipientEmail: player.email,
+      type: NotificationType.REGISTRATION_PENDING,
+      title: 'Club team updated',
+      message: `Your club changed the team for ${updated.event.title}. The entry is pending administrator review.`,
+      entityType: 'EventRegistration',
+      entityId: updated.id,
+      eventId: updated.eventId,
+      actionPath: `/dashboard/entries?entry=${updated.id}`,
+      version: updated.version,
+      metadata: {
+        previousStatus: registration.status,
+        status: updated.status,
+        replacementUserId: replacementMembership.userId,
+      },
+    })));
 
     await queueOutbox(tx, {
       topic: 'registration.lineup.replaced',
@@ -636,9 +639,7 @@ export async function updateRegistrationStatus(
     await writeAudit(tx, { action: 'registration.status.updated', actorId: adminId, eventId: registration.eventId, entityType: 'EventRegistration', entityId: id, before: { status: registration.status }, after: { status }, publicReason, internalReason: options?.internalNote });
 
     const type = registrationNotificationType(status);
-    for (const user of [updated.owner, updated.teammate]) {
-      await queueNotification(tx, { recipientUserId: user.id, recipientEmail: user.email, type, title: `Registration ${status.replaceAll('_', ' ').toLowerCase()}`, message: `Your entry for ${updated.event.title} is now ${status.replaceAll('_', ' ').toLowerCase()}.${publicReason ? ` ${publicReason}` : ''}`, entityType: 'EventRegistration', entityId: id, eventId: updated.eventId, actionPath: `/dashboard/entries?entry=${id}`, version: updated.version, metadata: { previousStatus: registration.status, status, categoryId: updated.categoryId } });
-    }
+    await queueNotifications(tx, [updated.owner, updated.teammate].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type, title: `Registration ${status.replaceAll('_', ' ').toLowerCase()}`, message: `Your entry for ${updated.event.title} is now ${status.replaceAll('_', ' ').toLowerCase()}.${publicReason ? ` ${publicReason}` : ''}`, entityType: 'EventRegistration', entityId: id, eventId: updated.eventId, actionPath: `/dashboard/entries?entry=${id}`, version: updated.version, metadata: { previousStatus: registration.status, status, categoryId: updated.categoryId } })));
     await queueOutbox(tx, { topic: 'registration.status.updated', aggregateType: 'EventRegistration', aggregateId: id, payload: { eventId: updated.eventId, registrationId: id, status, version: updated.version }, deduplicationKey: `registration:${id}:status:v${updated.version}` });
     await saveCommandReceipt(tx, { actorId: adminId, action: 'registration.status', commandId, hash, response: { registrationId: id, version: updated.version } });
     return updated;

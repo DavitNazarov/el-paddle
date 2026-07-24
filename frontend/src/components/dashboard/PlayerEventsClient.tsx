@@ -41,7 +41,7 @@ export function PlayerEventsClient({ initialUser }: { initialUser: PublicUser })
     .sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime());
 
   const eventCount = (count: number) => (
-    <span className="inline-flex min-h-8 items-center rounded-full border border-[var(--dash-border)] bg-white px-3 text-xs font-semibold text-[var(--dash-muted)] shadow-[0_1px_2px_rgba(25,50,77,0.04)]">
+    <span className="inline-flex min-h-8 items-center rounded-full border border-[var(--dash-border)] bg-white px-3 text-xs font-semibold text-[var(--dash-muted)] shadow-[0_1px_2px_rgba(43,26,24,0.04)]">
       {t('dashboard.player.sections.eventCount', { count })}
     </span>
   );

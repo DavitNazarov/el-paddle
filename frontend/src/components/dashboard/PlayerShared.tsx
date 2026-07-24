@@ -69,7 +69,7 @@ export function EventCard({
                       'min-h-6 px-2.5',
                       registered
                         ? 'border-[rgba(22,128,106,0.24)] bg-[var(--dash-teal-soft)] text-[var(--dash-teal)]'
-                        : 'border-[var(--dash-border)] bg-[#f7f9fc] text-[var(--dash-muted)]',
+                        : 'border-[var(--dash-border)] bg-[#faf6f3] text-[var(--dash-muted)]',
                     )}
                   >
                     {category.name}
@@ -94,14 +94,14 @@ export function EventCard({
           ) : null}
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            <MetaRow icon={CalendarDays} className="min-h-11 rounded-lg border border-[var(--dash-border)] bg-[#f8fafc] px-3 py-2.5">
+            <MetaRow icon={CalendarDays} className="min-h-11 rounded-lg border border-[var(--dash-border)] bg-[#faf6f3] px-3 py-2.5">
               {formatDate(event.date, { dateStyle: 'medium', timeStyle: 'short' })}
             </MetaRow>
-            <MetaRow icon={MapPin} className="min-h-11 rounded-lg border border-[var(--dash-border)] bg-[#f8fafc] px-3 py-2.5">
+            <MetaRow icon={MapPin} className="min-h-11 rounded-lg border border-[var(--dash-border)] bg-[#faf6f3] px-3 py-2.5">
               {event.location}
             </MetaRow>
             {event.arrivalTime ? (
-              <MetaRow icon={Clock} className="min-h-11 rounded-lg border border-[var(--dash-border)] bg-[#f8fafc] px-3 py-2.5 sm:col-span-2 xl:col-span-1">
+              <MetaRow icon={Clock} className="min-h-11 rounded-lg border border-[var(--dash-border)] bg-[#faf6f3] px-3 py-2.5 sm:col-span-2 xl:col-span-1">
                 {player.arrivalLabel}:{' '}
                 {formatDate(event.arrivalTime, { dateStyle: 'medium', timeStyle: 'short' })}
               </MetaRow>
@@ -125,7 +125,7 @@ export function EventCard({
                 {clubEntries.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex min-h-11 flex-col gap-2 rounded-lg border border-[var(--dash-border)] bg-[#f8fafc] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex min-h-11 flex-col gap-2 rounded-lg border border-[var(--dash-border)] bg-[#faf6f3] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-[var(--dash-text)]">
@@ -141,7 +141,7 @@ export function EventCard({
           ) : null}
         </div>
 
-        <div className="flex flex-col justify-between gap-5 border-t border-[var(--dash-border)] bg-[#f7f9fc] p-5 sm:flex-row sm:items-center lg:flex-col lg:items-stretch lg:border-l lg:border-t-0 lg:p-6">
+        <div className="flex flex-col justify-between gap-5 border-t border-[var(--dash-border)] bg-[#faf6f3] p-5 sm:flex-row sm:items-center lg:flex-col lg:items-stretch lg:border-l lg:border-t-0 lg:p-6">
           <div>
             <div className="flex items-center gap-2 text-[var(--dash-muted)]">
               <WalletCards className="h-4 w-4" aria-hidden="true" />
@@ -294,26 +294,26 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
             </div>
           ) : null}
 
-          <div className="rounded-md border border-[#d7e1ec] bg-white px-3 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#60748b]">
+          <div className="rounded-md border border-[#e7dcd8] bg-white px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d5f5c]">
               {player.registerModal.feeLabel}
             </p>
-            <p className="mt-1 text-lg font-semibold text-[#19324d]">
+            <p className="mt-1 text-lg font-semibold text-[#2a1f1e]">
               {t('dashboard.player.registerModal.feeAmount', { amount: registerEvent.participationFee })}
             </p>
-            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#60748b]">
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d5f5c]">
               {player.registerModal.bankReceiverLabel}
             </p>
-            <p className="mt-1 text-sm font-semibold text-[#19324d]">
+            <p className="mt-1 text-sm font-semibold text-[#2a1f1e]">
               {registerEvent.bankAccountReceiver}
             </p>
-            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#60748b]">
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d5f5c]">
               {player.registerModal.bankAccountLabel}
             </p>
-            <p className="mt-1 break-all font-mono text-sm font-semibold tracking-wide text-[#19324d]">
+            <p className="mt-1 break-all font-mono text-sm font-semibold tracking-wide text-[#2a1f1e]">
               {registerEvent.bankAccountIban}
             </p>
-            <p className="mt-2 text-xs leading-5 text-[#6b7f95]">{player.registerModal.feeNote}</p>
+            <p className="mt-2 text-xs leading-5 text-[#7a6c69]">{player.registerModal.feeNote}</p>
           </div>
 
           <DashboardField label={player.fields.category} id={`category-${registerEvent.id}`}>
@@ -392,7 +392,7 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
               />
             </DashboardField>
           </div>
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#d7e1ec] bg-white p-4 text-sm leading-6 text-[#334b65]">
+          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#e7dcd8] bg-white p-4 text-sm leading-6 text-[#4a3d3b]">
             <input name="participationLegalAccepted" className="mt-1 h-5 w-5 shrink-0 accent-[var(--padel-red)]" type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required />
             <span>{locale === 'ka' ? 'ვეთანხმები ' : 'I accept the '}<Link href="/legal/terms" target="_blank" className="font-semibold underline underline-offset-4">{locale === 'ka' ? 'ტურნირში მონაწილეობის პირობებს' : 'Tournament Participation Terms'}</Link>{locale === 'ka' ? ', გავეცანი ' : ', acknowledge the '}<Link href="/legal/refunds" target="_blank" className="font-semibold underline underline-offset-4">{locale === 'ka' ? 'თანხის დაბრუნებისა და გაუქმების პოლიტიკას' : 'Refund and Cancellation Policy'}</Link>{locale === 'ka' ? ' და ვადასტურებ გადახდის ვალდებულებასა და სპორტში მონაწილეობის ჩვეულებრივ ფიზიკურ რისკებს.' : ', and confirm the payment obligation and ordinary physical risks of participation.'}</span>
           </label>

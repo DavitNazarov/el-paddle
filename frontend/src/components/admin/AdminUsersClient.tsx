@@ -227,7 +227,7 @@ export function AdminUsersClient() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={copy.searchPlaceholder}
             aria-label={copy.searchPlaceholder}
-            className="h-10 rounded-md border-[var(--dash-border)] bg-white pl-9 text-[var(--dash-text)] placeholder:text-[var(--dash-faint)] focus-visible:border-[var(--dash-sky)] focus-visible:ring-[var(--padel-focus-ring)]"
+            className="h-10 rounded-md border-[var(--dash-border)] bg-white pl-9 text-[var(--dash-text)] placeholder:text-[var(--dash-faint)] focus-visible:border-[var(--dash-primary)] focus-visible:ring-[var(--padel-focus-ring)]"
           />
         </div>
       </div>
@@ -257,27 +257,27 @@ export function AdminUsersClient() {
                   <col className="w-[14%]" />
                   <col className="w-[132px] 2xl:w-[340px]" />
                 </colgroup>
-                <thead className="bg-[#f8faff] text-xs uppercase tracking-[0.14em] text-[var(--dash-faint)]">
+                <thead className="bg-[#fdf9f7] text-xs uppercase tracking-[0.14em] text-[var(--dash-faint)]">
                   <tr>
                     <th scope="col" className="px-5 py-4 font-medium">{copy.columnUser}</th>
                     <th scope="col" className="px-5 py-4 font-medium">{copy.columnClub}</th>
                     <th scope="col" className="px-5 py-4 font-medium">{copy.columnRole}</th>
                     <th scope="col" className="px-5 py-4 font-medium">{copy.columnStatus}</th>
-                    <th scope="col" className="sticky right-0 z-10 border-l border-[var(--dash-border)] bg-[#f8faff] px-5 py-4 text-right font-medium shadow-[-8px_0_14px_-10px_rgba(25,50,77,0.08)]">
+                    <th scope="col" className="sticky right-0 z-10 border-l border-[var(--dash-border)] bg-[#fdf9f7] px-5 py-4 text-right font-medium shadow-[-8px_0_14px_-10px_rgba(43,26,24,0.08)]">
                       {copy.columnActions}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--dash-border)]">
                   {visible.map((user) => (
-                    <tr key={user.id} className="group bg-white transition-colors hover:bg-[#f8fbff]">
+                    <tr key={user.id} className="group bg-white transition-colors hover:bg-[#fdf9f7]">
                       <td className="px-5 py-4 align-middle">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <span className="truncate font-medium text-[var(--dash-text)]" title={user.fullName}>
                             {user.fullName}
                           </span>
                           {user.id === currentUserId ? (
-                            <Badge className="shrink-0 border-[rgba(47,111,237,0.25)] bg-[var(--dash-sky-soft)] text-[var(--dash-sky)]">
+                            <Badge className="shrink-0 border-[rgba(61,103,150,0.25)] bg-[var(--dash-info-soft)] text-[var(--dash-info)]">
                               {copy.you}
                             </Badge>
                           ) : null}
@@ -288,13 +288,13 @@ export function AdminUsersClient() {
                         <span className="block truncate" title={user.club?.name}>{user.club?.name ?? '—'}</span>
                       </td>
                       <td className="px-5 py-4 align-middle">
-                        <Badge className="border-[var(--dash-border)] bg-[#f8faff] text-[var(--dash-muted)]">
+                        <Badge className="border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]">
                           {user.role === 'ADMIN' ? <Shield className="mr-1 h-3 w-3" /> : <UserRound className="mr-1 h-3 w-3" />}
                           {roleLabel(user.role)}
                         </Badge>
                       </td>
                       <td className="px-5 py-4 align-middle">
-                        <Badge className={user.isDisqualified ? 'border-[rgba(194,65,59,0.25)] bg-[var(--dash-coral-soft)] text-[var(--dash-coral)]' : 'border-[var(--dash-border)] bg-[#f8faff] text-[var(--dash-muted)]'}>
+                        <Badge className={user.isDisqualified ? 'border-[rgba(194,65,59,0.25)] bg-[var(--dash-coral-soft)] text-[var(--dash-coral)]' : 'border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]'}>
                           {statusLabel(user)}
                         </Badge>
                         {user.isDisqualified ? (
@@ -304,14 +304,14 @@ export function AdminUsersClient() {
                           </p>
                         ) : null}
                       </td>
-                      <td className="sticky right-0 z-10 border-l border-[var(--dash-border)] bg-white px-5 py-4 align-middle shadow-[-8px_0_14px_-10px_rgba(25,50,77,0.08)] transition-colors group-hover:bg-[#f8fbff]">
+                      <td className="sticky right-0 z-10 border-l border-[var(--dash-border)] bg-white px-5 py-4 align-middle shadow-[-8px_0_14px_-10px_rgba(43,26,24,0.08)] transition-colors group-hover:bg-[#fdf9f7]">
                         <div className="flex items-center justify-end gap-2">
                           {user.role === 'USER' ? (
                             user.isDisqualified ? (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#f8fbff]"
+                                className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#fdf9f7]"
                                 aria-label={copy.clearDisqualify}
                                 title={copy.clearDisqualify}
                                 disabled={busy}
@@ -326,7 +326,7 @@ export function AdminUsersClient() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#f8fbff]"
+                                className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#fdf9f7]"
                                 aria-label={copy.disqualify}
                                 title={copy.disqualify}
                                 onClick={() => {
@@ -528,7 +528,7 @@ export function AdminUsersClient() {
           />
         }
       >
-        <p className="text-sm leading-6 text-[#60748b]">{copy.deleteWarning}</p>
+        <p className="text-sm leading-6 text-[#6d5f5c]">{copy.deleteWarning}</p>
       </DashboardModal>
     </AdminShell>
   );

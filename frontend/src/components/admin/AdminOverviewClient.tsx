@@ -1,27 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import {
-  ArrowRight,
-  Building2,
-  CalendarDays,
-  CalendarPlus,
-  CheckCircle2,
-  ClipboardList,
-  Tags,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowRight, CalendarDays, CalendarPlus, CheckCircle2, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AttentionRow,
   EmptyState,
-  Metric,
   RegistrationStatusBadge,
   SectionHeading,
   softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
 import { apiFetch } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { useAdminCounts } from '@/hooks/useAdminCounts';
 import { cn } from '@/lib/utils';
 import { AdminShell } from './AdminShell';
 import type { EventDto, RegistrationDto } from '@/types/admin';
@@ -29,6 +21,9 @@ import type { EventDto, RegistrationDto } from '@/types/admin';
 export function AdminOverviewClient() {
   const { dictionary, formatDate } = useI18n();
   const copy = dictionary.dashboard.admin.overview;
+  // Counts come from the single summary source the sidebar also uses, so the
+  // Overview and the sidebar snapshot can never drift apart.
+  const { counts } = useAdminCounts();
   const [events, setEvents] = useState<EventDto[]>([]);
   const [registrations, setRegistrations] = useState<RegistrationDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,52 +51,38 @@ export function AdminOverviewClient() {
     };
   }, []);
 
-  const counts = useMemo(
-    () => ({
-      pending: registrations.filter((item) => item.status === 'PENDING').length,
-      approved: registrations.filter((item) => item.status === 'APPROVED').length,
-      published: events.filter((item) => item.isPublished).length,
-      drafts: events.filter((item) => !item.isPublished).length,
-      declined: registrations.filter((item) => item.status === 'DECLINED').length,
-    }),
-    [events, registrations],
-  );
-
   const pendingQueue = registrations.filter((item) => item.status === 'PENDING').slice(0, 6);
   const draftEvents = events.filter((item) => !item.isPublished).slice(0, 4);
+  // The setup path only helps before there is anything to run.
+  const showSetup = !loading && events.length === 0;
 
   return (
     <AdminShell title={copy.title} description={copy.description} eyebrow={dictionary.dashboard.admin.shell.eyebrow}>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label={dictionary.dashboard.admin.stats[0][0]} value={counts.pending} hint={dictionary.dashboard.admin.stats[0][1]} tone="warning" />
-        <Metric label={dictionary.dashboard.admin.stats[1][0]} value={counts.approved} hint={dictionary.dashboard.admin.stats[1][1]} tone="success" />
-        <Metric label={dictionary.dashboard.admin.stats[2][0]} value={counts.published} hint={dictionary.dashboard.admin.stats[2][1]} tone="info" />
-        <Metric label={dictionary.dashboard.admin.stats[3][0]} value={counts.declined} hint={dictionary.dashboard.admin.stats[3][1]} tone="danger" />
-      </section>
+      {showSetup ? (
+        <section className="mb-6">
+          <SectionHeading title={copy.workflowTitle} description={copy.workflowDescription} />
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {copy.steps.map((step, index) => (
+              <Link
+                key={step.title}
+                href={step.href}
+                className="dash-attention group transition-colors hover:border-[var(--dash-border-strong)] hover:bg-[var(--dash-tint)]"
+              >
+                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--dash-tint-strong)] text-xs font-semibold text-[var(--dash-muted)]">
+                  {index + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-[var(--dash-text)]">{step.title}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-[var(--dash-muted)]">{step.description}</p>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-[var(--dash-faint)] transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-      <section className="mt-6">
-        <SectionHeading title={copy.workflowTitle} description={copy.workflowDescription} />
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {copy.steps.map((step, index) => (
-            <Link
-              key={step.title}
-              href={step.href}
-              className="dash-attention group transition-colors hover:border-[rgba(213,201,177,0.22)] hover:bg-[rgba(213,201,177,0.05)]"
-            >
-              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[rgba(213,201,177,0.08)] text-xs font-semibold text-[rgba(213,201,177,0.7)]">
-                {index + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-[var(--padel-ivory)]">{step.title}</p>
-                <p className="mt-0.5 text-xs leading-5 text-[rgba(213,201,177,0.45)]">{step.description}</p>
-              </div>
-              <ArrowRight className="h-4 w-4 shrink-0 text-[rgba(213,201,177,0.35)] transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <section>
           <SectionHeading
             title={copy.pendingTitle}
@@ -179,30 +160,6 @@ export function AdminOverviewClient() {
           </div>
         </section>
       </div>
-
-      <section className="mt-6">
-        <SectionHeading title={copy.quickActionsTitle} />
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            { href: '/admin/categories', label: copy.quickCategories, icon: Tags },
-            { href: '/admin/events', label: copy.quickEvents, icon: CalendarPlus },
-            { href: '/admin/registrations', label: copy.quickRegistrations, icon: ClipboardList },
-            { href: '/admin/clubs', label: copy.quickClubs, icon: Building2 },
-          ].map((action) => (
-            <Button
-              key={action.href}
-              asChild
-              variant="outline"
-              className={cn(softButtonClassName, 'h-auto min-h-14 justify-start gap-3 rounded-lg px-4 py-3')}
-            >
-              <Link href={action.href}>
-                <action.icon className="h-4 w-4 text-[rgba(213,201,177,0.5)]" />
-                <span>{action.label}</span>
-              </Link>
-            </Button>
-          ))}
-        </div>
-      </section>
     </AdminShell>
   );
 }

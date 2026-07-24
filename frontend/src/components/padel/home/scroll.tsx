@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 import {
   animate,
@@ -23,6 +24,53 @@ import { WordReveal } from './motion';
 const LAZY_VIEW_MARGIN = '100% 0px 100% 0px';
 const forcedSectionIds = new Set<string>();
 const forceListeners = new Set<() => void>();
+
+/* Deferred sections keep first paint cheap, but mounting them mid-scroll
+   causes jank and blank flashes on slow machines. Once the page has loaded
+   and the main thread goes idle, mount everything that is still deferred. */
+let idleMountedAll = false;
+let idleMountScheduled = false;
+const idleMountListeners = new Set<() => void>();
+
+function scheduleIdleMountAll() {
+  if (idleMountedAll || idleMountScheduled || typeof window === 'undefined') return;
+  idleMountScheduled = true;
+
+  const fire = () => {
+    idleMountedAll = true;
+    idleMountListeners.forEach((listener) => listener());
+  };
+  const whenIdle = () => {
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(fire, { timeout: 4000 });
+    } else {
+      // Safari has no requestIdleCallback.
+      window.setTimeout(fire, 1500);
+    }
+  };
+
+  if (document.readyState === 'complete') {
+    whenIdle();
+  } else {
+    window.addEventListener('load', whenIdle, { once: true });
+  }
+}
+
+function subscribeToIdleMount(listener: () => void) {
+  idleMountListeners.add(listener);
+  return () => {
+    idleMountListeners.delete(listener);
+  };
+}
+
+function useIdleMountAll() {
+  useEffect(scheduleIdleMountAll, []);
+  return useSyncExternalStore(
+    subscribeToIdleMount,
+    () => idleMountedAll,
+    () => false,
+  );
+}
 
 /** Mount a deferred section immediately for anchor and hash navigation. */
 export function ensureSectionVisible(id: string) {
@@ -280,12 +328,13 @@ export function ViewportDeferredSection({
 }) {
   const ref = useRef<HTMLElement>(null);
   const forced = useForcedSection(id);
+  const idleMounted = useIdleMountAll();
   const inView = useInView(ref, {
     once: true,
     margin: LAZY_VIEW_MARGIN,
     amount: 0,
   });
-  const shouldRender = forced || inView;
+  const shouldRender = forced || inView || idleMounted;
 
   if (!shouldRender) {
     return (
@@ -317,6 +366,7 @@ export function LazyMount({
   eager?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const idleMounted = useIdleMountAll();
   const inView = useInView(ref, {
     once: true,
     margin: eager ? '40% 0px' : '80% 0px',
@@ -325,7 +375,7 @@ export function LazyMount({
 
   return (
     <div ref={ref} className={className}>
-      {inView ? children : null}
+      {inView || idleMounted ? children : null}
     </div>
   );
 }
@@ -347,7 +397,8 @@ export function SectionIntro({
 }) {
   const reduceMotion = useReducedMotion();
   const coarse = useCoarsePointer();
-  const lightweightMotion = Boolean(reduceMotion || coarse);
+  const lightweightMotion = Boolean(reduceMotion);
+  const speed = coarse ? 0.75 : 1;
 
   return (
     <div className={align === 'center' ? 'mx-auto max-w-3xl text-center' : 'max-w-3xl'}>
@@ -367,8 +418,8 @@ export function SectionIntro({
           initial={lightweightMotion ? false : { scaleX: 0, opacity: 0 }}
           animate={lightweightMotion ? { scaleX: 1, opacity: 0.55 } : undefined}
           whileInView={lightweightMotion ? undefined : { scaleX: 1, opacity: 0.55 }}
-          viewport={{ once: true, margin: '-40px' }}
-          transition={lightweightMotion ? { duration: 0 } : { duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+          viewport={{ once: true }}
+          transition={lightweightMotion ? { duration: 0 } : { duration: 0.7 * speed, delay: 0.12 * speed, ease: [0.16, 1, 0.3, 1] }}
           style={{ originX: 0 }}
         />
       </p>
@@ -389,8 +440,8 @@ export function SectionIntro({
           initial={lightweightMotion ? false : { opacity: 0 }}
           animate={lightweightMotion ? { opacity: 1 } : undefined}
           whileInView={lightweightMotion ? undefined : { opacity: 1 }}
-          viewport={{ once: true, amount: 0.4 }}
-          transition={lightweightMotion ? { duration: 0 } : { duration: 0.6, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          viewport={{ once: true, amount: 0.1 }}
+          transition={lightweightMotion ? { duration: 0 } : { duration: 0.6 * speed, delay: 0.22 * speed, ease: [0.16, 1, 0.3, 1] }}
         >
           {copy}
         </motion.p>

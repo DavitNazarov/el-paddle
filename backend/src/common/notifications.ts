@@ -1,4 +1,4 @@
-import { RegistrationStatus, type Event, type User } from '../generated/prisma/client.js';
+import { type Event, type User } from '../generated/prisma/client.js';
 import { appUrl, emailButton, emailDetails, emailLayout, emailPanel, escapeHtml, sendEmail } from './email.js';
 
 function userDisplayName(user: Pick<User, 'name' | 'surname' | 'email'>) {
@@ -73,45 +73,6 @@ export async function sendTeammateInviteEmail(
       { eyebrow: 'Teammate invitation', preheader: `${ownerName} registered you for ${event.title}.` },
     ),
   });
-}
-
-export async function sendRegistrationStatusEmail(
-  recipients: User[],
-  event: Event,
-  status: RegistrationStatus,
-  reason?: string | null,
-) {
-  const statusLabel =
-    status === RegistrationStatus.APPROVED
-      ? 'approved'
-      : status === RegistrationStatus.DECLINED
-        ? 'declined'
-        : 'moved back to pending';
-  const heading = status === RegistrationStatus.APPROVED
-    ? 'Your registration is approved'
-    : status === RegistrationStatus.DECLINED
-      ? 'Registration update'
-      : 'Your registration is pending review';
-  const safeReason = reason ? escapeHtml(reason) : '';
-  const dashboardUrl = appUrl('/dashboard');
-
-  await Promise.all(
-    recipients.map((user) =>
-      sendEmail({
-        to: user.email,
-        subject: `${event.title}: registration ${statusLabel}`,
-        text: `${heading}\n\nYour registration for ${event.title} was ${statusLabel}.${reason ? `\n\nNote from the organizer: ${reason}` : ''}\n\nView registration: ${dashboardUrl}`,
-        html: emailLayout(
-          heading,
-          `<p style="margin:0">The organizer has updated your tournament registration.</p>
-           ${emailDetails([{ label: 'Tournament', value: event.title }, { label: 'Status', value: statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1) }])}
-           ${safeReason ? emailPanel(`<p style="margin:0 0 6px;color:#766e67;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Note from the organizer</p><p style="margin:0;color:#4f4842">${safeReason}</p>`) : ''}
-           ${emailButton('View registration', dashboardUrl)}`,
-          { eyebrow: 'Registration status', preheader: `Your registration for ${event.title} was ${statusLabel}.` },
-        ),
-      }),
-    ),
-  );
 }
 
 export async function sendAccountInviteEmail(

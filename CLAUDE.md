@@ -40,16 +40,17 @@ The system has four audiences: public visitors, players, judges, and administrat
 
 ## Domain invariants
 
-- Event lifecycle moves forward through explicit allowed transitions.
+- Event lifecycle moves forward through explicit allowed transitions; the only backward transition is an explicit reopen of a completed event, which requires the `EVENT_STATE_CORRECT` capability.
 - Registration, bracket, match, schedule, and request writes use optimistic `version` checks where supported.
 - Retried commands must include a stable `commandId`; command receipts prevent duplicate application.
+- Players belong to exactly one club; each club fields at most one team (owner + teammate from the same club) per event.
 - Opponent requests apply only to the first bracket round and require final admin approval.
-- Brackets support 9–16 approved entries in a fixed 16-slot single-elimination graph.
+- Brackets support 2–16 approved entries; the single-elimination graph sizes to 2, 4, 8, or 16 slots and fills the gap with byes.
 - A locked bracket snapshots participant identity for historical accuracy.
 - Judges can score only assigned matches and must process a court queue in order.
 - Scores remain between zero and six. A score of six completes a normal match and advances the winner.
 - Completed result corrections must not overwrite a downstream match that has already started.
-- Public bracket, schedule, live scoring, and final results have independent publication controls.
+- Public event page, registration roster, bracket, schedule, live scoring, and final results have independent publication controls.
 
 ## Security requirements
 
@@ -117,6 +118,7 @@ For UI changes, verify no horizontal overflow, readable empty/error states, keyb
 ## Further reading
 
 - `README.md`: setup and feature overview
+- `docs/BUSINESS_OVERVIEW.md`: product model, audiences, and lifecycle
 - `docs/ARCHITECTURE.md`: system structure and data flow
 - `docs/API.md`: endpoint groups and request conventions
 - `docs/TOURNAMENT_OPERATIONS.md`: end-to-end operational workflow

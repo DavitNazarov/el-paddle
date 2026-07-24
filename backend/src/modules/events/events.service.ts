@@ -3,7 +3,7 @@ import { eventInclude } from '../../common/includes.js';
 import { isNotFoundError, jsonError } from '../../common/http.js';
 import { prisma } from '../../database/prisma.js';
 import { EventStatus, NotificationType, type Prisma } from '../../generated/prisma/client.js';
-import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 
 export async function listEvents({ adminScope }: { adminScope: boolean }) {
@@ -123,9 +123,7 @@ export async function changeEventStatus(input: {
 
     const registrations = await tx.eventRegistration.findMany({ where: { eventId: event.id, status: 'APPROVED' }, include: { owner: true, teammate: true } });
     const contacts = new Map(registrations.flatMap((entry) => [entry.owner, entry.teammate]).map((user) => [user.id, user]));
-    for (const user of contacts.values()) {
-      await queueNotification(tx, { recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.MATCH_SCHEDULED, title: `Event status: ${input.status.replaceAll('_', ' ')}`, message: `${event.title} has moved to ${input.status.replaceAll('_', ' ').toLowerCase()}.`, entityType: 'Event', entityId: event.id, eventId: event.id, actionPath: `/dashboard/events/${event.id}`, version: updated.version });
-    }
+    await queueNotifications(tx, [...contacts.values()].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.EVENT_STATUS_CHANGED, title: `Event status: ${input.status.replaceAll('_', ' ')}`, message: `${event.title} has moved to ${input.status.replaceAll('_', ' ').toLowerCase()}.`, entityType: 'Event', entityId: event.id, eventId: event.id, actionPath: `/dashboard/events/${event.id}`, version: updated.version })));
     await saveCommandReceipt(tx, { actorId: input.actorId, action: 'event.status', commandId: input.commandId, hash, response: { eventId: event.id, version: updated.version } });
     return updated;
   });
@@ -210,13 +208,14 @@ export async function deleteEvent(id: string, actorId: string) {
   }
 }
 
-export async function updateEvent(id: string, input: UpdateEventInput) {
+export async function updateEvent(id: string, input: UpdateEventInput, expectedVersion: number) {
   const existing = await prisma.event.findUnique({
     where: { id },
-    select: { id: true, status: true },
+    select: { id: true, status: true, version: true },
   });
   if (!existing) jsonError('Event not found.', 404);
   if (existing.status === EventStatus.COMPLETED) jsonError('Reopen the completed event before editing it.', 409);
+  if (existing.version !== expectedVersion) jsonError('Event changed. Refresh and try again.', 409);
 
   if (input.categoryIds) {
     await assertCategoriesExist(input.categoryIds);
@@ -256,8 +255,10 @@ export async function updateEvent(id: string, input: UpdateEventInput) {
       );
     }
 
-    return tx.event.update({
-      where: { id },
+    // Optimistic-concurrency guard: only apply if no concurrent admin edit landed
+    // first, matching the sibling event mutations (status / tournament-publication).
+    const updateResult = await tx.event.updateMany({
+      where: { id, version: expectedVersion },
       data: {
         ...(input.title !== undefined ? { title: input.title } : {}),
         ...(input.date !== undefined ? { date: input.date } : {}),
@@ -268,9 +269,11 @@ export async function updateEvent(id: string, input: UpdateEventInput) {
         ...(input.bankAccountIban !== undefined ? { bankAccountIban: input.bankAccountIban } : {}),
         ...(input.bankAccountReceiver !== undefined ? { bankAccountReceiver: input.bankAccountReceiver } : {}),
         ...(input.isPublished !== undefined ? { isPublished: input.isPublished } : {}),
+        version: { increment: 1 },
       },
-      include: eventInclude,
     });
+    if (updateResult.count !== 1) jsonError('Event changed. Refresh and try again.', 409);
+    return tx.event.findUniqueOrThrow({ where: { id }, include: eventInclude });
   });
 }
 

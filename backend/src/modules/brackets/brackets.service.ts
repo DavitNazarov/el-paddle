@@ -2,7 +2,7 @@ import { BracketStatus, MatchResultType, MatchRound, MatchSide, MatchStatus, Not
 import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
-import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 
 export const bracketInclude = {
   eventCategory: { include: { category: true } },
@@ -195,7 +195,7 @@ export async function publishBracket(input: { eventId: string; bracketId: string
     await writeAudit(tx, { action: input.published ? 'bracket.published' : 'bracket.unpublished', actorId: input.actorId, eventId: bracket.eventId, entityType: 'Bracket', entityId: bracket.id, after: { published: input.published } });
     await queueOutbox(tx, { topic: 'bracket.published', aggregateType: 'Bracket', aggregateId: bracket.id, payload: { eventId: bracket.eventId, bracketId: bracket.id, published: input.published, version: updated.version }, deduplicationKey: `bracket:${bracket.id}:publication:v${updated.version}` });
     const entries = await tx.eventRegistration.findMany({ where: { eventId: bracket.eventId, categoryId: bracket.categoryId, status: 'APPROVED' }, include: { owner: true, teammate: true } });
-    if (input.published) for (const entry of entries) for (const user of [entry.owner, entry.teammate]) await queueNotification(tx, { recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.BRACKET_PUBLISHED, title: 'Bracket published', message: 'The tournament bracket is ready to view.', entityType: 'Bracket', entityId: bracket.id, eventId: bracket.eventId, actionPath: `/dashboard/events/${bracket.eventId}`, version: updated.version });
+    if (input.published) await queueNotifications(tx, entries.flatMap((entry) => [entry.owner, entry.teammate].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.BRACKET_PUBLISHED, title: 'Bracket published', message: 'The tournament bracket is ready to view.', entityType: 'Bracket', entityId: bracket.id, eventId: bracket.eventId, actionPath: `/dashboard/events/${bracket.eventId}`, version: updated.version }))));
     await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.publish', commandId: input.commandId, hash });
     return updated;
   });

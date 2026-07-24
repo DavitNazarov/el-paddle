@@ -1,5 +1,7 @@
 # Tournament Management Feature Implementation Plan
 
+> **Historical document.** This is the original design plan written before the tournament system was built. The implementation has since shipped and evolved past several details recorded here — for example, brackets now size dynamically to 2–16 approved entries (2/4/8/16 slots), each club fields at most one team per event, and completed events can be explicitly reopened. For the current system, read [docs/BUSINESS_OVERVIEW.md](docs/BUSINESS_OVERVIEW.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md), and [docs/TOURNAMENT_OPERATIONS.md](docs/TOURNAMENT_OPERATIONS.md).
+
 ## 1. Executive Summary
 
 This repository is an Express 4 + Prisma 7/PostgreSQL backend and a Next.js 16/React 19 frontend. It is not NestJS, and it currently has no bracket, match, court, schedule, persistent notification, queue/worker, transactional outbox, or WebSocket implementation. The safest implementation is therefore an incremental extension of the existing modules and UI shells, not a parallel tournament subsystem.

@@ -130,7 +130,7 @@ export function AdminEventControlClient({ eventId }: { eventId: string }) {
 function OperationLink({ href, icon: Icon, title, detail }: { href: string; icon: typeof Swords; title: string; detail: string }) {
   return (
     <Link href={href} className="group min-h-40 rounded-xl border border-[var(--dash-border)] bg-white p-5 shadow-sm transition-colors hover:border-[var(--dash-border-strong)] hover:bg-[#fbfdff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]">
-      <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--dash-sky-soft)] text-[var(--dash-sky)]"><Icon className="h-4 w-4" aria-hidden="true" /></span>
+      <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--dash-primary-soft)] text-[var(--dash-primary)]"><Icon className="h-4 w-4" aria-hidden="true" /></span>
       <h2 className="mt-5 text-base font-semibold text-[var(--dash-text)] group-hover:underline">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-[var(--dash-muted)]">{detail}</p>
     </Link>

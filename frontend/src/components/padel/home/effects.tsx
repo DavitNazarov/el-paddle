@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useRef,
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -14,7 +13,6 @@ import {
   useMotionValue,
   useReducedMotion,
   useScroll,
-  useSpring,
   useTransform,
 } from 'framer-motion';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -29,12 +27,14 @@ export function Preloader() {
 
   useEffect(() => {
     if (reduceMotion || coarse) return;
+    // Keep the branded moment short: it is pure theatre and every ms delays
+    // real content, which old laptops feel the most.
     const fallback = window.setTimeout(() => {
       setProgress(100);
       setDone(true);
-    }, 2400);
+    }, 1200);
     const controls = animate(0, 100, {
-      duration: 1.5,
+      duration: 0.7,
       ease: [0.32, 0.72, 0.24, 1],
       onUpdate: (latest) => setProgress(Math.round(latest)),
       onComplete: () => {
@@ -64,13 +64,13 @@ export function Preloader() {
         <motion.div
           className="preloader fixed inset-0 z-[120] flex flex-col items-center justify-center bg-[var(--padel-red)]"
           exit={{ y: '-100%' }}
-          transition={{ duration: 0.85, ease: [0.76, 0, 0.24, 1] }}
+          transition={{ duration: 0.6, ease: [0.76, 0, 0.24, 1] }}
           aria-hidden
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
             <Image
               src="/images/el-padel-logo.png"
@@ -112,15 +112,11 @@ export function CursorRing() {
   const [mounted, setMounted] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [hoveringLink, setHoveringLink] = useState(false);
-  const resetBallRef = useRef<number | null>(null);
+  // Position updates are written straight to motion values: no springs, no
+  // React renders per move. Springs made the cursor trail behind the pointer
+  // on slower machines.
   const x = useMotionValue(-100);
   const y = useMotionValue(-100);
-  const ballX = useMotionValue(0);
-  const ballY = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 320, damping: 28, mass: 0.55 });
-  const springY = useSpring(y, { stiffness: 320, damping: 28, mass: 0.55 });
-  const springBallX = useSpring(ballX, { stiffness: 520, damping: 24, mass: 0.24 });
-  const springBallY = useSpring(ballY, { stiffness: 520, damping: 24, mass: 0.24 });
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMounted(true), 0);
@@ -142,19 +138,6 @@ export function CursorRing() {
       y.set(event.clientY);
       const target = event.target instanceof Element ? event.target : null;
       setHoveringLink(Boolean(target?.closest('a, button, input, textarea, select, [role="button"]')));
-
-      const maxTravel = target?.closest('a, button, input, textarea, select, [role="button"]') ? 9 : 7;
-      const moveBall = (value: number) => Math.max(-maxTravel, Math.min(maxTravel, value * 0.48));
-      ballX.set(moveBall(event.movementX));
-      ballY.set(moveBall(event.movementY));
-
-      if (resetBallRef.current !== null) {
-        window.clearTimeout(resetBallRef.current);
-      }
-      resetBallRef.current = window.setTimeout(() => {
-        ballX.set(0);
-        ballY.set(0);
-      }, 80);
     };
     const down = (event: PointerEvent) => {
       if (event.pointerType !== 'mouse') return;
@@ -173,11 +156,8 @@ export function CursorRing() {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerdown', down);
       window.removeEventListener('pointerup', up);
-      if (resetBallRef.current !== null) {
-        window.clearTimeout(resetBallRef.current);
-      }
     };
-  }, [ballX, ballY, reduceMotion, x, y]);
+  }, [reduceMotion, x, y]);
 
   if (!mounted || !enabled) return null;
 
@@ -185,7 +165,7 @@ export function CursorRing() {
     <motion.div
       aria-hidden
       className="cursor-ring pointer-events-none fixed left-0 top-0 z-[140]"
-      style={{ x: springX, y: springY }}
+      style={{ x, y }}
     >
       <motion.span
         className="cursor-ring__circle"
@@ -193,14 +173,9 @@ export function CursorRing() {
           scale: pressed ? 0.7 : hoveringLink ? 1.7 : 1,
           opacity: hoveringLink ? 0.95 : 0.8,
         }}
-        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      />
-      <motion.span
-        className="cursor-ring__dot"
-        animate={{ scale: pressed ? 0.72 : hoveringLink ? 0.86 : 1 }}
-        style={{ x: springBallX, y: springBallY }}
         transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       />
+      <span className="cursor-ring__dot" />
     </motion.div>,
     document.body,
   );
@@ -211,38 +186,14 @@ export function FilmGrain() {
 }
 
 export function PageSurface() {
-  const coarse = useCoarsePointer();
-  const reduceMotion = useReducedMotion();
-  const animateAurora = !coarse && !reduceMotion;
-
+  // The aurora drifts via CSS keyframes (compositor-friendly in Safari and on
+  // phones); prefers-reduced-motion disables it globally.
   return (
     <div className="page-surface" aria-hidden>
       <div className="page-surface__gradient" />
       <div className="page-surface__aurora aurora">
-        {animateAurora ? (
-          <>
-            <motion.div
-              className="aurora-orb aurora-orb--a page-surface__aurora-a"
-              aria-hidden
-              animate={{
-                x: ['0rem', '6rem', '0rem'],
-                y: ['0rem', '4rem', '0rem'],
-                scale: [1, 1.14, 1],
-              }}
-              transition={{ duration: 24, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <motion.div
-              className="aurora-orb aurora-orb--b page-surface__aurora-b"
-              aria-hidden
-              animate={{
-                x: ['0rem', '-5rem', '0rem'],
-                y: ['0rem', '-3rem', '0rem'],
-                scale: [1.05, 0.9, 1.05],
-              }}
-              transition={{ duration: 30, repeat: Infinity, ease: 'easeInOut' }}
-            />
-          </>
-        ) : null}
+        <div className="aurora-orb aurora-orb--a page-surface__aurora-a aurora-orb--drift-a" />
+        <div className="aurora-orb aurora-orb--b page-surface__aurora-b aurora-orb--drift-b" />
       </div>
       <div className="page-surface__sheen" />
     </div>

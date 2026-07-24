@@ -432,6 +432,8 @@ export const ka = {
           club: 'ჩემი კლუბი',
           events: 'ივენთები',
           entries: 'განაცხადები',
+          matches: 'ისტორია',
+          notifications: 'შეტყობინებები',
           settings: 'პარამეტრები',
           publicSite: 'საჯარო საიტი',
         },
@@ -585,7 +587,7 @@ export const ka = {
         },
         overview: {
           title: 'მიმოხილვა',
-          description: 'რიგები და რაოდენობები — პირდაპირ იმაზე, რაც მოქმედებას საჭიროებს.',
+          description: 'რას სჭირდება ყურადღება — ერთი შეხედვით.',
           workflowTitle: 'სწრაფი დაყენება',
           workflowDescription: 'კატეგორიები → ივენთები → დამტკიცება.',
           steps: [

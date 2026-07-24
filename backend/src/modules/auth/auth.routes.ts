@@ -33,6 +33,7 @@ import {
   getCurrentUser,
   OAUTH_STATE_COOKIE,
   OAUTH_LEGAL_COOKIE,
+  reconcileUserRole,
   requireUser,
   revokeUserSessions,
   roleForEmail,
@@ -177,6 +178,7 @@ authRouter.post('/api/admin/bootstrap', bootstrapLimit, asyncHandler(async (requ
     ip,
     detail: result.created ? 'created' : 'promoted',
   });
+  await reconcileUserRole(result.user.id);
   setSessionCookie(response, result.user);
   response.status(result.created ? 201 : 200).json({
     created: result.created,
@@ -311,6 +313,7 @@ authRouter.post('/api/auth/verify', authStrictLimit, asyncHandler(async (request
     });
   });
 
+  await reconcileUserRole(verifiedUser.id);
   setSessionCookie(response, verifiedUser);
   response.json({ user: toPublicUser(verifiedUser) });
 }));
@@ -361,6 +364,7 @@ authRouter.post('/api/auth/login', authStrictLimit, asyncHandler(async (request,
   }
 
   auditLog({ event: 'auth.login', outcome: 'success', userId: user.id, email, ip });
+  await reconcileUserRole(user.id);
   setSessionCookie(response, user);
   response.json({ user: toPublicUser(user) });
 }));
@@ -483,6 +487,7 @@ authRouter.post('/api/auth/invite/complete', asyncHandler(async (request, respon
     email: user.email,
     ip: requestIp(request),
   });
+  await reconcileUserRole(user.id);
   setSessionCookie(response, user);
   response.json({ user: toPublicUser(user) });
 }));
@@ -754,6 +759,7 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
 
   if (!user) return;
 
+  await reconcileUserRole(user.id);
   setSessionCookie(response, user);
   const role = roleForEmail(user.email, user.role, { emailVerified: true });
   const isStaff = role === UserRole.ADMIN || role === UserRole.JUDGE;

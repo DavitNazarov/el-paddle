@@ -17,6 +17,7 @@ import {
 import { auditLog, requestIp } from '../../common/audit.js';
 import { passwordValidationError } from '../../common/security.js';
 import { requireCapability } from '../../common/capabilities.js';
+import { parseListRange } from '../../common/pagination.js';
 import {
   createUserByAdmin,
   deleteUserAccount,
@@ -29,7 +30,7 @@ import {
 
 export const usersRouter = Router();
 
-type PublicPlayerRecord = Awaited<ReturnType<typeof listPublicPlayers>>[number];
+type PublicPlayerRecord = Awaited<ReturnType<typeof getPublicPlayer>>;
 
 function serializePublicPlayer(player: PublicPlayerRecord) {
   const clubMembership = player.clubMemberships[0] ?? null;
@@ -42,10 +43,11 @@ function serializePublicPlayer(player: PublicPlayerRecord) {
   };
 }
 
-usersRouter.get('/api/public/players', asyncHandler(async (_request, response) => {
-  const players = await listPublicPlayers();
+usersRouter.get('/api/public/players', asyncHandler(async (request, response) => {
+  const page = await listPublicPlayers(parseListRange(request.query));
   response.json({
-    players: players.map(serializePublicPlayer),
+    players: page.items.map(serializePublicPlayer),
+    nextCursor: page.nextCursor,
   });
 }));
 
@@ -56,14 +58,14 @@ usersRouter.get('/api/public/players/:id', asyncHandler(async (request, response
 
 usersRouter.get('/api/admin/users', asyncHandler(async (request, response) => {
   await requireCapability(request, Capability.USER_MANAGE);
-  const users = await listUsers();
-  response.json({ users: users.map(serializeAdminUser) });
+  const page = await listUsers(undefined, parseListRange(request.query));
+  response.json({ users: page.items.map(serializeAdminUser), nextCursor: page.nextCursor });
 }));
 
 usersRouter.get('/api/admin/judges', asyncHandler(async (request, response) => {
   await requireCapability(request, Capability.JUDGE_MANAGE);
-  const users = await listUsers(UserRole.JUDGE);
-  response.json({ judges: users.map(serializeAdminUser) });
+  const page = await listUsers(UserRole.JUDGE, parseListRange(request.query));
+  response.json({ judges: page.items.map(serializeAdminUser), nextCursor: page.nextCursor });
 }));
 
 for (const action of ['activate', 'deactivate'] as const) {

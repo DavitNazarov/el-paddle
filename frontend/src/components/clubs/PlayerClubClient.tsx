@@ -509,14 +509,14 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
           ) : null}
 
           {impactLoading ? (
-            <div className="flex min-h-28 items-center justify-center gap-2 text-sm text-[#60748b]">
+            <div className="flex min-h-28 items-center justify-center gap-2 text-sm text-[#6d5f5c]">
               <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
               {copy.checkingRegistrations}
             </div>
           ) : null}
 
           {removalImpact && !removalImpact.affectedRegistrations.length ? (
-            <p className="text-sm leading-6 text-[#60748b]">{copy.removeDescription}</p>
+            <p className="text-sm leading-6 text-[#6d5f5c]">{copy.removeDescription}</p>
           ) : null}
 
           {removalImpact?.affectedRegistrations.length ? (
@@ -533,18 +533,18 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                   return (
                     <section
                       key={registration.id}
-                      className="rounded-xl border border-[#d7e1ec] bg-[#f7f9fc] p-4"
+                      className="rounded-xl border border-[#e7dcd8] bg-[#faf6f3] p-4"
                       aria-labelledby={`affected-registration-${registration.id}`}
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <h3
                             id={`affected-registration-${registration.id}`}
-                            className="font-semibold text-[#19324d]"
+                            className="font-semibold text-[#2a1f1e]"
                           >
                             {registration.event.title}
                           </h3>
-                          <p className="mt-1 text-sm text-[#60748b]">
+                          <p className="mt-1 text-sm text-[#6d5f5c]">
                             {registration.category.name} ·{' '}
                             {formatDate(registration.event.date, { dateStyle: 'medium' })}
                           </p>
@@ -635,7 +635,7 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                       )}
 
                       {!registration.blockedReason && resolution?.action === 'REPLACE' ? (
-                        <p className="mt-3 flex items-center gap-2 text-xs leading-5 text-[#60748b]">
+                        <p className="mt-3 flex items-center gap-2 text-xs leading-5 text-[#6d5f5c]">
                           <ArrowRightLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
                           {copy.replacementPendingHint}
                         </p>

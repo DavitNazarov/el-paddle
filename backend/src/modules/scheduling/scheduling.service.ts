@@ -1,7 +1,7 @@
 import { MatchStatus, NotificationType, ScheduleItemStatus, UserRole, UserStatus, type Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
-import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 
 export const scheduleInclude = {
   judgeAssignments: { include: { judge: true }, where: { revokedAt: null }, orderBy: { startsAt: 'asc' as const } },
@@ -87,7 +87,7 @@ export async function scheduleMatch(input: { eventId: string; matchId: string; c
     const item = await tx.scheduleItem.create({ data: { matchId: match.id, courtId: court.id, assignedJudgeId: input.judgeId, queuePosition: (last._max.queuePosition ?? 0) + 1, plannedStartAt: input.plannedStartAt, plannedEndAt: input.plannedEndAt, status: resolved ? ScheduleItemStatus.READY : ScheduleItemStatus.TENTATIVE } });
     await writeAudit(tx, { action: 'match.scheduled', actorId: input.actorId, eventId: input.eventId, entityType: 'ScheduleItem', entityId: item.id, after: { matchId: match.id, courtId: court.id, judgeId: input.judgeId } });
     await queueOutbox(tx, { topic: 'court.queue.updated', aggregateType: 'Court', aggregateId: court.id, payload: { eventId: input.eventId, courtId: court.id }, deduplicationKey: `schedule-item:${item.id}:created` });
-    for (const entry of [match.participantA, match.participantB].filter(Boolean)) for (const user of [entry!.owner, entry!.teammate]) await queueNotification(tx, { recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.MATCH_SCHEDULED, title: 'Match scheduled', message: `Your match has been scheduled on ${court.name}.`, entityType: 'Match', entityId: match.id, eventId: input.eventId, actionPath: `/dashboard/events/${input.eventId}`, version: item.version });
+    await queueNotifications(tx, [match.participantA, match.participantB].filter(Boolean).flatMap((entry) => [entry!.owner, entry!.teammate].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.MATCH_SCHEDULED, title: 'Match scheduled', message: `Your match has been scheduled on ${court.name}.`, entityType: 'Match', entityId: match.id, eventId: input.eventId, actionPath: `/dashboard/events/${input.eventId}`, version: item.version }))));
     return item;
   });
 }

@@ -1,14 +1,16 @@
 # El Padel
 
-El Padel is a full-stack padel club and tournament platform. It supports public club discovery, player registration, tournament administration, opponent requests, fixed Round-of-16 brackets, court scheduling, judge queues, live scoring, notifications, and historical results.
+El Padel is a full-stack padel club and tournament platform for the Georgian padel community. Clubs — not individuals — are the unit of competition: players belong to one club, each club fields one two-person team per event, and tournaments run from registration through opponent requests, single-elimination brackets, court scheduling, judged live scoring, and published results.
+
+See [docs/BUSINESS_OVERVIEW.md](docs/BUSINESS_OVERVIEW.md) for the full product story.
 
 ## Technology
 
-- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS
+- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS, bilingual UI (English/Georgian)
 - Backend: Express, TypeScript, Prisma, PostgreSQL
 - Realtime: Socket.IO
 - Background work: PostgreSQL-backed transactional outbox worker
-- Authentication: secure cookie sessions, email/password, optional Google OAuth
+- Authentication: HTTP-only JWT session cookies, email/password with verification codes, optional Google OAuth
 - Legal compliance: bilingual policies, permanent legal links, versioned account/invite consent, and versioned tournament/refund/risk acknowledgement
 - Email: Resend
 - Tests: Vitest and Testing Library
@@ -20,11 +22,10 @@ frontend/                     Next.js application
 backend/                      Express API and background worker
 backend/prisma/               Prisma schema, migrations, and seed data
 deploy/                       Nginx deployment configuration
-docs/                         Architecture, API, and operational guides
+docs/                         Business, architecture, API, and operational guides
 docker-compose.yml            PostgreSQL, API, worker, and frontend services
 CLAUDE.md                     Repository instructions for coding agents
 DEPLOY.md                     Production VPS deployment runbook
-FEATURE_IMPLEMENTATION_PLAN.md Detailed feature and domain design
 ```
 
 ## Quick start
@@ -84,29 +85,36 @@ Judge users can be created from Admin → Users.
 
 ### Administrator
 
-1. Create categories, clubs, users, and an event.
-2. Publish the event and review registrations.
-3. Close registration and open category opponent-request windows.
-4. Review accepted requests and approve or reject pairings.
-5. Generate, lock, and publish the Round-of-16 bracket.
-6. Create courts, assign judges, order matches, and publish the schedule.
-7. Move the event to ongoing and monitor scores and deliveries.
-8. Complete the event and publish results.
+1. Create categories, clubs, users, and an event (fee, bank details, categories).
+2. Publish the event and review club team registrations.
+3. Publish the approved roster, close registration, and open per-category opponent-request windows.
+4. Approve accepted pairings, reject them, or override refusals.
+5. Generate, review, lock, and publish each category bracket (2–16 entries; bracket sized 2/4/8/16 with byes).
+6. Create courts, assign judges to time windows, queue matches, and publish the schedule.
+7. Move the event to ongoing, optionally enable public live scoring, and monitor scores and deliveries.
+8. Complete the event and publish final results; reopen explicitly if a correction is needed.
 
 ### Player
 
-1. Register or accept a teammate invitation.
-2. Enter a published event with a teammate.
-3. Request an eligible first-round opponent when the window opens.
-4. Accept, refuse, edit, or withdraw an opponent request.
-5. View the published bracket, schedule, notifications, and match history.
+1. Register with email verification (or complete an invite), then create or join a club.
+2. Enter the club's team in a published event with a teammate from the same club.
+3. Request a preferred first-round opponent when the category window opens.
+4. Accept, refuse, edit, or withdraw opponent requests.
+5. Follow the published bracket, schedule, live scores, notifications, and match history.
+
+### Club leader
+
+1. Create the club and invite club mates.
+2. Approve or reject join requests.
+3. Replace a registered player when needed (entry returns to review).
+4. Resolve affected registrations before removing a member.
 
 ### Judge
 
-1. Open assigned courts.
-2. Process the court queue in order.
+1. Open assigned courts during the assigned time window.
+2. Process the court queue strictly in order.
 3. Start the next ready match.
-4. Record scores from zero to six or complete a walkover/withdrawal with a reason.
+4. Score 0–6 per side (six wins), or record a walkover/withdrawal/disqualification with a reason.
 
 ## Commands
 
@@ -133,21 +141,21 @@ npm run worker --workspace backend
 
 ## Security model
 
-- Session cookies are HTTP-only and validated against a user session version.
+- Session cookies are HTTP-only JWTs validated against a per-user session version; logout and sensitive changes revoke outstanding sessions.
 - Unsafe API requests require a double-submit CSRF token and an allowed origin.
-- Admin operations use capability checks rather than UI visibility alone.
-- Commands that change tournament state use command IDs and optimistic versions.
-- Private realtime rooms are restricted to administrators, event participants, or assigned judges.
-- Audit entries, notifications, email jobs, and realtime events are committed in the same database transaction as domain changes.
+- Admin operations use fine-grained capability checks (with per-user allow/deny grants), not UI visibility.
+- Commands that change tournament state use command IDs and optimistic versions; hot paths add PostgreSQL advisory locks.
+- Public routes and realtime rooms only ever expose explicitly published data; DTO serializers keep raw database records out of responses.
+- Audit entries, notifications, email jobs, and realtime events commit in the same database transaction as the domain change.
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
+- [Business overview](docs/BUSINESS_OVERVIEW.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [API reference](docs/API.md)
 - [Tournament operations](docs/TOURNAMENT_OPERATIONS.md)
 - [Production deployment](DEPLOY.md)
-- [Feature implementation plan](FEATURE_IMPLEMENTATION_PLAN.md)
 
 ## Deployment
 

@@ -3,6 +3,21 @@
   border: 1px solid rgba(213, 201, 177, 0.13);
   border-radius: 0.75rem;
   background: rgba(213, 201, 177, 0.025);
+  /* Subtle settle on mount so operational pages don't feel static;
+     the global prefers-reduced-motion rule disables it. */
+  animation: panelRise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes panelRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .sectionHeader {
@@ -141,6 +156,18 @@
   color: var(--padel-ivory);
 }
 
+/* Touch press feedback: phones get no hover state, so acknowledge taps. */
+@media (hover: none) {
+  .commandButton:active:not(:disabled) {
+    transform: scale(0.97);
+    background: rgba(213, 201, 177, 0.1);
+  }
+
+  .backLink:active {
+    color: var(--padel-ivory);
+  }
+}
+
 .backLink {
   display: inline-flex;
   min-height: 2.75rem;
@@ -198,7 +225,7 @@
 :global(.dash-app) .panel {
   border-color: var(--dash-border);
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 3px rgba(25, 50, 77, 0.04), 0 10px 30px rgba(25, 50, 77, 0.02);
+  box-shadow: 0 1px 3px rgba(43, 26, 24, 0.04), 0 10px 30px rgba(43, 26, 24, 0.02);
 }
 
 :global(.dash-app) .sectionHeader {
@@ -218,7 +245,7 @@
 
 :global(.dash-app) .statusLabel {
   border-color: var(--dash-border);
-  background: #f7f9fc;
+  background: #faf6f3;
   color: var(--dash-muted);
 }
 
@@ -229,9 +256,9 @@
 }
 
 :global(.dash-app) .statusLabel[data-tone='info'] {
-  border-color: rgba(47, 111, 237, 0.25);
-  background: var(--dash-sky-soft);
-  color: var(--dash-sky);
+  border-color: rgba(61, 103, 150, 0.25);
+  background: var(--dash-info-soft);
+  color: var(--dash-info);
 }
 
 :global(.dash-app) .statusLabel[data-tone='danger'] {
@@ -259,14 +286,14 @@
 }
 
 :global(.dash-app) .emptyIcon {
-  border-color: rgba(47, 111, 237, 0.16);
-  background: var(--dash-sky-soft);
-  color: var(--dash-sky);
+  border-color: rgba(164, 22, 26, 0.16);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
 }
 
 :global(.dash-app) .notice {
-  border-color: rgba(47, 111, 237, 0.22);
-  background: var(--dash-sky-soft);
+  border-color: rgba(61, 103, 150, 0.22);
+  background: var(--dash-info-soft);
   color: var(--dash-text);
 }
 
@@ -288,19 +315,19 @@
 
 :global(.dash-app) .commandButton:hover:not(:disabled) {
   border-color: var(--dash-border-strong);
-  background: var(--dash-sky-soft);
+  background: var(--dash-primary-soft);
   color: var(--dash-text);
 }
 
 :global(.dash-app) .commandButton[data-tone='primary'] {
-  border-color: var(--dash-sky);
-  background: var(--dash-sky);
+  border-color: var(--dash-primary);
+  background: var(--dash-primary);
   color: #fff;
 }
 
 :global(.dash-app) .commandButton[data-tone='primary']:hover:not(:disabled) {
-  border-color: #245f9b;
-  background: #245f9b;
+  border-color: #851317;
+  background: #851317;
   color: #fff;
 }
 
@@ -320,7 +347,7 @@
 
 :global(.dash-app) .dataList th {
   border-color: var(--dash-border);
-  background: #f8fafc;
+  background: #faf6f3;
   color: var(--dash-faint);
 }
 

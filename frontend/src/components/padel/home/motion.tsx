@@ -93,7 +93,7 @@ export function WordReveal({
   const coarse = useCoarsePointer();
   const words = text.split(' ');
 
-  if (reduceMotion || coarse) {
+  if (reduceMotion) {
     return <span className={className}>{text}</span>;
   }
 
@@ -102,8 +102,13 @@ export function WordReveal({
       className={className}
       initial="hidden"
       whileInView="visible"
-      viewport={{ once: true, margin: '-12%' }}
-      transition={{ staggerChildren: 0.055, delayChildren: delay }}
+      // Trigger as soon as the heading enters the viewport; a shrunken
+      // viewport fires late in Safari and the slide becomes visible.
+      viewport={{ once: true }}
+      transition={{
+        staggerChildren: coarse ? 0.04 : 0.055,
+        delayChildren: delay,
+      }}
       style={{ display: 'inline' }}
     >
       {words.map((word, index) => (
@@ -114,7 +119,10 @@ export function WordReveal({
               hidden: { y: '115%' },
               visible: {
                 y: '0%',
-                transition: { duration: 0.72, ease: [0.16, 1, 0.3, 1] },
+                transition: {
+                  duration: coarse ? 0.58 : 0.72,
+                  ease: [0.16, 1, 0.3, 1],
+                },
               },
             }}
           >
@@ -137,11 +145,10 @@ export function Counter({
   duration?: number;
 }) {
   const reduceMotion = useReducedMotion();
-  const coarse = useCoarsePointer();
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-15%' });
+  const inView = useInView(ref, { once: true });
   const [value, setValue] = useState(0);
-  const shouldSkipMotion = Boolean(reduceMotion || coarse);
+  const shouldSkipMotion = Boolean(reduceMotion);
   const displayValue = shouldSkipMotion ? to : value;
 
   useEffect(() => {
@@ -280,16 +287,18 @@ export function Reveal({
   const reduceMotion = useReducedMotion();
   const coarse = useCoarsePointer();
 
-  if (reduceMotion || coarse) {
+  if (reduceMotion) {
     return <div className={className}>{children}</div>;
   }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 18 }}
+      initial={{ opacity: 0, y: coarse ? 12 : 16 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.64, delay, ease: easeOut }}
+      // Low amount: start while the element is still entering the viewport.
+      // Waiting for 20% visibility reads as a late "pop up" in Safari.
+      viewport={{ once: true, amount: 0.1 }}
+      transition={{ duration: coarse ? 0.5 : 0.6, delay, ease: easeOut }}
       className={className}
     >
       {children}
@@ -311,7 +320,7 @@ export function Stagger({
   const reduceMotion = useReducedMotion();
   const coarse = useCoarsePointer();
 
-  if (reduceMotion || coarse) {
+  if (reduceMotion) {
     return <div className={className}>{children}</div>;
   }
 
@@ -320,11 +329,14 @@ export function Stagger({
       className={className}
       initial="hidden"
       whileInView="visible"
-      viewport={{ once: true, amount: 0.15 }}
+      viewport={{ once: true, amount: 0.08 }}
       variants={{
         hidden: {},
         visible: {
-          transition: { staggerChildren: stagger, delayChildren: delay },
+          transition: {
+            staggerChildren: coarse ? Math.min(stagger, 0.06) : stagger,
+            delayChildren: delay,
+          },
         },
       }}
     >
@@ -342,15 +354,18 @@ export function StaggerItem({
   className?: string;
   y?: number;
 }) {
+  const coarse = useCoarsePointer();
+  const travel = coarse ? Math.min(y, 14) : y;
+
   return (
     <motion.div
       className={className}
       variants={{
-        hidden: { opacity: 0, y },
+        hidden: { opacity: 0, y: travel },
         visible: {
           opacity: 1,
           y: 0,
-          transition: { duration: 0.58, ease: easeOut },
+          transition: { duration: coarse ? 0.46 : 0.58, ease: easeOut },
         },
       }}
     >
@@ -360,12 +375,9 @@ export function StaggerItem({
 }
 
 export function MarqueeBand() {
-  const reduceMotion = useReducedMotion();
-  const coarse = useCoarsePointer();
   const { dictionary } = useI18n();
   const items = dictionary.home.marquee;
   const sequence = [...items, ...items];
-  const staticTrack = reduceMotion || coarse;
 
   const renderGroup = (keyPrefix: string) => (
     <div className="marquee-band__group">
@@ -378,22 +390,14 @@ export function MarqueeBand() {
     </div>
   );
 
+  // CSS keyframes run on the compositor, so the band stays smooth in Safari
+  // and on phones; prefers-reduced-motion disables it in CSS.
   return (
     <div className="marquee-band" aria-hidden>
-      {staticTrack ? (
-        <div className="marquee-band__track marquee-band__track--static">
-          {renderGroup('static')}
-        </div>
-      ) : (
-        <motion.div
-          className="marquee-band__track"
-          animate={{ x: ['0%', '-50%'] }}
-          transition={{ duration: 46, repeat: Infinity, ease: 'linear' }}
-        >
-          {renderGroup('a')}
-          {renderGroup('b')}
-        </motion.div>
-      )}
+      <div className="marquee-band__track marquee-band__track--animated">
+        {renderGroup('a')}
+        {renderGroup('b')}
+      </div>
     </div>
   );
 }

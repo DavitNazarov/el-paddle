@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { CheckCircle2, CircleDashed, PanelLeftClose, PanelLeftOpen, XCircle } from 'lucide-react';
+import { Bell, CheckCircle2, ChevronDown, CircleDashed, PanelLeftClose, PanelLeftOpen, XCircle } from 'lucide-react';
 import { motion, useReducedMotion, useScroll, useSpring } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -20,14 +20,23 @@ import {
 import { Label } from '@/components/ui/label';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { Reveal } from '@/components/padel/home/motion';
 import { DashboardStyles } from './DashboardStyles';
+
+type ProfileItem = {
+  label: string;
+  href?: string;
+  icon?: LucideIcon;
+  onClick?: () => void;
+  danger?: boolean;
+};
 
 type DashboardShellProps = {
   eyebrow: string;
   title: string;
   description: string;
   actions?: ReactNode;
+  headerBell?: { href: string; label: string; unread?: number };
+  profile?: { name?: string; email?: string; items: ProfileItem[] };
   sidebarTitle?: string;
   sidebarSubtitle?: string;
   sidebarContent?: ReactNode;
@@ -43,16 +52,6 @@ type SidebarLinkProps = {
   active?: boolean;
   badge?: number;
   compact?: boolean;
-};
-
-type StatCardProps = {
-  label: string;
-  value: number | string;
-  icon?: LucideIcon;
-  description?: string;
-  tone?: 'neutral' | 'success' | 'warning' | 'danger';
-  onClick?: () => void;
-  delay?: number;
 };
 
 type SectionHeadingProps = {
@@ -90,7 +89,7 @@ type SurfaceCardProps = {
 } & React.HTMLAttributes<HTMLDivElement>;
 
 export const formControlClassName =
-  'dashboard-form-control min-h-11 min-w-0 border-[rgba(88,16,16,0.14)] bg-[var(--padel-ivory)] text-[var(--padel-ink)] placeholder:text-[rgba(88,16,16,0.42)] focus-visible:ring-[var(--padel-focus-ring)]';
+  'dashboard-form-control min-h-11 min-w-0 border-[var(--dash-border)] bg-white text-[var(--dash-text)] placeholder:text-[var(--dash-faint)] focus-visible:ring-[var(--padel-focus-ring)]';
 
 export const selectControlClassName = cn(
   formControlClassName,
@@ -101,13 +100,7 @@ export const softButtonClassName = 'dash-soft-btn border';
 
 /** Outline control for parchment dialogs / light surfaces */
 export const modalSoftButtonClassName =
-  'dashboard-modal-soft-button border-[#c8d5e3] bg-white text-[#19324d] hover:border-[#9eb2c8] hover:bg-[#f1f5fa] hover:text-[#19324d] focus-visible:ring-[#2f6fed]/35';
-
-export const sidebarTabTriggerClassName =
-  'dash-sidebar-link justify-start focus-visible:ring-1 focus-visible:ring-[rgba(213,201,177,0.46)] focus-visible:ring-offset-0';
-
-export const mobileTabTriggerClassName =
-  'dash-mobile-link min-h-11 flex-1 flex-col gap-1 rounded-full px-2 py-2 text-[11px] font-semibold leading-tight sm:flex-row sm:gap-2 sm:px-3 sm:text-sm';
+  'dashboard-modal-soft-button border-[#e0d4d0] bg-white text-[#2a1f1e] hover:border-[#c6b5b0] hover:bg-[#f7ede9] hover:text-[#2a1f1e] focus-visible:ring-[#a4161a]/35';
 
 function ScrollProgress() {
   const { scrollYProgress } = useScroll();
@@ -117,11 +110,113 @@ function ScrollProgress() {
   return <motion.div className="dash-progress" style={{ scaleX }} />;
 }
 
+function HeaderBell({ href, label, unread = 0 }: { href: string; label: string; unread?: number }) {
+  return (
+    <Link
+      href={href}
+      aria-label={unread > 0 ? `${label} (${unread})` : label}
+      title={label}
+      className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-[var(--dash-border)] bg-white text-[var(--dash-muted)] transition-colors hover:border-[var(--dash-border-strong)] hover:text-[var(--dash-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
+    >
+      <Bell className="h-4 w-4" />
+      {unread > 0 ? (
+        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--dash-coral)] ring-2 ring-white" aria-hidden />
+      ) : null}
+    </Link>
+  );
+}
+
+function ProfileMenu({ name, email, items }: { name?: string; email?: string; items: ProfileItem[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const initial = (name?.trim()?.charAt(0) ?? 'U').toUpperCase();
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[var(--dash-border)] bg-white pl-1 pr-2 text-[var(--dash-text)] transition-colors hover:border-[var(--dash-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
+      >
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--dash-primary)] font-display text-sm font-semibold text-white">
+          {initial}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 text-[var(--dash-faint)]" />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-30 mt-2 w-56 rounded-lg border border-[var(--dash-border)] bg-white p-1.5 shadow-[0_12px_32px_rgba(43,26,24,0.14)]"
+        >
+          {name || email ? (
+            <div className="border-b border-[var(--dash-border)] px-2.5 pb-2 pt-1.5">
+              {name ? <p className="truncate text-sm font-medium text-[var(--dash-text)]">{name}</p> : null}
+              {email ? <p className="truncate text-xs text-[var(--dash-muted)]">{email}</p> : null}
+            </div>
+          ) : null}
+          <div className="grid gap-0.5 pt-1">
+            {items.map((item, index) => {
+              const Icon = item.icon;
+              const itemClass = cn(
+                'flex min-h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
+                item.danger
+                  ? 'text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]'
+                  : 'text-[var(--dash-text)] hover:bg-[var(--dash-tint)]',
+              );
+              return item.href ? (
+                <Link key={index} href={item.href} role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
+                  {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  key={index}
+                  type="button"
+                  role="menuitem"
+                  className={itemClass}
+                  onClick={() => {
+                    setOpen(false);
+                    item.onClick?.();
+                  }}
+                >
+                  {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function DashboardShell({
   eyebrow,
   title,
   description,
   actions,
+  headerBell,
+  profile,
   sidebarTitle = 'El Padel',
   sidebarSubtitle = 'Tournament operations',
   sidebarContent,
@@ -156,16 +251,16 @@ export function DashboardShell({
           >
             <div
               className={cn(
-                'flex w-full items-center gap-3 border-b border-[rgba(213,201,177,0.1)] py-5',
+                'flex w-full items-center gap-3 border-b border-[var(--dash-border)] py-5',
                 sidebarOpen ? 'justify-between px-5' : 'justify-center px-3',
               )}
             >
               {sidebarOpen ? (
                 <div className="min-w-0">
-                  <Link href="/" className="font-display text-xl font-semibold tracking-normal text-[var(--padel-ivory)]">
+                  <Link href="/" className="font-display text-xl font-semibold tracking-normal text-[var(--dash-text)]">
                     {sidebarTitle}
                   </Link>
-                  <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(213,201,177,0.42)]">
+                  <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--dash-faint)]">
                     {sidebarSubtitle}
                   </p>
                 </div>
@@ -178,7 +273,7 @@ export function DashboardShell({
                 aria-label={sidebarToggleLabel}
                 aria-expanded={sidebarOpen}
                 onClick={() => setSidebarOpen((current) => !current)}
-                className="h-9 w-9 shrink-0 rounded-md text-[var(--padel-ivory)] hover:bg-[rgba(213,201,177,0.1)] hover:text-[var(--padel-ivory)] focus-visible:ring-1 focus-visible:ring-[rgba(213,201,177,0.4)] focus-visible:ring-offset-0"
+                className="h-9 w-9 shrink-0 rounded-md text-[var(--dash-text)] hover:bg-[var(--dash-tint)] hover:text-[var(--dash-text)] focus-visible:ring-1 focus-visible:ring-[var(--dash-border-strong)] focus-visible:ring-offset-0"
               >
                 {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
               </Button>
@@ -196,7 +291,7 @@ export function DashboardShell({
                 {sidebarContent}
               </nav>
             ) : null}
-            {sidebarFooter && sidebarOpen ? <div className="w-full border-t border-[rgba(213,201,177,0.1)] p-4">{sidebarFooter}</div> : null}
+            {sidebarFooter && sidebarOpen ? <div className="w-full border-t border-[var(--dash-border)] p-4">{sidebarFooter}</div> : null}
           </aside>
         ) : null}
 
@@ -211,19 +306,21 @@ export function DashboardShell({
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <p className="dash-kicker">{eyebrow}</p>
-                  <h1 className="mt-2 text-2xl font-semibold leading-tight tracking-normal text-[var(--padel-ivory)] sm:text-[1.75rem]">
+                  <h1 className="mt-2 text-2xl font-semibold leading-tight tracking-normal text-[var(--dash-text)] sm:text-[1.75rem]">
                     {title}
                   </h1>
-                  <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[rgba(213,201,177,0.5)] sm:line-clamp-none line-clamp-2">
+                  <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--dash-muted)] sm:line-clamp-none line-clamp-2">
                     {description}
                   </p>
                 </motion.div>
                 <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                   <LanguageSwitcher
                     tone="light"
-                    className="border-[var(--dash-border)] bg-white shadow-[0_1px_2px_rgba(25,50,77,0.04)]"
+                    className="border-[var(--dash-border)] bg-white shadow-[0_1px_2px_rgba(43,26,24,0.04)]"
                   />
+                  {headerBell ? <HeaderBell {...headerBell} /> : null}
                   {actions}
+                  {profile ? <ProfileMenu {...profile} /> : null}
                 </div>
               </div>
               {mobileNavigation ? <div className="mt-3 lg:hidden">{mobileNavigation}</div> : null}
@@ -269,62 +366,6 @@ export function SurfaceCard({ className, children, featured = false, interactive
   );
 }
 
-export function StatCard({
-  label,
-  value,
-  icon: Icon,
-  description,
-  tone = 'neutral',
-  onClick,
-  delay = 0,
-}: StatCardProps) {
-  const toneClass = {
-    neutral: 'dash-tone-icon--neutral',
-    success: 'dash-tone-icon--success',
-    warning: 'dash-tone-icon--warning',
-    danger: 'dash-tone-icon--danger',
-  }[tone];
-
-  const content = (
-    <div className="dash-stat relative p-4">
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <p className="dash-metric__label">{label}</p>
-          <p className="dash-metric__value mt-2">{value}</p>
-        </div>
-        {Icon ? (
-          <span className={cn('dash-tone-icon inline-flex h-9 w-9 items-center justify-center rounded-md', toneClass)}>
-            <Icon className="h-4 w-4" />
-          </span>
-        ) : null}
-      </div>
-      {description ? (
-        <p className="relative mt-3 text-sm leading-5 text-[rgba(213,201,177,0.48)]">{description}</p>
-      ) : null}
-    </div>
-  );
-
-  const card = onClick ? (
-    <SurfaceCard interactive className="overflow-hidden">
-      <button
-        type="button"
-        onClick={onClick}
-        className="w-full rounded-[inherit] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
-      >
-        {content}
-      </button>
-    </SurfaceCard>
-  ) : (
-    <SurfaceCard className="overflow-hidden">{content}</SurfaceCard>
-  );
-
-  return (
-    <Reveal delay={delay} className="h-full">
-      {card}
-    </Reveal>
-  );
-}
-
 export function SectionHeading({
   eyebrow,
   title,
@@ -337,11 +378,11 @@ export function SectionHeading({
     <div id={id} className={cn('flex scroll-mt-28 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between', className)}>
       <div>
         {eyebrow ? <p className="dash-kicker">{eyebrow}</p> : null}
-        <h2 className={cn('text-lg font-semibold tracking-normal text-[var(--padel-ivory)]', eyebrow ? 'mt-1.5' : '')}>
+        <h2 className={cn('text-lg font-semibold tracking-normal text-[var(--dash-text)]', eyebrow ? 'mt-1.5' : '')}>
           {title}
         </h2>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm leading-5 text-[rgba(213,201,177,0.48)]">{description}</p>
+          <p className="mt-1 max-w-2xl text-sm leading-5 text-[var(--dash-muted)]">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -362,11 +403,11 @@ export function DashboardField({
 }) {
   return (
     <div className="dash-field min-w-0 space-y-2">
-      <Label htmlFor={id} className="dashboard-field-label block text-xs font-semibold uppercase leading-5 tracking-[0.16em] text-[#4d6178]">
+      <Label htmlFor={id} className="dashboard-field-label block text-xs font-semibold uppercase leading-5 tracking-[0.16em] text-[#6d5f5c]">
         {label}
       </Label>
       {children}
-      {hint ? <p className="dashboard-field-hint text-xs leading-5 text-[#6b7f95]">{hint}</p> : null}
+      {hint ? <p className="dashboard-field-hint text-xs leading-5 text-[#7a6c69]">{hint}</p> : null}
     </div>
   );
 }
@@ -389,16 +430,18 @@ export function FeedbackBanner({
       ref={ref}
       variant={kind === 'error' ? 'destructive' : 'default'}
       className={cn(
-        'mb-5 rounded-xl border backdrop-blur-md',
-        kind === 'success' && 'border-emerald-400/30 bg-emerald-950/40 text-emerald-100',
-        kind === 'error' && 'border-red-400/30 bg-red-950/45 text-red-100',
+        'mb-5 rounded-xl border',
+        kind === 'success' &&
+          'border-[rgba(22,128,106,0.28)] bg-[var(--dash-teal-soft)] text-[var(--dash-teal)]',
+        kind === 'error' &&
+          'border-[rgba(194,65,59,0.28)] bg-[var(--dash-coral-soft)] text-[var(--dash-coral)]',
       )}
     >
       <div className="flex items-start gap-3">
         {kind === 'success' ? (
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--dash-teal)]" />
         ) : (
-          <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
+          <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--dash-coral)]" />
         )}
         <AlertDescription className="text-inherit">{children}</AlertDescription>
       </div>
@@ -413,16 +456,16 @@ export function EmptyState({
   action,
 }: EmptyStateProps) {
   return (
-    <SurfaceCard className="border-dashed border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.03)]">
+    <SurfaceCard className="border-dashed border-[var(--dash-border)] bg-[var(--dash-tint)]">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-4">
           <span className="dash-empty-icon">
             <Icon className="h-5 w-5" />
           </span>
           <div>
-            <h3 className="font-semibold text-[var(--padel-ivory)]">{title}</h3>
+            <h3 className="font-semibold text-[var(--dash-text)]">{title}</h3>
             {description ? (
-              <p className="mt-1 text-sm leading-6 text-[rgba(213,201,177,0.55)]">{description}</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--dash-muted)]">{description}</p>
             ) : null}
           </div>
         </div>
@@ -495,15 +538,6 @@ export function RegistrationStatusBadge({
   );
 }
 
-export function PremiumButton({
-  className,
-  dark: _dark = false,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof Button> & { dark?: boolean }) {
-  void _dark;
-  return <Button className={cn(className)} {...props} />;
-}
-
 export function Metric({
   label,
   value,
@@ -519,7 +553,7 @@ export function Metric({
     <div className="dash-metric" data-tone={tone}>
       <p className="dash-metric__label">{label}</p>
       <p className="dash-metric__value">{value}</p>
-      {hint ? <p className="text-xs text-[rgba(213,201,177,0.42)]">{hint}</p> : null}
+      {hint ? <p className="text-xs text-[var(--dash-faint)]">{hint}</p> : null}
     </div>
   );
 }
@@ -539,8 +573,8 @@ export function AttentionRow({
     <div className="dash-attention">
       <span className={cn('dash-attention__dot', urgent && 'dash-attention__dot--urgent')} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-[var(--padel-ivory)]">{title}</p>
-        {detail ? <p className="mt-0.5 text-xs leading-5 text-[rgba(213,201,177,0.48)]">{detail}</p> : null}
+        <p className="text-sm font-medium text-[var(--dash-text)]">{title}</p>
+        {detail ? <p className="mt-0.5 text-xs leading-5 text-[var(--dash-muted)]">{detail}</p> : null}
       </div>
       {action}
     </div>
@@ -557,8 +591,8 @@ export function MetaRow({
   className?: string;
 }) {
   return (
-    <span className={cn('inline-flex items-center gap-2 text-sm text-[rgba(213,201,177,0.58)]', className)}>
-      <Icon className="h-4 w-4 shrink-0 text-[rgba(213,201,177,0.4)]" />
+    <span className={cn('inline-flex items-center gap-2 text-sm text-[var(--dash-muted)]', className)}>
+      <Icon className="h-4 w-4 shrink-0 text-[var(--dash-faint)]" />
       {children}
     </span>
   );

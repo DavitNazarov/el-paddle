@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireUser } from '../auth/auth.service.js';
 import { Capability } from '../../generated/prisma/client.js';
 import { requireCapability } from '../../common/capabilities.js';
+import { parseListRange } from '../../common/pagination.js';
 import { auditLog, requestIp } from '../../common/audit.js';
 import {
   asyncHandler,
@@ -136,8 +137,8 @@ clubsRouter.patch('/api/account/club/join-requests/:id', asyncHandler(async (req
 
 clubsRouter.get('/api/admin/clubs', asyncHandler(async (request, response) => {
   await requireCapability(request, Capability.CLUB_MANAGE);
-  const clubs = await listAdminClubs();
-  response.json({ clubs: clubs.map(serializeClub) });
+  const page = await listAdminClubs(parseListRange(request.query));
+  response.json({ clubs: page.items.map(serializeClub), nextCursor: page.nextCursor });
 }));
 
 clubsRouter.post('/api/admin/clubs', asyncHandler(async (request, response) => {

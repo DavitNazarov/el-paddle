@@ -220,7 +220,7 @@ export function AdminEventsClient() {
       ? await apiFetch(`/api/events/${editingEvent.id}`, {
           method: 'PATCH',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, expectedVersion: editingEvent.version }),
         })
       : await apiFetch('/api/events', {
           method: 'POST',
@@ -247,7 +247,7 @@ export function AdminEventsClient() {
     const response = await apiFetch(`/api/events/${event.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ isPublished: !event.isPublished }),
+      body: JSON.stringify({ isPublished: !event.isPublished, expectedVersion: event.version }),
     });
     const result = (await response.json()) as { error?: string };
     setBusy(null);
@@ -353,7 +353,7 @@ export function AdminEventsClient() {
                           className={cn(
                             'border-transparent',
                             event.status === 'COMPLETED'
-                              ? 'bg-slate-600 text-white'
+                              ? 'bg-stone-600 text-white'
                               : event.status === 'ONGOING'
                                 ? 'bg-amber-500 text-[var(--padel-ink)]'
                                 : event.status === 'REGISTRATION_CLOSED'
@@ -614,8 +614,8 @@ export function AdminEventsClient() {
                     className={cn(
                       'flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 text-sm font-medium transition-colors',
                       selected
-                        ? 'border-[#2f6fed] bg-[#eaf1ff] text-[#1f55b5]'
-                        : 'border-[#d3deea] bg-white text-[#334b65] hover:border-[#aebfd1] hover:bg-[#f4f7fb]',
+                        ? 'border-[#a4161a] bg-[#fbeceb] text-[#851317]'
+                        : 'border-[#e7dcd8] bg-white text-[#4a3d3b] hover:border-[#cdbdb8] hover:bg-[#faf3f0]',
                     )}
                   >
                     <input
@@ -663,7 +663,7 @@ export function AdminEventsClient() {
           />
         }
       >
-        <p className="text-sm leading-6 text-[#60748b]">{copy.deleteWarning}</p>
+        <p className="text-sm leading-6 text-[#6d5f5c]">{copy.deleteWarning}</p>
       </DashboardModal>
     </AdminShell>
   );

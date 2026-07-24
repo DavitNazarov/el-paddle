@@ -5,36 +5,56 @@ export function DashboardStyles() {
   return (
     <style jsx global>{`
       .dash-app {
-        --padel-ink: #19324d;
-        --padel-red: #245f9b;
-        --padel-red-2: #1c4a7a;
-        --padel-red-3: #15385e;
-        --padel-gold: #245f9b;
-        --padel-gold-2: #245f9b;
+        --padel-ink: #2a1f1e;
+        --padel-red: #a4161a;
+        --padel-red-2: #851317;
+        --padel-red-3: #611015;
+        --padel-gold: #a4161a;
+        --padel-gold-2: #851317;
         --padel-ember: #c2413b;
-        --padel-focus-ring: rgba(36, 95, 155, 0.28);
+        --padel-focus-ring: rgba(164, 22, 26, 0.3);
         --dash-surface: rgba(255, 255, 255, 0.82);
         --dash-surface-strong: #ffffff;
-        --dash-border: rgba(25, 50, 77, 0.12);
-        --dash-border-strong: rgba(36, 95, 155, 0.3);
-        --dash-text: #19324d;
-        --dash-muted: #627287;
-        --dash-faint: #8491a2;
-        /* Familiar business semantics: blue leads; status colours stay clear. */
+        --dash-border: rgba(43, 26, 24, 0.12);
+        --dash-border-strong: rgba(164, 22, 26, 0.3);
+        --dash-text: #2a1f1e;
+        --dash-muted: #6d5f5c;
+        --dash-faint: #9a8b87;
+        /* Red brand leads; status hues stay distinct so colour is never the
+           only signal (icons + labels carry meaning alongside it). */
+        --dash-primary: #a4161a;
+        --dash-primary-soft: rgba(164, 22, 26, 0.1);
         --dash-teal: #16806a;
         --dash-teal-soft: rgba(22, 128, 106, 0.12);
         --dash-amber: #a86712;
         --dash-amber-soft: rgba(168, 103, 18, 0.12);
         --dash-coral: #c2413b;
         --dash-coral-soft: rgba(194, 65, 59, 0.11);
-        --dash-sky: #2f6fed;
-        --dash-sky-soft: rgba(47, 111, 237, 0.11);
+        --dash-info: #3d6796;
+        --dash-info-soft: rgba(61, 103, 150, 0.1);
+        /* Neutral tint derived from ink (not the legacy ivory) so faint fills
+           read the same everywhere in the single light theme. */
+        --dash-tint: rgba(43, 26, 24, 0.05);
+        --dash-tint-strong: rgba(43, 26, 24, 0.08);
+        /* Spacing scale — stop hardcoding rem literals across dashboards. */
+        --space-1: 0.25rem;
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
+        --space-5: 1.5rem;
+        --space-6: 2rem;
+        --space-8: 3rem;
+        /* Radius scale — cards, controls, pills. */
+        --radius-card: 0.75rem;
+        --radius-tile: 0.65rem;
+        --radius-control: 0.55rem;
+        --radius-pill: 999px;
         position: relative;
         isolation: isolate;
         min-height: 100dvh;
         overflow-x: clip;
         color: var(--dash-text);
-        background: #f6f8fc;
+        background: #f8f5f2;
       }
 
       .dash-app::before {
@@ -44,8 +64,8 @@ export function DashboardStyles() {
         z-index: 0;
         pointer-events: none;
         background:
-          radial-gradient(ellipse 70% 42% at 0% 0%, rgba(47, 111, 237, 0.11), transparent 55%),
-          radial-gradient(ellipse 50% 30% at 100% 0%, rgba(22, 128, 106, 0.07), transparent 50%);
+          radial-gradient(ellipse 70% 42% at 0% 0%, rgba(164, 22, 26, 0.08), transparent 55%),
+          radial-gradient(ellipse 50% 30% at 100% 0%, rgba(168, 103, 18, 0.05), transparent 50%);
       }
 
       .dash-app > * {
@@ -61,14 +81,14 @@ export function DashboardStyles() {
         font-weight: 650;
         letter-spacing: 0.2em;
         text-transform: uppercase;
-        color: var(--dash-sky);
+        color: var(--dash-primary);
       }
 
       .dash-kicker::before {
         content: '';
         width: 0.85rem;
         height: 1px;
-        background: var(--dash-sky);
+        background: var(--dash-primary);
       }
 
       .dash-glass {
@@ -76,7 +96,7 @@ export function DashboardStyles() {
         border: 1px solid var(--dash-border);
         border-radius: 0.75rem;
         background: var(--dash-surface);
-        box-shadow: 0 1px 2px rgba(25, 50, 77, 0.035);
+        box-shadow: 0 1px 2px rgba(43, 26, 24, 0.035);
         transition:
           border-color 0.2s ease,
           background 0.2s ease;
@@ -87,13 +107,46 @@ export function DashboardStyles() {
         background: #ffffff;
       }
 
+      /* Panels settle in on mount so dashboards don't feel static; opacity/
+         transform only, and the global reduced-motion rule disables it. */
+      .dash-glass,
+      .dash-metric {
+        animation: dash-rise 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+
+      @keyframes dash-rise {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Touch press feedback: phones never see hover states. */
+      @media (hover: none) {
+        .dash-chip:active,
+        .dash-soft-btn:active,
+        .dash-mobile-link:active,
+        .dash-sidebar-link:active {
+          transform: scale(0.97);
+        }
+
+        .dash-glass:active {
+          border-color: var(--dash-border-strong);
+        }
+      }
+
       .dash-glass--featured {
-        background: linear-gradient(135deg, rgba(47, 111, 237, 0.1), rgba(255, 255, 255, 0.9) 55%, rgba(22, 128, 106, 0.07));
-        border-color: rgba(47, 111, 237, 0.22);
+        background: linear-gradient(135deg, rgba(164, 22, 26, 0.09), rgba(255, 255, 255, 0.92) 58%, rgba(168, 103, 18, 0.05));
+        border-color: rgba(164, 22, 26, 0.22);
       }
 
       .dash-glass--featured:hover {
-        border-color: rgba(213, 201, 177, 0.22);
+        border-color: rgba(164, 22, 26, 0.3);
       }
 
       .dash-stat {
@@ -102,7 +155,7 @@ export function DashboardStyles() {
 
       .dash-sidebar {
         border-right: 1px solid var(--dash-border);
-        background: rgba(240, 245, 252, 0.94);
+        background: rgba(247, 242, 238, 0.94);
       }
 
       .dash-sidebar-link {
@@ -116,7 +169,7 @@ export function DashboardStyles() {
         padding: 0 0.75rem;
         font-size: 0.875rem;
         font-weight: 550;
-        color: #51647a;
+        color: #6d5f5c;
         transition:
           color 0.15s ease,
           background 0.15s ease;
@@ -124,18 +177,18 @@ export function DashboardStyles() {
 
       .dash-sidebar-link:hover {
         color: var(--dash-text);
-        background: rgba(47, 111, 237, 0.06);
+        background: rgba(164, 22, 26, 0.06);
       }
 
       .dash-sidebar-link[data-active='true'] {
         color: var(--dash-text);
-        background: var(--dash-sky-soft);
-        box-shadow: inset 2px 0 0 var(--dash-sky);
+        background: var(--dash-primary-soft);
+        box-shadow: inset 2px 0 0 var(--dash-primary);
       }
 
       .dash-sidebar-link[data-active='true'] .dash-nav-badge {
-        background: rgba(47, 111, 237, 0.14);
-        color: var(--dash-sky);
+        background: rgba(164, 22, 26, 0.14);
+        color: var(--dash-primary);
       }
 
       .dash-nav-badge {
@@ -154,7 +207,7 @@ export function DashboardStyles() {
 
       .dash-header {
         border-bottom: 1px solid var(--dash-border);
-        background: rgba(245, 247, 244, 0.88);
+        background: rgba(249, 245, 242, 0.88);
         backdrop-filter: blur(12px);
       }
 
@@ -169,7 +222,7 @@ export function DashboardStyles() {
         padding: 0 0.85rem;
         font-size: 0.8125rem;
         font-weight: 550;
-        color: #53667d;
+        color: #6d5f5c;
         transition:
           color 0.15s ease,
           background 0.15s ease,
@@ -179,13 +232,13 @@ export function DashboardStyles() {
       .dash-chip:hover {
         color: var(--dash-text);
         border-color: var(--dash-border-strong);
-        background: rgba(47, 111, 237, 0.06);
+        background: rgba(164, 22, 26, 0.06);
       }
 
       .dash-chip[data-active='true'] {
         color: var(--dash-text);
-        border-color: rgba(47, 111, 237, 0.32);
-        background: var(--dash-sky-soft);
+        border-color: rgba(164, 22, 26, 0.32);
+        background: var(--dash-primary-soft);
       }
 
       .dash-chip__count {
@@ -196,7 +249,7 @@ export function DashboardStyles() {
         border-radius: 999px;
         padding: 0 0.3rem;
         font-size: 0.68rem;
-        background: rgba(213, 201, 177, 0.1);
+        background: var(--dash-tint);
         color: inherit;
       }
 
@@ -216,7 +269,7 @@ export function DashboardStyles() {
         left: 0;
         z-index: 60;
         height: 2px;
-        background: var(--dash-sky);
+        background: var(--dash-primary);
         transform-origin: left;
         pointer-events: none;
       }
@@ -251,8 +304,8 @@ export function DashboardStyles() {
 
       .dash-mobile-link[data-active='true'] {
         color: var(--dash-text);
-        border-color: rgba(47, 111, 237, 0.32);
-        background: var(--dash-sky-soft);
+        border-color: rgba(164, 22, 26, 0.32);
+        background: var(--dash-primary-soft);
       }
 
       .dash-empty-icon {
@@ -263,7 +316,7 @@ export function DashboardStyles() {
         align-items: center;
         justify-content: center;
         border-radius: 0.6rem;
-        background: rgba(47, 111, 237, 0.08);
+        background: rgba(164, 22, 26, 0.08);
         color: var(--padel-red);
         border: 1px solid var(--dash-border);
       }
@@ -275,7 +328,7 @@ export function DashboardStyles() {
       }
 
       .dash-soft-btn:hover {
-        background: rgba(47, 111, 237, 0.08) !important;
+        background: rgba(164, 22, 26, 0.08) !important;
         color: var(--dash-text) !important;
       }
 
@@ -337,7 +390,7 @@ export function DashboardStyles() {
         font-weight: 650;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: #718198;
+        color: #8a7c78;
       }
 
       /* Existing dashboards use a few explicit legacy text utilities. Scope
@@ -345,7 +398,7 @@ export function DashboardStyles() {
       .dash-app [class*='text-[var(--padel-ivory)]'] { color: var(--dash-text) !important; }
       .dash-app [class*='text-[rgba(213,201,177'] { color: var(--dash-muted) !important; }
       .dash-app [class*='text-[rgba(246,239,225'] { color: var(--dash-muted) !important; }
-      .dash-app [class*='bg-[#102927]'] { background-color: #f0f5fc !important; }
+      .dash-app [class*='bg-[#102927]'] { background-color: #f6efec !important; }
       /* Filled controls need their own foreground token. The light-theme text
          fallback above is intentionally for content, not for action labels. */
       .dash-app :is(button, a)[class*='bg-[var(--padel-red)]'],
@@ -356,7 +409,7 @@ export function DashboardStyles() {
       }
       .dash-app .admin-field input,
       .dash-app .admin-field textarea {
-        border-color: rgba(25, 50, 77, 0.16);
+        border-color: rgba(43, 26, 24, 0.16);
         background: #ffffff;
         color: var(--dash-text);
       }
@@ -365,73 +418,73 @@ export function DashboardStyles() {
       /* Dialogs intentionally return to the product's charcoal tournament
          palette instead of inheriting the light admin canvas overrides. */
       .dashboard-dialog-content {
-        --padel-ink: #19324d;
+        --padel-ink: #2a1f1e;
         --padel-ivory: #ffffff;
-        --padel-focus-ring: rgba(47, 111, 237, 0.32);
+        --padel-focus-ring: rgba(164, 22, 26, 0.32);
       }
       .dashboard-dialog-content .dashboard-dialog-scroll {
-        background: #f7f9fc;
+        background: #faf6f3;
       }
       .dashboard-dialog-content .dashboard-form-control {
-        border-color: #cbd7e4 !important;
+        border-color: #e0d4d0 !important;
         background: #ffffff !important;
-        color: #19324d !important;
-        box-shadow: 0 1px 2px rgba(15, 35, 58, 0.035);
+        color: #2a1f1e !important;
+        box-shadow: 0 1px 2px rgba(43, 26, 24, 0.05);
       }
       .dashboard-dialog-content .dashboard-form-control::placeholder {
-        color: #8293a7 !important;
+        color: #a2938f !important;
       }
       .dashboard-dialog-content .dashboard-form-control:hover:not(:disabled) {
-        border-color: #aebfd1 !important;
+        border-color: #cdbdb8 !important;
       }
       .dashboard-dialog-content .dashboard-form-control:focus-visible {
-        border-color: #2f6fed !important;
-        box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.14) !important;
+        border-color: #a4161a !important;
+        box-shadow: 0 0 0 3px rgba(164, 22, 26, 0.14) !important;
       }
       .dashboard-dialog-content select.dashboard-form-control,
       .dashboard-dialog-content select.dashboard-form-control option {
         background-color: #ffffff !important;
-        color: #19324d !important;
+        color: #2a1f1e !important;
       }
       .dashboard-dialog-content .dash-field label,
       .dashboard-dialog-content .dashboard-field-label {
-        color: #4d6178 !important;
+        color: #6d5f5c !important;
       }
       .dashboard-dialog-content .dashboard-field-hint {
-        color: #6b7f95 !important;
+        color: #7a6c69 !important;
       }
       .dashboard-dialog-content [class*='text-[rgba(246,239,225'] {
-        color: #60748b !important;
+        color: #6d5f5c !important;
       }
       .dashboard-dialog-content .dashboard-modal-soft-button {
-        border-color: #c8d5e3 !important;
+        border-color: #e0d4d0 !important;
         background: #ffffff !important;
-        color: #19324d !important;
+        color: #2a1f1e !important;
       }
       .dashboard-dialog-content .dashboard-modal-soft-button:hover:not(:disabled) {
-        border-color: #aebfd1 !important;
-        background: #f1f5fa !important;
+        border-color: #cdbdb8 !important;
+        background: #f7ede9 !important;
       }
       .dashboard-dialog-content button[class*='bg-[var(--padel-red)]'] {
         border-color: transparent !important;
-        background: #2f6fed !important;
+        background: #a4161a !important;
         color: #ffffff !important;
       }
       .dashboard-dialog-content button[class*='bg-[var(--padel-red)]']:hover:not(:disabled) {
-        background: #245bc7 !important;
+        background: #851317 !important;
       }
       .dashboard-dialog-content input[type='checkbox'] {
-        accent-color: #2f6fed;
+        accent-color: #a4161a;
       }
 
       /* Event metadata deliberately uses a dark business-blue surface. Keep
          its labels and values high contrast instead of applying light-card text. */
       .dash-app .tournament-key-value {
-        border-color: rgba(25, 50, 77, 0.22);
-        background: rgba(25, 50, 77, 0.22);
+        border-color: rgba(43, 26, 24, 0.22);
+        background: rgba(43, 26, 24, 0.22);
       }
-      .dash-app .tournament-key-value__item { background: #19324d; }
-      .dash-app .tournament-key-value__label { color: #b7c9df !important; }
+      .dash-app .tournament-key-value__item { background: #2a1f1e; }
+      .dash-app .tournament-key-value__label { color: #d8c9c4 !important; }
       .dash-app .tournament-key-value__value { color: #ffffff !important; }
 
       .dash-metric[data-tone='success'] { border-color: rgba(22, 128, 106, 0.24); }
@@ -440,11 +493,11 @@ export function DashboardStyles() {
       .dash-metric[data-tone='warning'] .dash-metric__value { color: var(--dash-amber); }
       .dash-metric[data-tone='danger'] { border-color: rgba(194, 65, 59, 0.24); }
       .dash-metric[data-tone='danger'] .dash-metric__value { color: var(--dash-coral); }
-      .dash-metric[data-tone='info'] { border-color: rgba(47, 111, 237, 0.24); }
-      .dash-metric[data-tone='info'] .dash-metric__value { color: var(--dash-sky); }
+      .dash-metric[data-tone='info'] { border-color: rgba(61, 103, 150, 0.24); }
+      .dash-metric[data-tone='info'] .dash-metric__value { color: var(--dash-info); }
 
       .dash-tone-icon { border: 1px solid transparent; }
-      .dash-tone-icon--neutral { background: rgba(213, 201, 177, 0.08); color: rgba(213, 201, 177, 0.7); }
+      .dash-tone-icon--neutral { background: var(--dash-tint-strong); color: var(--dash-muted); }
       .dash-tone-icon--success { background: var(--dash-teal-soft); border-color: rgba(22, 128, 106, 0.2); color: var(--dash-teal); }
       .dash-tone-icon--warning { background: var(--dash-amber-soft); border-color: rgba(168, 103, 18, 0.2); color: var(--dash-amber); }
       .dash-tone-icon--danger { background: var(--dash-coral-soft); border-color: rgba(194, 65, 59, 0.2); color: var(--dash-coral); }

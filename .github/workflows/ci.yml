@@ -11,6 +11,20 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: elpadel
+          POSTGRES_PASSWORD: elpadel
+          POSTGRES_DB: elpadel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -37,5 +51,21 @@ jobs:
       - name: Build
         run: npm run build
 
+      # DB-backed integration suite (authorization matrix, IDOR/ownership,
+      # optimistic concurrency, command idempotency, event lifecycle, and the
+      # opponent-request expiry workflow) against the Postgres service above.
+      - name: Integration tests
+        env:
+          DATABASE_URL: postgresql://elpadel:elpadel@localhost:5432/elpadel_test?schema=public
+          JWT_SECRET: ci-integration-jwt-secret-at-least-32-chars
+          NODE_ENV: test
+        run: |
+          npm run prisma:migrate:deploy --workspace backend
+          npm run test:integration
+
+      # Gates the build on high-severity advisories. Transitive dev/CLI packages
+      # that upstream (next, prisma) have not yet re-released against are pinned to
+      # patched versions via the root package.json "overrides" block; revisit those
+      # pins when the upstreams bump the dependencies themselves.
       - name: Dependency audit
         run: npm audit --audit-level=high
