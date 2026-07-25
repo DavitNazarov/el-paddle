@@ -744,8 +744,12 @@ async function main() {
     const court1 = { id: `seed_court_${eventKey}_1`, eventId, name: 'Center Court', active: true };
     const court2 = { id: `seed_court_${eventKey}_2`, eventId, name: 'Court 2', active: true };
     courtRows.push(court1, court2);
-    for (const court of [court1, court2]) {
-      for (const judge of judges.slice(0, 3)) {
+    // A judge may not hold two overlapping active assignments, so each court
+    // gets a disjoint set of judges.
+    const court1Judges = judges.slice(0, 2);
+    const court2Judges = judges.slice(2, 4);
+    for (const [court, courtJudges] of [[court1, court1Judges], [court2, court2Judges]] as const) {
+      for (const judge of courtJudges) {
         judgeAssignmentRows.push({
           courtId: court.id,
           judgeUserId: judge.id,
@@ -764,7 +768,7 @@ async function main() {
     buildBracket({
       eventKey, categoryKey: 'A', categoryId: catId('A'), eventId, teams: teamsA,
       status: BracketStatus.COMPLETED, completeThroughRound: 2, lockedById: admin.id, publishedById: admin.id,
-      scheduled: true, liveScoring: true, courtId: court1.id, judgePool: judges.slice(0, 3), baseDate: eventDate,
+      scheduled: true, liveScoring: true, courtId: court1.id, judgePool: court1Judges, baseDate: eventDate,
       // Positions 1 and 3 of round 0 are byes (6 teams in an 8-slot draw), so
       // the special results target the real matches at positions 2 and 4.
       specialResults: {
@@ -781,7 +785,7 @@ async function main() {
     buildBracket({
       eventKey, categoryKey: 'B', categoryId: catId('B'), eventId, teams: teamsB,
       status: BracketStatus.COMPLETED, completeThroughRound: 1, lockedById: admin.id, publishedById: admin.id,
-      scheduled: true, liveScoring: true, courtId: court2.id, judgePool: judges.slice(0, 3), baseDate: eventDate,
+      scheduled: true, liveScoring: true, courtId: court2.id, judgePool: court2Judges, baseDate: eventDate,
     });
   }
 
