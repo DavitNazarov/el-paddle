@@ -10,15 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   DashboardField,
   DashboardModal,
+  DataTable,
   EmptyState,
   FeedbackBanner,
   SectionHeading,
-  SurfaceCard,
   formControlClassName,
   softButtonClassName,
   modalSoftButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
-import { Reveal } from '@/components/padel/home/motion';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -105,21 +104,23 @@ export function AdminClubsClient() {
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
-      <div className="mb-6 flex justify-end">
-        <Button
-          variant="red"
-          className="rounded-md"
-          onClick={() => {
-            setClubForm({ name: '', slug: '', description: '', logoUrl: '' });
-            setCreateOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          {copy.showCreate}
-        </Button>
-      </div>
-
-      <SectionHeading title={copy.listTitle} description={copy.listDescription} />
+      <SectionHeading
+        title={copy.listTitle}
+        description={copy.listDescription}
+        actions={
+          <Button
+            variant="red"
+            className="min-h-11 rounded-md"
+            onClick={() => {
+              setClubForm({ name: '', slug: '', description: '', logoUrl: '' });
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            {copy.showCreate}
+          </Button>
+        }
+      />
       <div className="mt-4 grid gap-4">
         {loading ? <EmptyState title={admin.clubs.loadingTitle} description={admin.clubs.loadingDescription} icon={Building2} /> : null}
         {!loading && !clubs.length ? (
@@ -128,66 +129,96 @@ export function AdminClubsClient() {
             description={admin.clubs.emptyDescription}
             icon={Building2}
             action={
-              <Button variant="red" className="rounded-md" onClick={() => setCreateOpen(true)}>
+              <Button variant="red" className="min-h-11 rounded-md" onClick={() => setCreateOpen(true)}>
                 {copy.showCreate}
               </Button>
             }
           />
         ) : null}
 
-        {clubs.map((club, index) => (
-          <Reveal key={club.id} delay={Math.min(index * 0.04, 0.2)}>
-            <SurfaceCard>
-              <div className="p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <h3 className="font-display text-xl font-semibold text-[var(--padel-ivory)]">{club.name}</h3>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-[rgba(213,201,177,0.55)]">
-                      {club.description || admin.clubs.noDescription}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className="border-[var(--padel-gold)]/30 bg-[var(--padel-gold)]/15 text-[var(--padel-gold-2)]">
-                      {t('common.members', { count: club.members.length })}
-                    </Badge>
-                    <Button asChild size="sm" variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
-                      <Link href={`/clubs/${club.slug}`}>
-                        <ExternalLink className="h-4 w-4" />
-                        {admin.clubs.openPage}
-                      </Link>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="red"
-                      className="rounded-md"
-                      onClick={() => {
-                        setMemberForm({ email: '', roleTitle: '' });
-                        setMemberClub(club);
-                      }}
-                    >
-                      <Users className="h-4 w-4" />
-                      {admin.clubs.addMember}
-                    </Button>
-                  </div>
-                </div>
-
-                {club.members.length ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {club.members.map((member) => (
-                      <Badge
-                        key={member.id}
-                        className="border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.05)] text-[rgba(213,201,177,0.75)]"
-                      >
-                        {member.user.fullName}
-                        {member.roleTitle ? ` · ${member.roleTitle}` : ''}
+        {!loading && clubs.length ? (
+          <DataTable
+            rows={clubs}
+            rowKey={(club) => club.id}
+            minWidthClassName="min-w-[820px]"
+            actionsHeader={admin.clubs.columnActions}
+            actionsWidth="w-[120px] 2xl:w-[300px]"
+            columns={[
+              {
+                key: 'club',
+                header: admin.clubs.columnClub,
+                width: 'w-[28%]',
+                cell: (club) => (
+                  <>
+                    <span className="block truncate font-medium text-[var(--dash-text)]" title={club.name}>
+                      {club.name}
+                    </span>
+                    <span className="mt-1 block truncate text-sm text-[var(--dash-muted)]">/{club.slug}</span>
+                  </>
+                ),
+              },
+              {
+                key: 'description',
+                header: admin.clubs.columnDescription,
+                width: 'w-[32%]',
+                cell: (club) => (
+                  <p className="line-clamp-2 text-sm leading-6 text-[var(--dash-muted)]">
+                    {club.description || admin.clubs.noDescription}
+                  </p>
+                ),
+              },
+              {
+                key: 'members',
+                header: admin.clubs.columnMembers,
+                width: 'w-[28%]',
+                cell: (club) =>
+                  club.members.length ? (
+                    <>
+                      <Badge className="border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]">
+                        {t('common.members', { count: club.members.length })}
                       </Badge>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </SurfaceCard>
-          </Reveal>
-        ))}
+                      <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-[var(--dash-muted)]">
+                        {club.members
+                          .map((member) => member.user.fullName + (member.roleTitle ? ` · ${member.roleTitle}` : ''))
+                          .join(', ')}
+                      </p>
+                    </>
+                  ) : (
+                    <span className="text-sm text-[var(--dash-faint)]">{admin.clubs.noMembers}</span>
+                  ),
+              },
+            ]}
+            renderActions={(club) => (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={cn(softButtonClassName, 'rounded-md')}
+                  aria-label={admin.clubs.addMember}
+                  title={admin.clubs.addMember}
+                  onClick={() => {
+                    setMemberForm({ email: '', roleTitle: '' });
+                    setMemberClub(club);
+                  }}
+                >
+                  <Users className="h-4 w-4" />
+                  <span className="hidden 2xl:inline">{admin.clubs.addMember}</span>
+                </Button>
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className={cn(softButtonClassName, 'rounded-md')}
+                >
+                  <Link href={`/clubs/${club.slug}`} aria-label={admin.clubs.openPage} title={admin.clubs.openPage}>
+                    <ExternalLink className="h-4 w-4" />
+                    <span className="hidden 2xl:inline">{admin.clubs.openPage}</span>
+                  </Link>
+                </Button>
+              </>
+            )}
+          />
+        ) : null}
       </div>
 
       <DashboardModal

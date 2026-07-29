@@ -1,16 +1,20 @@
-import { BracketStatus, MatchResultType, MatchRound, MatchSide, MatchStatus, NotificationType, OpponentRequestStatus, type Prisma } from '../../generated/prisma/client.js';
+import { BracketStatus, MatchResultType, MatchRound, MatchSide, MatchStatus, NotificationType, OpponentRequestStatus, ScoringMode, type Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { entryUserSelect } from '../../common/includes.js';
+import { isValidSlotCount } from '../matches/slot-engine.js';
 
 export const bracketInclude = {
   eventCategory: { include: { category: true } },
+  roundConfigs: true,
   matches: {
     include: {
-      participantA: { include: { owner: true, teammate: true } },
-      participantB: { include: { owner: true, teammate: true } },
+      participantA: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } },
+      participantB: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } },
       scheduleItem: { include: { court: true } },
+      slots: { orderBy: { slotNumber: 'asc' as const } },
     },
     orderBy: { matchNumber: 'asc' as const },
   },
@@ -32,6 +36,36 @@ export async function createBracket(input: { eventId: string; categoryId: string
     await writeAudit(tx, { action: 'bracket.created', actorId: input.actorId, eventId: input.eventId, entityType: 'Bracket', entityId: bracket.id, after: { categoryId: input.categoryId, generation: bracket.generation } });
     await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.create', commandId: input.commandId, hash, response: { bracketId: bracket.id } });
     return bracket;
+  });
+}
+
+/**
+ * Per-round slot defaults. Only bind when a match starts, so they stay editable on a locked
+ * bracket; a running match keeps the count it snapshotted.
+ */
+export async function setBracketSlotDefaults(input: { eventId: string; bracketId: string; actorId: string; defaults: Partial<Record<MatchRound, number>>; expectedVersion: number; commandId: string }) {
+  for (const value of Object.values(input.defaults)) if (!isValidSlotCount(value)) jsonError('Slot count must be 1, 2, or 3.');
+  const hash = payloadHash(input);
+  return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'bracket.slot-defaults', input.commandId, hash);
+    if (replay) return tx.bracket.findUniqueOrThrow({ where: { id: input.bracketId }, include: bracketInclude });
+    const bracket = await tx.bracket.findFirst({ where: { id: input.bracketId, eventId: input.eventId }, include: { roundConfigs: true, event: { select: { status: true } } } });
+    if (!bracket) jsonError('Bracket not found.', 404);
+    if (bracket.event.status === 'COMPLETED') jsonError('Reopen the completed event before editing its bracket.', 409);
+    if (bracket.version !== input.expectedVersion) jsonError('Bracket changed. Refresh and try again.', 409);
+    const before = Object.fromEntries(bracket.roundConfigs.map((config) => [config.round, config.slotCount]));
+    for (const round of Object.values(MatchRound)) {
+      const slotCount = input.defaults[round];
+      if (slotCount === undefined) await tx.bracketRoundConfig.deleteMany({ where: { bracketId: bracket.id, round } });
+      else await tx.bracketRoundConfig.upsert({ where: { bracketId_round: { bracketId: bracket.id, round } }, update: { slotCount }, create: { bracketId: bracket.id, round, slotCount } });
+    }
+    const updateResult = await tx.bracket.updateMany({ where: { id: bracket.id, version: input.expectedVersion }, data: { version: { increment: 1 } } });
+    if (updateResult.count !== 1) jsonError('Bracket changed. Refresh and try again.', 409);
+    const updated = await tx.bracket.findUniqueOrThrow({ where: { id: bracket.id }, include: bracketInclude });
+    await writeAudit(tx, { action: 'bracket.slot-defaults.updated', actorId: input.actorId, eventId: input.eventId, entityType: 'Bracket', entityId: bracket.id, before, after: input.defaults });
+    await queueOutbox(tx, { topic: 'bracket.updated', aggregateType: 'Bracket', aggregateId: bracket.id, payload: { eventId: input.eventId, bracketId: bracket.id, version: updated.version }, deduplicationKey: `bracket:${bracket.id}:slot-defaults:v${updated.version}` });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.slot-defaults', commandId: input.commandId, hash });
+    return updated;
   });
 }
 
@@ -78,6 +112,7 @@ async function createMatchGraph(tx: Prisma.TransactionClient, bracketId: string,
           round: current.round,
           roundPosition: position,
           matchNumber: current.firstMatchNumber + position - 1,
+          scoringMode: ScoringMode.SLOTS,
           nextMatchId: target?.id,
           nextMatchSlot: target ? (position % 2 === 1 ? MatchSide.A : MatchSide.B) : undefined,
         },
@@ -135,8 +170,81 @@ export async function generateBracket(input: { eventId: string; bracketId: strin
   });
 }
 
+/**
+ * Moves a first-round entry to another slot, swapping with whoever is there. Draft brackets only:
+ * locking snapshots participant identity, so placement is frozen from then on.
+ */
+export async function placeBracketEntry(input: { eventId: string; bracketId: string; actorId: string; sourceMatchId: string; sourceSide: MatchSide; targetMatchId: string; targetSide: MatchSide; expectedVersion: number; commandId: string }) {
+  const hash = payloadHash(input);
+  return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'bracket.place', input.commandId, hash);
+    if (replay) {
+      const current = await tx.bracket.findUniqueOrThrow({ where: { id: input.bracketId }, include: bracketInclude });
+      return { bracket: current, revertedRequestIds: [] as string[] };
+    }
+    const bracket = await tx.bracket.findFirst({ where: { id: input.bracketId, eventId: input.eventId }, include: { event: { select: { status: true } } } });
+    if (!bracket) jsonError('Bracket not found.', 404);
+    if (bracket.event.status === 'COMPLETED') jsonError('Reopen the completed event before editing its bracket.', 409);
+    if (bracket.status !== BracketStatus.DRAFT) jsonError('Only a draft bracket can be rearranged.', 409);
+    if (bracket.version !== input.expectedVersion) jsonError('Bracket changed. Refresh and try again.', 409);
+    if (input.sourceMatchId === input.targetMatchId && input.sourceSide === input.targetSide) jsonError('Choose a different slot.');
+
+    const firstRound = firstRoundForSize(bracket.size);
+    const matchIds = [...new Set([input.sourceMatchId, input.targetMatchId])];
+    const matches = await tx.match.findMany({ where: { id: { in: matchIds }, bracketId: bracket.id } });
+    if (matches.length !== matchIds.length) jsonError('Match not found.', 404);
+    if (matches.some((match) => match.round !== firstRound)) jsonError('Placements can only change first-round slots.');
+
+    const sourceMatch = matches.find((match) => match.id === input.sourceMatchId)!;
+    const targetMatch = matches.find((match) => match.id === input.targetMatchId)!;
+    const sourceEntryId = input.sourceSide === MatchSide.A ? sourceMatch.participantAEntryId : sourceMatch.participantBEntryId;
+    if (!sourceEntryId) jsonError('That slot is already empty. Refresh and try again.', 409);
+    const targetEntryId = input.targetSide === MatchSide.A ? targetMatch.participantAEntryId : targetMatch.participantBEntryId;
+
+    // Build the post-move participants per match, then derive each match's readiness from them.
+    const pending = new Map(matches.map((match) => [match.id, { a: match.participantAEntryId, b: match.participantBEntryId }]));
+    const setSlot = (matchId: string, side: MatchSide, entryId: string | null) => {
+      const slots = pending.get(matchId)!;
+      if (side === MatchSide.A) slots.a = entryId; else slots.b = entryId;
+    };
+    setSlot(input.sourceMatchId, input.sourceSide, targetEntryId);
+    setSlot(input.targetMatchId, input.targetSide, sourceEntryId);
+
+    for (const [matchId, slots] of pending) {
+      await tx.match.update({
+        where: { id: matchId },
+        data: {
+          participantAEntryId: slots.a,
+          participantBEntryId: slots.b,
+          status: slots.a && slots.b ? MatchStatus.READY : MatchStatus.PENDING,
+          version: { increment: 1 },
+        },
+      });
+    }
+
+    // A pairing request only stays applied while both of its entries share the match it was applied to.
+    const appliedRequests = await tx.opponentRequest.findMany({ where: { appliedMatchId: { in: matchIds }, status: OpponentRequestStatus.APPLIED_TO_BRACKET } });
+    const revertedRequestIds: string[] = [];
+    for (const request of appliedRequests) {
+      const slots = pending.get(request.appliedMatchId!)!;
+      const stillPaired = [slots.a, slots.b].includes(request.requestingEntryId) && [slots.a, slots.b].includes(request.targetEntryId);
+      if (stillPaired) continue;
+      await tx.opponentRequest.update({ where: { id: request.id }, data: { status: OpponentRequestStatus.APPROVED_BY_ADMIN, appliedMatchId: null, version: { increment: 1 } } });
+      revertedRequestIds.push(request.id);
+    }
+
+    const updateResult = await tx.bracket.updateMany({ where: { id: bracket.id, version: input.expectedVersion }, data: { version: { increment: 1 } } });
+    if (updateResult.count !== 1) jsonError('Bracket changed. Refresh and try again.', 409);
+    const updated = await tx.bracket.findUniqueOrThrow({ where: { id: bracket.id }, include: bracketInclude });
+    await writeAudit(tx, { action: 'bracket.placement.updated', actorId: input.actorId, eventId: input.eventId, entityType: 'Bracket', entityId: bracket.id, before: { matchId: input.sourceMatchId, side: input.sourceSide, entryId: sourceEntryId }, after: { matchId: input.targetMatchId, side: input.targetSide, entryId: sourceEntryId, swappedEntryId: targetEntryId, revertedRequestIds } });
+    await queueOutbox(tx, { topic: 'bracket.updated', aggregateType: 'Bracket', aggregateId: bracket.id, payload: { eventId: input.eventId, bracketId: bracket.id, version: updated.version }, deduplicationKey: `bracket:${bracket.id}:placement:v${updated.version}` });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.place', commandId: input.commandId, hash });
+    return { bracket: updated, revertedRequestIds };
+  });
+}
+
 async function snapshotEntry(tx: Prisma.TransactionClient, matchId: string, side: MatchSide, entryId: string) {
-  const entry = await tx.eventRegistration.findUnique({ where: { id: entryId }, include: { owner: { include: { clubMemberships: { include: { club: true }, take: 1 } } }, teammate: true } });
+  const entry = await tx.eventRegistration.findUnique({ where: { id: entryId }, include: { owner: { select: { ...entryUserSelect, clubMemberships: { select: { club: { select: { id: true, name: true } } }, take: 1 } } }, teammate: { select: entryUserSelect } } });
   if (!entry) jsonError('Bracket entry not found.', 409);
   const club = entry.owner.clubMemberships[0]?.club;
   if (!club) jsonError('Bracket entry no longer belongs to a club.', 409);
@@ -194,7 +302,7 @@ export async function publishBracket(input: { eventId: string; bracketId: string
     const updated = await tx.bracket.update({ where: { id: bracket.id }, data: { publishedAt: input.published ? new Date() : null, publishedById: input.published ? input.actorId : null, version: { increment: 1 } }, include: bracketInclude });
     await writeAudit(tx, { action: input.published ? 'bracket.published' : 'bracket.unpublished', actorId: input.actorId, eventId: bracket.eventId, entityType: 'Bracket', entityId: bracket.id, after: { published: input.published } });
     await queueOutbox(tx, { topic: 'bracket.published', aggregateType: 'Bracket', aggregateId: bracket.id, payload: { eventId: bracket.eventId, bracketId: bracket.id, published: input.published, version: updated.version }, deduplicationKey: `bracket:${bracket.id}:publication:v${updated.version}` });
-    const entries = await tx.eventRegistration.findMany({ where: { eventId: bracket.eventId, categoryId: bracket.categoryId, status: 'APPROVED' }, include: { owner: true, teammate: true } });
+    const entries = await tx.eventRegistration.findMany({ where: { eventId: bracket.eventId, categoryId: bracket.categoryId, status: 'APPROVED' }, include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } });
     if (input.published) await queueNotifications(tx, entries.flatMap((entry) => [entry.owner, entry.teammate].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.BRACKET_PUBLISHED, title: 'Bracket published', message: 'The tournament bracket is ready to view.', entityType: 'Bracket', entityId: bracket.id, eventId: bracket.eventId, actionPath: `/dashboard/events/${bracket.eventId}`, version: updated.version }))));
     await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.publish', commandId: input.commandId, hash });
     return updated;

@@ -7,28 +7,41 @@ import {
   isValidEmail,
   jsonError,
   requireParamId,
+  setPublicCache,
 } from '../../common/http.js';
 import { serializeAdminUser } from '../../common/serializers.js';
 import {
   clearSessionCookie,
+  getCurrentUser,
   requireUser,
   revokeUserSessions,
+  setSessionCookie,
 } from '../auth/auth.service.js';
 import { auditLog, requestIp } from '../../common/audit.js';
 import { passwordValidationError } from '../../common/security.js';
 import { requireCapability } from '../../common/capabilities.js';
 import { parseListRange } from '../../common/pagination.js';
+import { rateLimit } from '../../common/rateLimit.js';
 import {
+  changeOwnPassword,
   createUserByAdmin,
   deleteUserAccount,
+  getOwnAccount,
   getPublicPlayer,
   listPublicPlayers,
   listUsers,
   setUserDisqualification,
   setJudgeActive,
+  updateOwnProfile,
 } from './users.service.js';
 
 export const usersRouter = Router();
+
+const accountPasswordLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyPrefix: 'account-password',
+});
 
 type PublicPlayerRecord = Awaited<ReturnType<typeof getPublicPlayer>>;
 
@@ -45,6 +58,7 @@ function serializePublicPlayer(player: PublicPlayerRecord) {
 
 usersRouter.get('/api/public/players', asyncHandler(async (request, response) => {
   const page = await listPublicPlayers(parseListRange(request.query));
+  setPublicCache(response);
   response.json({
     players: page.items.map(serializePublicPlayer),
     nextCursor: page.nextCursor,
@@ -53,6 +67,7 @@ usersRouter.get('/api/public/players', asyncHandler(async (request, response) =>
 
 usersRouter.get('/api/public/players/:id', asyncHandler(async (request, response) => {
   const player = await getPublicPlayer(requireParamId(request.params.id, 'player id'));
+  setPublicCache(response);
   response.json({ player: serializePublicPlayer(player) });
 }));
 
@@ -85,7 +100,11 @@ usersRouter.post('/api/admin/users', asyncHandler(async (request, response) => {
   const roleRaw = cleanString(request.body.role).toUpperCase();
   const password = cleanString(request.body.password);
   const clubId = cleanString(request.body.clubId);
-  const role = roleRaw === 'ADMIN' ? UserRole.ADMIN : roleRaw === 'JUDGE' ? UserRole.JUDGE : UserRole.USER;
+  const role =
+    roleRaw === 'ADMIN' ? UserRole.ADMIN
+      : roleRaw === 'JUDGE' ? UserRole.JUDGE
+        : roleRaw === 'ORGANISER' ? UserRole.ORGANISER
+          : UserRole.USER;
 
   if (!isValidEmail(email)) jsonError('Enter a valid email.');
   if (!name || !surname) jsonError('Name and surname are required.');
@@ -158,6 +177,56 @@ usersRouter.delete('/api/admin/users/:id/disqualify', asyncHandler(async (reques
     detail: targetId,
   });
   response.json({ user: serializeAdminUser(user) });
+}));
+
+usersRouter.get('/api/account/profile', asyncHandler(async (request, response) => {
+  const current = await requireUser(request);
+  response.json({ profile: await getOwnAccount(current.id) });
+}));
+
+usersRouter.patch('/api/account/profile', asyncHandler(async (request, response) => {
+  const current = await requireUser(request);
+
+  const name = cleanString(request.body.name);
+  const surname = cleanString(request.body.surname);
+  const phone = cleanString(request.body.phone);
+
+  if (!name || !surname) jsonError('Name and surname are required.');
+  if (phone && phone.length < 5) jsonError('Enter a valid phone number.');
+
+  await updateOwnProfile(current.id, { name, surname, phone });
+  auditLog({
+    event: 'account.profile_update',
+    outcome: 'success',
+    userId: current.id,
+    email: current.email,
+    ip: requestIp(request),
+  });
+
+  response.json({ user: await getCurrentUser(request) });
+}));
+
+usersRouter.post('/api/account/password', accountPasswordLimit, asyncHandler(async (request, response) => {
+  const current = await requireUser(request);
+
+  const currentPassword = cleanString(request.body.currentPassword);
+  const newPassword = cleanString(request.body.newPassword);
+
+  const passwordError = passwordValidationError(newPassword);
+  if (passwordError) jsonError(passwordError);
+
+  const updated = await changeOwnPassword(current.id, { currentPassword, newPassword });
+  auditLog({
+    event: 'account.password_change',
+    outcome: 'success',
+    userId: current.id,
+    email: current.email,
+    ip: requestIp(request),
+  });
+
+  // The change revoked every outstanding session; keep this device signed in.
+  setSessionCookie(response, updated);
+  response.json({ ok: true });
 }));
 
 usersRouter.delete('/api/account', asyncHandler(async (request, response) => {

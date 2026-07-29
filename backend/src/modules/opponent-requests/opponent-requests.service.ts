@@ -9,10 +9,11 @@ import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { entryUserSelect } from '../../common/includes.js';
 
 export const opponentRequestInclude = {
-  requestingEntry: { include: { owner: true, teammate: true, category: true } },
-  targetEntry: { include: { owner: true, teammate: true, category: true } },
+  requestingEntry: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect }, category: true } },
+  targetEntry: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect }, category: true } },
 } satisfies Prisma.OpponentRequestInclude;
 
 type OpponentRequestGraph = Prisma.OpponentRequestGetPayload<{ include: typeof opponentRequestInclude }>;

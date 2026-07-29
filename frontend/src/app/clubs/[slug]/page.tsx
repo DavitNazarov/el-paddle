@@ -13,7 +13,7 @@ type ClubDto = ClubClientDto & { slug: string };
 
 async function getClub(slug: string) {
   const response = await fetch(apiUrl(`/api/public/clubs/${slug}`), {
-    cache: 'no-store',
+    next: { revalidate: 300 },
   });
 
   if (response.status === 404) return null;

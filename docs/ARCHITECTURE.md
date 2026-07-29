@@ -37,7 +37,7 @@ Express mounts feature routers from `backend/src/routes.ts`. Route modules valid
 
 Important cross-cutting modules:
 
-- `common/capabilities.ts`: capability authorization; admins hold every capability by default, and per-user `UserCapabilityGrant` rows (ALLOW/DENY) override the role default
+- `common/capabilities.ts`: capability authorization; admins hold every capability by default, per-user `UserCapabilityGrant` rows (ALLOW/DENY) override the role default, and `requireEventCapability` grants an organiser their event-running capabilities on one event at a time
 - `common/commands.ts`: idempotent command receipts keyed by actor, action, and command ID with payload hashes
 - `common/csrf.ts`: double-submit token issuance and unsafe-request protection
 - `common/domain-events.ts`: audit, in-app notifications, email delivery jobs, and outbox enqueueing inside domain transactions
@@ -70,9 +70,9 @@ In production, Docker runs the worker as a separate service (`RUN_OUTBOX_IN_API=
 | `events` | event configuration (including fee and bank details), lifecycle, and publication controls |
 | `registrations` | club team entries, review workflow, lineup replacement, roster publication |
 | `opponent-requests` | first-round opponent negotiation windows, player responses, and admin decisions |
-| `brackets` | draw generation, locking, publication, and the single-elimination progression graph |
-| `scheduling` | courts, queues, judge assignments, timing, publication, judge queue reads |
-| `matches` | start, scoring, completion, correction, snapshots, history, and visibility rules |
+| `brackets` | draw generation, first-round placement, slot defaults, locking, publication, and the single-elimination progression graph |
+| `scheduling` | courts, queues and their ordering, judge assignments, timing, publication, judge queue reads |
+| `matches` | start, slot scoring, completion, correction, reopening, snapshots, history, and visibility rules |
 | `notifications` | in-app notification inbox and read state |
 | `dashboard` | player dashboard aggregate and admin summary counts |
 | `operations` | audit inspection and email-delivery retry |
@@ -99,6 +99,18 @@ Mutable tournament records (events, registrations, requests, brackets, matches, 
 
 State-changing tournament commands accept `commandId`. The server hashes the payload and stores a `CommandReceipt`. Repeating the same ID with the same payload returns the existing result; reusing an ID with a different payload is rejected.
 
+### Slot scoring
+
+`Match.scoringMode` selects the engine: `POINTS` for events played before the slot format, `SLOTS` for everything since. A slot match races to `Match.slotCount` slot wins, capped at `2 * slotCount - 1` slots so a decider always exists; the rules live as pure functions in `backend/src/modules/matches/slot-engine.ts`.
+
+`MatchSlot` holds the current decided slots and is the row an undo deletes. `SlotEvent` is the append-only history of every decision and withdrawal, and its `@@unique([actorId, commandId])` is the idempotency anchor, mirroring `ScoreEvent` in the legacy engine. `Match.scoreA`/`scoreB` denormalize the tally so every existing read path — serializers, public boards, match history — keeps working unchanged; they are rewritten from the `MatchSlot` rows inside the same transaction.
+
+The format is resolved once, when the match starts: the per-match `slotCountOverride`, else the `BracketRoundConfig` row for that round, else one. The resolved value is written to `Match.slotCount`, which is what makes later configuration changes safe during live play.
+
+### Queue ordering
+
+A court queue is `ScheduleItem.queuePosition`, unique per court, always renumbered to 1..n. Reorders submit the court's complete order with per-item versions and are validated by the pure `validateQueueReorder` in `backend/src/modules/scheduling/queueOrdering.ts`: started and completed items must keep their exact position, a fully finished court is immutable, and any stale item version rejects the whole request. Cross-court moves park the row on a negative position so neither renumber pass collides with the `(courtId, queuePosition)` unique index.
+
 ### Advisory locks
 
 Registration creation, lineup replacement, and member removal serialize on PostgreSQL advisory locks keyed by event/player and event/club, closing race windows that unique constraints alone cannot express.
@@ -113,11 +125,12 @@ Privileged transitions create append-only `AuditLog` records with actor, before/
 
 ## Authorization
 
-Roles are `USER` (player), `JUDGE`, and `ADMIN`.
+Roles are `USER` (player), `JUDGE`, `ORGANISER`, and `ADMIN`.
 
 - Public users receive only explicitly published event, roster, bracket, schedule, live-score, and result data.
 - Players receive their own club/registration/request data plus published tournament data.
 - Judges receive court queues and matches only for courts with an active, unrevoked time-boxed assignment.
+- Organisers hold **no global capability**. Every power they have is checked against an `EventOrganiser` link by `requireEventCapability`, so it applies to the events an admin handed them and to nothing else. They may not create, edit, publish, or delete an event, review registrations, correct a finished result, reopen a completed event, or touch accounts, clubs, and club requests.
 - Administrators require the specific capability for each privileged operation; capabilities can be individually granted or denied per user.
 - `ADMIN_EMAILS` elevation applies only after the email address is verified.
 

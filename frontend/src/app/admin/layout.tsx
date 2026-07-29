@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect('/login?next=/admin');
-  if (user.role !== 'ADMIN') redirect('/dashboard');
+  if (user.role !== 'ADMIN' && user.role !== 'ORGANISER') redirect('/dashboard');
 
   return children;
 }

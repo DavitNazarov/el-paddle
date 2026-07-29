@@ -72,14 +72,15 @@ The API starts an in-process outbox worker in local development. Production Dock
 
 ## Development accounts
 
-After seeding:
+After seeding, every account uses the password `Password123!`:
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Administrator | `admin@example.com` | `Password123!` |
-| Player | `nika.beridze@example.com` | `Password123!` |
+| Role | Email |
+| --- | --- |
+| Administrator | `admin@example.com` |
+| Judge | `judge1@example.com` … `judge5@example.com` |
+| Player | `athlete001@example.com` … `athlete036@example.com` |
 
-Judge users can be created from Admin → Users.
+Players are distributed two per club across the seeded clubs. Additional judges can be created from Admin → Users.
 
 ## Main workflows
 
@@ -113,8 +114,10 @@ Judge users can be created from Admin → Users.
 
 1. Open assigned courts during the assigned time window.
 2. Process the court queue strictly in order.
-3. Start the next ready match.
-4. Score 0–6 per side (six wins), or record a walkover/withdrawal/disqualification with a reason.
+3. Start the next ready match. Starting it freezes the match's slot format.
+4. After each slot, press the button for the side that won it and confirm in the dialog. The match completes automatically once a side reaches the required slot wins.
+5. Use "Undo last slot" to withdraw the most recent slot while the match is still in progress; reopening a completed match is an administrator action.
+6. Or record a walkover/withdrawal/disqualification with a reason.
 
 ## Commands
 
@@ -123,13 +126,21 @@ npm run dev                 # Run API and frontend
 npm run dev:backend         # Run only the API
 npm run dev:frontend        # Run only Next.js
 npm run lint                # Frontend lint and backend TypeScript validation
-npm test                    # Backend and frontend tests
+npm test                    # Backend and frontend unit tests (no database needed)
 npm run build               # Production builds
 npm run prisma:generate     # Generate Prisma client
 npm run prisma:migrate      # Apply a local development migration
 npm run prisma:studio       # Open Prisma Studio
 npm run db:seed             # Seed development records
 npm run audit               # Report high-severity dependency vulnerabilities
+```
+
+The DB-backed suite runs separately. It truncates every table between tests and
+therefore refuses to run unless the database name contains `test`:
+
+```bash
+DATABASE_URL='postgresql://elpadel:elpadel@localhost:5433/elpadel_test?schema=public' \
+  npm run test:integration --workspace backend
 ```
 
 Run the compiled worker independently:

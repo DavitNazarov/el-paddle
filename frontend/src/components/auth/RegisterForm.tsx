@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { ArrowRight, Mail } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -14,12 +13,12 @@ import { authInputClassName } from '@/constants/form-styles';
 import { friendlyError } from '@/lib/utils/errors';
 import { cn } from '@/lib/utils';
 
-type Step = 'account' | 'verify' | 'club' | 'mate';
+type Step = 'account' | 'verify' | 'club' | 'mate' | 'submitted';
 
-export function RegisterForm({ oauthError }: { oauthError?: string }) {
-  const router = useRouter();
+export function RegisterForm({ oauthError, initialStep }: { oauthError?: string; initialStep?: string }) {
   const { t, locale } = useI18n();
-  const [step, setStep] = useState<Step>('account');
+  // Google returnees come back mid-flow: their address is already proven.
+  const [step, setStep] = useState<Step>(initialStep === 'club' ? 'club' : 'account');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
@@ -38,12 +37,13 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [eligibilityConfirmed, setEligibilityConfirmed] = useState(false);
 
-  const stepIndex = step === 'account' ? 0 : step === 'verify' ? 1 : step === 'club' ? 2 : 3;
+  const stepIndex = step === 'account' ? 0 : step === 'verify' ? 1 : step === 'club' ? 2 : step === 'mate' ? 3 : 4;
   const stepLabels = [
     t('forms.register.steps.account'),
     t('forms.register.steps.verify'),
     t('forms.register.steps.club'),
     t('forms.register.steps.mate'),
+    t('forms.register.steps.submitted'),
   ];
 
   const createAccount = async (event: FormEvent<HTMLFormElement>) => {
@@ -53,7 +53,7 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
     setMessage('');
 
     try {
-      const response = await apiFetch('/api/auth/register', {
+      const response = await apiFetch('/api/applications', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, name, surname, phone, password, legalAccepted, eligibilityConfirmed }),
@@ -81,27 +81,15 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
     setMessage('');
 
     try {
-      const response = await apiFetch('/api/auth/verify', {
+      const response = await apiFetch('/api/applications/verify', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email, code }),
       });
-      const data = await readApiJson<{ error?: string; user?: { role?: string; club?: unknown } }>(response, {});
+      const data = await readApiJson<{ error?: string }>(response, {});
 
       if (!response.ok) {
         setError(friendlyError(data.error, t('forms.register.verifyError'), t('forms.databaseNotReady')));
-        return;
-      }
-
-      if (data.user?.role === 'ADMIN') {
-        router.push('/admin');
-        router.refresh();
-        return;
-      }
-
-      if (data.user?.club) {
-        router.push('/dashboard');
-        router.refresh();
         return;
       }
 
@@ -114,6 +102,16 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
     }
   };
 
+  const saveDraft = async (patch: Record<string, string>, fallbackError: string) => {
+    const response = await apiFetch('/api/applications/current', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const data = await readApiJson<{ error?: string }>(response, {});
+    if (!response.ok) throw new Error(data.error ?? fallbackError);
+  };
+
   const createClub = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
@@ -121,21 +119,42 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
     setMessage('');
 
     try {
-      const response = await apiFetch('/api/account/club', {
+      await saveDraft({ clubName, clubDescription }, t('forms.register.clubError'));
+      setStep('mate');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('forms.apiConnectionError'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** Hand the finished request to the admins. No account exists until approval. */
+  const submitApplication = async (withMate: boolean) => {
+    setLoading(true);
+    setError('');
+    setMessage('');
+
+    try {
+      if (withMate) {
+        await saveDraft(
+          { mateEmail, mateName, mateSurname, matePhone },
+          t('forms.register.mateError'),
+        );
+      }
+
+      const response = await apiFetch('/api/applications/current/submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: clubName, description: clubDescription }),
       });
       const data = await readApiJson<{ error?: string }>(response, {});
-
       if (!response.ok) {
-        setError(data.error ?? t('forms.register.clubError'));
+        setError(data.error ?? t('forms.register.submitError'));
         return;
       }
 
-      setStep('mate');
-    } catch {
-      setError(t('forms.apiConnectionError'));
+      setStep('submitted');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('forms.apiConnectionError'));
     } finally {
       setLoading(false);
     }
@@ -143,35 +162,7 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
 
   const addMate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setLoading(true);
-    setError('');
-    setMessage('');
-
-    try {
-      const response = await apiFetch('/api/account/club/mate', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          email: mateEmail,
-          name: mateName,
-          surname: mateSurname,
-          phone: matePhone,
-        }),
-      });
-      const data = await readApiJson<{ error?: string }>(response, {});
-
-      if (!response.ok) {
-        setError(data.error ?? t('forms.register.mateError'));
-        return;
-      }
-
-      router.push('/dashboard');
-      router.refresh();
-    } catch {
-      setError(t('forms.apiConnectionError'));
-    } finally {
-      setLoading(false);
-    }
+    await submitApplication(true);
   };
 
   const title =
@@ -181,7 +172,9 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
         ? t('forms.register.verifyTitle')
         : step === 'club'
           ? t('forms.register.clubTitle')
-          : t('forms.register.mateTitle');
+          : step === 'mate'
+            ? t('forms.register.mateTitle')
+            : t('forms.register.submittedTitle');
 
   const copy =
     step === 'account'
@@ -190,7 +183,9 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
         ? t('forms.register.verifyCopy', { email })
         : step === 'club'
           ? t('forms.register.clubCopy')
-          : t('forms.register.mateCopy');
+          : step === 'mate'
+            ? t('forms.register.mateCopy')
+            : t('forms.register.submittedCopy', { email });
 
   return (
     <div className="space-y-6">
@@ -202,7 +197,7 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
         <p className="mt-3 text-sm leading-6 text-[var(--padel-ink)]/65">{copy}</p>
       </div>
 
-      <ol className="grid grid-cols-4 gap-2">
+      <ol className="grid grid-cols-5 gap-2">
         {stepLabels.map((label, index) => (
           <li key={label} className="min-w-0">
             <div
@@ -318,7 +313,7 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
           </Field>
           <div className="grid gap-3">
             <Button type="submit" variant="red" size="lg" disabled={loading} className="min-h-12 w-full">
-              {loading ? t('forms.register.savingMate') : t('forms.register.finish')}
+              {loading ? t('forms.register.submitting') : t('forms.register.submitRequest')}
               <ArrowRight className="h-5 w-5" />
             </Button>
             <Button
@@ -327,15 +322,23 @@ export function RegisterForm({ oauthError }: { oauthError?: string }) {
               size="lg"
               disabled={loading}
               className="min-h-12 w-full border-[var(--padel-ink)]/20 bg-transparent text-[var(--padel-ink)] hover:bg-[var(--padel-ink)]/5"
-              onClick={() => {
-                router.push('/dashboard');
-                router.refresh();
-              }}
+              onClick={() => void submitApplication(false)}
             >
-              {t('forms.register.skipMate')}
+              {t('forms.register.skipMateAndSubmit')}
             </Button>
           </div>
         </form>
+      ) : null}
+
+      {step === 'submitted' ? (
+        <div className="space-y-5">
+          <div className="rounded-lg border border-[var(--padel-ink)]/12 bg-[var(--padel-ink)]/[0.035] p-4 text-sm leading-6">
+            <p>{t('forms.register.submittedNote')}</p>
+          </div>
+          <Button asChild variant="outline" size="lg" className="min-h-12 w-full border-[var(--padel-ink)]/20 bg-transparent text-[var(--padel-ink)] hover:bg-[var(--padel-ink)]/5">
+            <Link href="/register/status">{t('forms.register.checkStatus')}</Link>
+          </Button>
+        </div>
       ) : null}
 
       {step === 'account' || step === 'verify' ? (

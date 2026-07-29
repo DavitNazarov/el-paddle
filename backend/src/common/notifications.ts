@@ -78,9 +78,13 @@ export async function sendTeammateInviteEmail(
 export async function sendAccountInviteEmail(
   email: string,
   token: string,
-  role: 'USER' | 'ADMIN' | 'JUDGE',
+  role: 'USER' | 'ADMIN' | 'JUDGE' | 'ORGANISER',
 ) {
-  const roleLabel = role === 'ADMIN' ? 'admin' : role === 'JUDGE' ? 'judge' : 'player';
+  const roleLabel =
+    role === 'ADMIN' ? 'admin'
+      : role === 'JUDGE' ? 'judge'
+        : role === 'ORGANISER' ? 'organiser'
+          : 'player';
   const inviteUrl = appUrl(`/invite?token=${encodeURIComponent(token)}`);
   const privacyUrl = appUrl('/legal/privacy');
   await sendEmail({
@@ -96,6 +100,134 @@ export async function sendAccountInviteEmail(
        <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">An El Padel administrator provided your email for this invitation. Read our <a href="${privacyUrl}" style="color:#86000c;font-weight:700">Privacy Policy</a>.</p>
        <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">If you were not expecting this invitation, you can ignore this email.</p>`,
       { eyebrow: 'Account invitation', preheader: `Your El Padel ${roleLabel} account is ready to set up.` },
+    ),
+  });
+}
+
+/**
+ * Send a courtesy email for work that has already committed. A provider outage
+ * must not turn a completed approval or hand-off into a 5xx the caller would
+ * retry — the change is done, so the failure is logged and reported instead.
+ */
+export async function notifyAfterCommit(label: string, send: () => Promise<void>) {
+  try {
+    await send();
+    return true;
+  } catch (error) {
+    console.error('[notify]', label, error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+
+/** Render admin-written plain text as HTML paragraphs, escaping every line. */
+function textToHtml(body: string) {
+  return body
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p style="margin:0 0 16px">${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+export async function sendClubApplicationReceivedEmail(
+  email: string,
+  clubName: string,
+  mateEmail?: string | null,
+) {
+  const statusUrl = appUrl('/register/status');
+  const details = [{ label: 'Club', value: clubName }];
+  if (mateEmail) details.push({ label: 'Group mate', value: mateEmail });
+
+  await sendEmail({
+    to: email,
+    subject: 'We received your El Padel club request',
+    text: `Your request is with our team\n\nWe received your request to create ${clubName} on El Padel. An administrator will review it and email you the decision.\n\nCheck the status: ${statusUrl}`,
+    html: emailLayout(
+      'Your request is with our team',
+      `<p style="margin:0">Thank you for applying. An administrator will review your club request and email you as soon as a decision is made.</p>
+       ${emailDetails(details)}
+       <p style="margin:0">You do not need to do anything else for now. We will be in touch.</p>
+       ${emailButton('Check request status', statusUrl)}`,
+      { eyebrow: 'Club request', preheader: `We received your request to create ${clubName}.` },
+    ),
+  });
+}
+
+export async function sendClubApplicationApprovedEmail(email: string, clubName: string) {
+  const loginUrl = appUrl('/login');
+  await sendEmail({
+    to: email,
+    subject: `${clubName} is approved — your El Padel account is ready`,
+    text: `Your club request was approved\n\n${clubName} is live on El Padel and your account is ready. Sign in with the email and password you chose: ${loginUrl}`,
+    html: emailLayout(
+      'Your club request was approved',
+      `<p style="margin:0">An administrator approved your request. Your account is active and your club is live.</p>
+       ${emailDetails([{ label: 'Club', value: clubName }])}
+       <p style="margin:0">Sign in with the email address and password you chose when you applied.</p>
+       ${emailButton('Sign in to El Padel', loginUrl)}`,
+      { eyebrow: 'Club request', preheader: `${clubName} is approved and your account is ready.` },
+    ),
+  });
+}
+
+export async function sendClubApplicationRejectedEmail(email: string, reason: string) {
+  const registerUrl = appUrl('/register');
+  const trimmedReason = reason.trim();
+  const reasonBlock = trimmedReason
+    ? emailPanel(`<p style="margin:0 0 6px;color:#766e67;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">Reason</p><p style="margin:0;color:#211d1a;font-size:15px;line-height:24px">${escapeHtml(trimmedReason)}</p>`)
+    : '';
+
+  await sendEmail({
+    to: email,
+    subject: 'About your El Padel club request',
+    text: `Your club request was not approved\n\n${trimmedReason ? `Reason: ${trimmedReason}\n\n` : ''}We have removed the details you submitted. You are welcome to apply again with this same email address: ${registerUrl}`,
+    html: emailLayout(
+      'Your club request was not approved',
+      `<p style="margin:0">An administrator reviewed your request and was not able to approve it this time.</p>
+       ${reasonBlock}
+       <p style="margin:0">We have removed the details you submitted. You are welcome to apply again with this same email address.</p>
+       ${emailButton('Apply again', registerUrl)}`,
+      { eyebrow: 'Club request', preheader: 'An update on your El Padel club request.' },
+    ),
+  });
+}
+
+/** A free-text message an admin wrote to an applicant. */
+export async function sendClubApplicationMessageEmail(
+  email: string,
+  subject: string,
+  body: string,
+) {
+  const statusUrl = appUrl('/register/status');
+  await sendEmail({
+    to: email,
+    subject,
+    text: `${body}\n\nCheck your request status: ${statusUrl}`,
+    html: emailLayout(
+      subject,
+      `${textToHtml(body)}
+       ${emailButton('Check request status', statusUrl)}
+       <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">This message was sent by an El Padel administrator about your club request. Reply to this email to reach them.</p>`,
+      { eyebrow: 'Club request', preheader: 'A message about your El Padel club request.' },
+    ),
+  });
+}
+
+export async function sendEventOrganiserAssignedEmail(
+  email: string,
+  eventTitle: string,
+  eventId: string,
+) {
+  const eventUrl = appUrl(`/admin/events/${eventId}`);
+  await sendEmail({
+    to: email,
+    subject: `You are running ${eventTitle}`,
+    text: `You were assigned as organiser\n\nAn administrator handed ${eventTitle} to you. You can now manage its bracket, schedule, judges and opponent requests: ${eventUrl}`,
+    html: emailLayout(
+      'You were assigned as organiser',
+      `<p style="margin:0">An administrator handed this tournament to you.</p>
+       ${emailDetails([{ label: 'Tournament', value: eventTitle }])}
+       <p style="margin:0">You can now manage its bracket, schedule, judges, opponent requests and lifecycle.</p>
+       ${emailButton('Open the event', eventUrl)}`,
+      { eyebrow: 'Organiser assignment', preheader: `You were assigned to run ${eventTitle}.` },
     ),
   });
 }

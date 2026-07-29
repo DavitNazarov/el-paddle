@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { Capability } from '../../generated/prisma/client.js';
-import { requireCapability } from '../../common/capabilities.js';
+import { requireEventCapability } from '../../common/capabilities.js';
 import { requireCommandId } from '../../common/commands.js';
 import { asyncHandler, cleanString, jsonError, requireParamId } from '../../common/http.js';
 import { requireUser } from '../auth/auth.service.js';
@@ -9,17 +9,18 @@ import { createOpponentRequest, decideOpponentRequest, listEligibleOpponents, li
 export const opponentRequestsRouter = Router();
 
 opponentRequestsRouter.post('/api/admin/events/:eventId/categories/:categoryId/opponent-requests/:action(open|close)', asyncHandler(async (request, response) => {
-  const admin = await requireCapability(request, Capability.OPPONENT_REQUEST_MANAGE);
+  const eventId = requireParamId(request.params.eventId);
+  const admin = await requireEventCapability(request, eventId, Capability.OPPONENT_REQUEST_MANAGE);
   const deadlineText = cleanString(request.body.deadline);
   const deadline = deadlineText ? new Date(deadlineText) : undefined;
   if (deadline && Number.isNaN(deadline.getTime())) jsonError('Invalid deadline.');
-  const window = await setOpponentRequestWindow({ eventId: requireParamId(request.params.eventId), categoryId: requireParamId(request.params.categoryId), actorId: admin.id, open: request.params.action === 'open', deadline, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) });
+  const window = await setOpponentRequestWindow({ eventId, categoryId: requireParamId(request.params.categoryId), actorId: admin.id, open: request.params.action === 'open', deadline, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) });
   response.json({ window });
 }));
 
 opponentRequestsRouter.get('/api/admin/events/:eventId/opponent-requests', asyncHandler(async (request, response) => {
-  await requireCapability(request, Capability.OPPONENT_REQUEST_DECIDE);
   const eventId = requireParamId(request.params.eventId);
+  await requireEventCapability(request, eventId, Capability.OPPONENT_REQUEST_DECIDE);
   const [requests, windows] = await Promise.all([listOpponentRequests(eventId), listOpponentRequestWindows(eventId)]);
   response.json({ requests: requests.map((item) => serializeOpponentRequest(item, true)), windows: windows.map(serializeOpponentRequestWindow) });
 }));
@@ -61,7 +62,8 @@ for (const action of ['accept', 'refuse'] as const) {
 for (const action of ['approve', 'reject', 'override-refusal'] as const) {
   opponentRequestsRouter.post(`/api/admin/events/:eventId/opponent-requests/:requestId/${action}`, asyncHandler(async (request, response) => {
     const capability = action === 'override-refusal' ? Capability.OPPONENT_REQUEST_OVERRIDE : Capability.OPPONENT_REQUEST_DECIDE;
-    const admin = await requireCapability(request, capability);
-    response.json({ request: serializeOpponentRequest(await decideOpponentRequest({ actorId: admin.id, eventId: requireParamId(request.params.eventId), requestId: requireParamId(request.params.requestId), decision: action === 'override-refusal' ? 'override' : action, publicReason: cleanString(request.body.reason), internalNote: cleanString(request.body.internalNote), expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) }), true) });
+    const eventId = requireParamId(request.params.eventId);
+    const admin = await requireEventCapability(request, eventId, capability);
+    response.json({ request: serializeOpponentRequest(await decideOpponentRequest({ actorId: admin.id, eventId, requestId: requireParamId(request.params.requestId), decision: action === 'override-refusal' ? 'override' : action, publicReason: cleanString(request.body.reason), internalNote: cleanString(request.body.internalNote), expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) }), true) });
   }));
 }

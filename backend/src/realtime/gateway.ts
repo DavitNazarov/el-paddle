@@ -4,6 +4,7 @@ import { Server, type Socket } from 'socket.io';
 import { config } from '../config/env.js';
 import { prisma } from '../database/prisma.js';
 import { SESSION_COOKIE } from '../modules/auth/auth.service.js';
+import { isEventOrganiser } from '../common/capabilities.js';
 import { registerSocketServer } from './socket.js';
 
 type SocketUser = { id: string; role: string };
@@ -76,6 +77,8 @@ async function canSubscribeToEvent(user: SocketUser | undefined, eventId: string
   if (event.isPublished) return true;
   if (!user) return false;
   if (user.role === 'ADMIN') return true;
+  // An organiser sees only the events handed to them, never another's.
+  if (user.role === 'ORGANISER') return isEventOrganiser(user.id, eventId);
   if (user.role === 'JUDGE') {
     const now = new Date();
     return Boolean(await prisma.courtJudgeAssignment.findFirst({
@@ -99,7 +102,7 @@ async function canSubscribeToMatch(user: SocketUser | undefined, matchId: string
       participantA: { select: { ownerId: true, teammateId: true } },
       participantB: { select: { ownerId: true, teammateId: true } },
       scheduleItem: { select: { assignedJudgeId: true, court: { select: { judgeAssignments: { where: { revokedAt: null, startsAt: { lte: new Date() }, endsAt: { gt: new Date() } }, select: { judgeUserId: true } } } } } },
-      bracket: { select: { publishedAt: true, event: { select: { schedulePublishedAt: true, publicLiveScoringEnabled: true } } } },
+      bracket: { select: { publishedAt: true, eventId: true, event: { select: { schedulePublishedAt: true, publicLiveScoringEnabled: true } } } },
     },
   });
   if (!match) return false;
@@ -107,6 +110,7 @@ async function canSubscribeToMatch(user: SocketUser | undefined, matchId: string
   if (isPubliclyListed && match.bracket.event.publicLiveScoringEnabled) return true;
   if (!user) return false;
   if (user.role === 'ADMIN') return true;
+  if (user.role === 'ORGANISER') return isEventOrganiser(user.id, match.bracket.eventId);
   if (user.role === 'JUDGE') {
     return match.scheduleItem?.assignedJudgeId === user.id || Boolean(match.scheduleItem?.court.judgeAssignments.some((assignment) => assignment.judgeUserId === user.id));
   }

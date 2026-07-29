@@ -10,7 +10,8 @@ import type { MatchDto } from '@/types/tournament';
 import { InlineNotice, StatusLabel, TournamentPanel, TournamentSectionHeader } from './TournamentUI';
 import { useTournamentRealtime } from '@/hooks/useTournamentRealtime';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { tournamentCopy, tournamentRound, tournamentStatus } from '@/lib/i18n/tournament';
+import { visibleSlots } from '@/lib/matchResult';
+import { fillTemplate, tournamentCopy, tournamentRound, tournamentStatus } from '@/lib/i18n/tournament';
 
 type MatchDetailDto = Omit<MatchDto, 'scoreA' | 'scoreB'> & {
   scoreA: number | null;
@@ -62,6 +63,7 @@ function MatchResultSheet({ match }: { match: MatchDetailDto }) {
   const scoreDescription = isCompleted ? (resultVisible ? copy.matchDetail.finalScoreDescription : copy.matchDetail.resultPendingDescription) : isLive ? copy.matchDetail.liveScoreDescription : copy.matchDetail.lineupDescription;
   const badge = isCompleted ? (resultVisible ? copy.matchDetail.badge : copy.matchDetail.completeBadge) : isLive ? copy.matchDetail.liveBadge : copy.matchDetail.scheduledBadge;
   const court = match.scheduleItem?.court;
+  const slots = resultVisible || isLive ? visibleSlots(match) : [];
 
   return (
     <>
@@ -86,6 +88,27 @@ function MatchResultSheet({ match }: { match: MatchDetailDto }) {
           <DetailSide side="B" team={sideB.team} isBye={sideB.isBye} score={(isLive || isCompleted) && resultVisible ? match.scoreB ?? undefined : undefined} winner={winnerSide === 'B'} />
         </div>
       </TournamentPanel>
+
+      {slots.length ? (
+        <TournamentPanel className="mt-5 rounded-sm border-[var(--padel-line)] bg-[var(--padel-red-2)]/40">
+          <TournamentSectionHeader title={copy.matchDetail.slotBreakdown} description={copy.matchDetail.slotBreakdownDescription} />
+          <ol className="divide-y divide-[var(--padel-line)]">
+            {slots.map((slot) => {
+              const winnerTeam = slot.winnerSide === 'A' ? sideA.team : sideB.team;
+              return (
+                <li key={slot.slotNumber} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--padel-muted)]">
+                    {fillTemplate(copy.matchDetail.slotRow, { number: slot.slotNumber })}
+                  </span>
+                  <span className="text-sm font-semibold text-[var(--padel-ivory)]">
+                    {winnerTeam ? `${winnerTeam.ownerName} / ${winnerTeam.teammateName}` : (slot.winnerSide === 'A' ? copy.common.sideA : copy.common.sideB)}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </TournamentPanel>
+      ) : null}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Fact icon={CalendarDays} label={copy.matchDetail.event} value={match.bracket?.event.title ?? '-'} />

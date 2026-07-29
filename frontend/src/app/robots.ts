@@ -20,7 +20,7 @@ export default function robots(): MetadataRoute.Robots {
           '/notifications/',
           '/invite',
           '/invite/',
-          '/complete-club',
+          '/complete-club', '/register/status',
           '/complete-club/',
           '/login',
           '/login/',

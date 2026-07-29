@@ -10,13 +10,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ error?: string; step?: string }> }) {
   const user = await getCurrentUser();
-  if (user) redirect(user.role === 'ADMIN' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
+  if (user) redirect(user.role === 'ADMIN' || user.role === 'ORGANISER' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
 
   return (
     <AuthShell variant="register">
-      <RegisterForm oauthError={(await searchParams).error} />
+      <RegisterForm {...(({ error, step }) => ({ oauthError: error, initialStep: step }))(await searchParams)} />
     </AuthShell>
   );
 }

@@ -2,20 +2,20 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { Pencil, Plus, Tags, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   DashboardField,
   DashboardModal,
+  DataTable,
   EmptyState,
   FeedbackBanner,
   SectionHeading,
-  SurfaceCard,
   formControlClassName,
   softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
-import { Reveal } from '@/components/padel/home/motion';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -141,21 +141,23 @@ export function AdminCategoriesClient() {
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
-      <div className="mb-6 flex justify-end">
-        <Button
-          variant="red"
-          className="rounded-md"
-          onClick={() => {
-            setForm(emptyForm);
-            setCreateOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          {copy.showCreate}
-        </Button>
-      </div>
-
-      <SectionHeading title={copy.listTitle} description={copy.listDescription} />
+      <SectionHeading
+        title={copy.listTitle}
+        description={copy.listDescription}
+        actions={
+          <Button
+            variant="red"
+            className="min-h-11 rounded-md"
+            onClick={() => {
+              setForm(emptyForm);
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            {copy.showCreate}
+          </Button>
+        }
+      />
       <div className="mt-4 grid gap-3">
         {loading ? <EmptyState title={copy.loading} icon={Tags} /> : null}
         {!loading && !categories.length ? (
@@ -164,56 +166,85 @@ export function AdminCategoriesClient() {
             description={admin.events.noCategoriesDescription}
             icon={Tags}
             action={
-              <Button variant="red" className="rounded-md" onClick={() => setCreateOpen(true)}>
+              <Button variant="red" className="min-h-11 rounded-md" onClick={() => setCreateOpen(true)}>
                 {copy.showCreate}
               </Button>
             }
           />
         ) : null}
-        {categories.map((category, index) => {
-          const inUse = (category.eventCount ?? 0) > 0;
-          return (
-            <Reveal key={category.id} delay={Math.min(index * 0.04, 0.2)}>
-              <SurfaceCard>
-                <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <h3 className="font-display text-lg font-semibold text-[var(--padel-ivory)]">{category.name}</h3>
-                    <p className="mt-2 text-sm leading-6 text-[rgba(213,201,177,0.55)]">
-                      {category.description || copy.noDescription}
-                    </p>
-                    {inUse ? (
-                      <p className="mt-2 text-xs text-[rgba(213,201,177,0.4)]">
-                        {copy.inUseByEvents.replace('{count}', String(category.eventCount))}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={cn(softButtonClassName, 'rounded-md')}
-                      onClick={() => openEdit(category)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                      {copy.edit}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={cn(softButtonClassName, 'rounded-md')}
-                      disabled={inUse}
-                      title={inUse ? admin.messages.categoryInUse : undefined}
-                      onClick={() => openDelete(category)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {copy.delete}
-                    </Button>
-                  </div>
-                </div>
-              </SurfaceCard>
-            </Reveal>
-          );
-        })}
+        {!loading && categories.length ? (
+          <DataTable
+            rows={categories}
+            rowKey={(category) => category.id}
+            minWidthClassName="min-w-[720px]"
+            actionsHeader={copy.columnActions}
+            columns={[
+              {
+                key: 'name',
+                header: copy.columnName,
+                width: 'w-[30%]',
+                cell: (category) => (
+                  <span className="block truncate font-medium text-[var(--dash-text)]" title={category.name}>
+                    {category.name}
+                  </span>
+                ),
+              },
+              {
+                key: 'description',
+                header: copy.columnDescription,
+                width: 'w-[40%]',
+                cell: (category) => (
+                  <p className="line-clamp-2 text-sm leading-6 text-[var(--dash-muted)]">
+                    {category.description || copy.noDescription}
+                  </p>
+                ),
+              },
+              {
+                key: 'usage',
+                header: copy.columnUsage,
+                width: 'w-[16%]',
+                cell: (category) =>
+                  (category.eventCount ?? 0) > 0 ? (
+                    <Badge className="border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]">
+                      {copy.inUseByEvents.replace('{count}', String(category.eventCount))}
+                    </Badge>
+                  ) : (
+                    <span className="text-sm text-[var(--dash-faint)]">{copy.notInUse}</span>
+                  ),
+              },
+            ]}
+            renderActions={(category) => {
+              const inUse = (category.eventCount ?? 0) > 0;
+              return (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={cn(softButtonClassName, 'rounded-md')}
+                    aria-label={copy.edit}
+                    title={copy.edit}
+                    onClick={() => openEdit(category)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    <span className="hidden 2xl:inline">{copy.edit}</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-md border-[rgba(194,65,59,0.28)] bg-white text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]"
+                    disabled={inUse}
+                    aria-label={copy.delete}
+                    title={inUse ? admin.messages.categoryInUse : copy.delete}
+                    onClick={() => openDelete(category)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="hidden 2xl:inline">{copy.delete}</span>
+                  </Button>
+                </>
+              );
+            }}
+          />
+        ) : null}
       </div>
 
       <DashboardModal

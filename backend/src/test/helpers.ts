@@ -129,7 +129,7 @@ export function authedGet(app: Express, path: string, user?: Pick<User, 'id' | '
 /** Unsafe method with a valid CSRF double-submit and optional session cookie. */
 export async function authedSend(
   app: Express,
-  method: 'post' | 'patch' | 'delete',
+  method: 'post' | 'put' | 'patch' | 'delete',
   path: string,
   user: Pick<User, 'id' | 'sessionVersion'> | undefined,
   body: Record<string, unknown> = {},

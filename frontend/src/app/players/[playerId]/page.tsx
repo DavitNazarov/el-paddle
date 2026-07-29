@@ -11,7 +11,7 @@ import { breadcrumbJsonLd, buildPageMetadata, personJsonLd } from '@/lib/seo';
 type PlayerProfilePageProps = { params: Promise<{ playerId: string }> };
 
 async function getPlayer(playerId: string) {
-  const response = await fetch(apiUrl(`/api/public/players/${encodeURIComponent(playerId)}`), { cache: 'no-store' });
+  const response = await fetch(apiUrl(`/api/public/players/${encodeURIComponent(playerId)}`), { next: { revalidate: 300 } });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('Could not load player profile.');
   return ((await response.json()) as { player: PublicPlayer }).player;

@@ -25,7 +25,7 @@ function safeNextPath(value?: string) {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const user = await getCurrentUser();
-  if (user) redirect(user.role === 'ADMIN' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
+  if (user) redirect(user.role === 'ADMIN' || user.role === 'ORGANISER' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
   const nextPath = safeNextPath(params.next);
 
   return (

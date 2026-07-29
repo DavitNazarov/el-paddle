@@ -1,12 +1,22 @@
 import { MatchStatus, NotificationType, ScheduleItemStatus, UserRole, UserStatus, type Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../../database/prisma.js';
-import { jsonError } from '../../common/http.js';
+import { isValidEmail, jsonError } from '../../common/http.js';
+import { createUserByAdmin } from '../users/users.service.js';
+import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import { entryUserSelect } from '../../common/includes.js';
+import { firstMovablePosition, isFrozen, isQueueFinished, validateQueueReorder } from './queueOrdering.js';
+
+const scheduleMatchInclude = {
+  participantA: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } },
+  participantB: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } },
+  bracket: { include: { eventCategory: { include: { category: true } } } },
+} satisfies Prisma.MatchInclude;
 
 export const scheduleInclude = {
-  judgeAssignments: { include: { judge: true }, where: { revokedAt: null }, orderBy: { startsAt: 'asc' as const } },
+  judgeAssignments: { include: { judge: { select: entryUserSelect } }, where: { revokedAt: null }, orderBy: { startsAt: 'asc' as const } },
   scheduleItems: {
-    include: { match: { include: { participantA: { include: { owner: true, teammate: true } }, participantB: { include: { owner: true, teammate: true } }, bracket: { include: { eventCategory: { include: { category: true } } } } } } },
+    include: { match: { include: scheduleMatchInclude } },
     orderBy: { queuePosition: 'asc' as const },
   },
 } satisfies Prisma.CourtInclude;
@@ -16,6 +26,117 @@ async function assertEventEditable(tx: Prisma.TransactionClient, eventId: string
   if (!event) jsonError('Event not found.', 404);
   if (event.status === 'COMPLETED') jsonError('Reopen the completed event before changing its schedule.', 409);
   return event;
+}
+
+/**
+ * A judge may only work an event they have been admitted to. Admins holding
+ * global JUDGE_MANAGE are admitted implicitly — picking a judge from the global
+ * roster stays one click for them — but an organiser is confined to the pool
+ * they built, which is what keeps one event's judges out of another's schedule.
+ */
+export async function ensureEventJudge(
+  tx: Prisma.TransactionClient,
+  eventId: string,
+  judgeId: string,
+  actor: { id: string; canManageAllJudges: boolean },
+) {
+  const link = await tx.eventJudge.findUnique({
+    where: { eventId_userId: { eventId, userId: judgeId } },
+  });
+  if (link && !link.revokedAt) return;
+  if (!actor.canManageAllJudges) {
+    jsonError('That judge is not part of this event. Add them to the event first.', 403);
+  }
+
+  const judge = await tx.user.findFirst({ where: { id: judgeId, role: UserRole.JUDGE } });
+  if (!judge) jsonError('Judge not found.', 404);
+
+  await tx.eventJudge.upsert({
+    where: { eventId_userId: { eventId, userId: judgeId } },
+    update: { revokedAt: null, createdById: actor.id },
+    create: { eventId, userId: judgeId, createdById: actor.id },
+  });
+}
+
+export async function listEventJudges(eventId: string) {
+  const links = await prisma.eventJudge.findMany({
+    where: { eventId, revokedAt: null },
+    include: { user: { select: entryUserSelect } },
+    orderBy: { createdAt: 'asc' },
+  });
+  return links.map((link) => ({ ...link.user, addedAt: link.createdAt.toISOString() }));
+}
+
+/**
+ * Admit a judge to one event, inviting them if they have no account yet. Role
+ * changes stay out of reach: an address already belonging to a player or admin
+ * is refused rather than converted.
+ */
+export async function addEventJudge(input: {
+  eventId: string;
+  actorId: string;
+  email: string;
+  name: string;
+  surname: string;
+}) {
+  const email = input.email.trim().toLowerCase();
+  if (!isValidEmail(email)) jsonError('Enter a valid judge email.');
+  if (!input.name.trim() || !input.surname.trim()) jsonError('Judge name and surname are required.');
+
+  const event = await prisma.event.findUnique({ where: { id: input.eventId }, select: { id: true } });
+  if (!event) jsonError('Event not found.', 404);
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing && existing.role !== UserRole.JUDGE) {
+    jsonError('This email already belongs to another account. An admin must change its role.', 409);
+  }
+
+  const created = existing
+    ? { user: existing, invited: false }
+    : await createUserByAdmin({
+        email,
+        name: input.name.trim(),
+        surname: input.surname.trim(),
+        role: UserRole.JUDGE,
+      });
+
+  await prisma.eventJudge.upsert({
+    where: { eventId_userId: { eventId: input.eventId, userId: created.user.id } },
+    update: { revokedAt: null, createdById: input.actorId },
+    create: { eventId: input.eventId, userId: created.user.id, createdById: input.actorId },
+  });
+
+  return created;
+}
+
+/** Remove a judge from one event. The account itself is untouched. */
+export async function revokeEventJudge(input: { eventId: string; userId: string; actorId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const link = await tx.eventJudge.findUnique({
+      where: { eventId_userId: { eventId: input.eventId, userId: input.userId } },
+    });
+    if (!link || link.revokedAt) jsonError('That judge is not part of this event.', 404);
+
+    await tx.eventJudge.update({ where: { id: link.id }, data: { revokedAt: new Date() } });
+    // Leaving live assignments behind would let a removed judge keep scoring.
+    await tx.courtJudgeAssignment.updateMany({
+      where: { judgeUserId: input.userId, revokedAt: null, court: { eventId: input.eventId } },
+      data: { revokedAt: new Date() },
+    });
+    await tx.scheduleItem.updateMany({
+      where: { assignedJudgeId: input.userId, court: { eventId: input.eventId } },
+      data: { assignedJudgeId: null },
+    });
+    await writeAudit(tx, {
+      action: 'event.judge.revoked',
+      actorId: input.actorId,
+      eventId: input.eventId,
+      entityType: 'EventJudge',
+      entityId: link.id,
+      after: { userId: input.userId },
+    });
+    return { ok: true };
+  });
 }
 
 export async function listEventSchedule(eventId: string, publicOnly = false) {
@@ -53,12 +174,13 @@ export async function updateCourt(input: { eventId: string; courtId: string; act
   });
 }
 
-export async function assignJudge(input: { eventId: string; courtId: string; judgeId: string; actorId: string; startsAt: Date; endsAt: Date }) {
+export async function assignJudge(input: { eventId: string; courtId: string; judgeId: string; actorId: string; canManageAllJudges: boolean; startsAt: Date; endsAt: Date }) {
   if (!(input.startsAt < input.endsAt)) jsonError('Assignment end must be after start.');
   return prisma.$transaction(async (tx) => {
     await assertEventEditable(tx, input.eventId);
     const court = await tx.court.findFirst({ where: { id: input.courtId, eventId: input.eventId, active: true } });
     if (!court) jsonError('Court not found.', 404);
+    await ensureEventJudge(tx, input.eventId, input.judgeId, { id: input.actorId, canManageAllJudges: input.canManageAllJudges });
     const judge = await tx.user.findFirst({ where: { id: input.judgeId, role: UserRole.JUDGE, status: UserStatus.ACTIVE } });
     if (!judge) jsonError('Active judge not found.', 404);
     const overlap = await tx.courtJudgeAssignment.findFirst({ where: { judgeUserId: input.judgeId, revokedAt: null, startsAt: { lt: input.endsAt }, endsAt: { gt: input.startsAt } } });
@@ -70,15 +192,17 @@ export async function assignJudge(input: { eventId: string; courtId: string; jud
   });
 }
 
-export async function scheduleMatch(input: { eventId: string; matchId: string; courtId: string; judgeId?: string; plannedStartAt?: Date; plannedEndAt?: Date; actorId: string }) {
+export async function scheduleMatch(input: { eventId: string; matchId: string; courtId: string; judgeId?: string; plannedStartAt?: Date; plannedEndAt?: Date; actorId: string; canManageAllJudges: boolean }) {
   return prisma.$transaction(async (tx) => {
     await assertEventEditable(tx, input.eventId);
     const court = await tx.court.findFirst({ where: { id: input.courtId, eventId: input.eventId, active: true } });
-    const match = await tx.match.findFirst({ where: { id: input.matchId, bracket: { eventId: input.eventId } }, include: { participantA: { include: { owner: true, teammate: true } }, participantB: { include: { owner: true, teammate: true } } } });
+    const match = await tx.match.findFirst({ where: { id: input.matchId, bracket: { eventId: input.eventId } }, include: { participantA: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } }, participantB: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } } } });
     if (!court || !match) jsonError('Court or match not found.', 404);
     if (match.status === MatchStatus.COMPLETED) jsonError('Completed matches cannot be scheduled.', 409);
     if (await tx.scheduleItem.findUnique({ where: { matchId: match.id } })) jsonError('Match is already scheduled.', 409);
+    await assertCourtQueueMutable(tx, court.id);
     if (input.judgeId) {
+      await ensureEventJudge(tx, input.eventId, input.judgeId, { id: input.actorId, canManageAllJudges: input.canManageAllJudges });
       const assignment = await tx.courtJudgeAssignment.findFirst({ where: { courtId: court.id, judgeUserId: input.judgeId, revokedAt: null, ...(input.plannedStartAt ? { startsAt: { lte: input.plannedStartAt }, endsAt: { gte: input.plannedStartAt } } : {}) } });
       if (!assignment) jsonError('Judge is not assigned to this court at that time.', 409);
     }
@@ -92,36 +216,94 @@ export async function scheduleMatch(input: { eventId: string; matchId: string; c
   });
 }
 
-export async function reorderSchedule(input: { eventId: string; courtId: string; actorId: string; itemIds: string[] }) {
+/** Renumbers a court queue to 1..n in the given order, dodging the (courtId, queuePosition) unique. */
+async function renumberQueue(tx: Prisma.TransactionClient, courtId: string, orderedIds: string[]) {
+  const existing = await tx.scheduleItem.findMany({ where: { courtId }, select: { id: true, queuePosition: true } });
+  for (const item of existing) await tx.scheduleItem.update({ where: { id: item.id }, data: { queuePosition: item.queuePosition + 1000 } });
+  for (const [index, id] of orderedIds.entries()) await tx.scheduleItem.update({ where: { id }, data: { queuePosition: index + 1, version: { increment: 1 } } });
+}
+
+async function assertCourtQueueMutable(tx: Prisma.TransactionClient, courtId: string) {
+  const items = await tx.scheduleItem.findMany({ where: { courtId }, select: { status: true } });
+  if (isQueueFinished(items)) jsonError('This court queue is finished and can no longer be changed.', 409);
+}
+
+export async function reorderSchedule(input: { eventId: string; courtId: string; actorId: string; items: { id: string; version: number }[]; commandId: string }) {
+  const hash = payloadHash(input);
   return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'schedule.reorder', input.commandId, hash);
+    if (replay) return;
     await assertEventEditable(tx, input.eventId);
-    const items = await tx.scheduleItem.findMany({ where: { courtId: input.courtId, court: { eventId: input.eventId } } });
-    if (items.length !== input.itemIds.length || new Set(input.itemIds).size !== items.length || input.itemIds.some((id) => !items.some((item) => item.id === id))) jsonError('Queue list is incomplete.', 409);
-    for (const item of items) await tx.scheduleItem.update({ where: { id: item.id }, data: { queuePosition: item.queuePosition + 1000 } });
-    for (const [index, id] of input.itemIds.entries()) await tx.scheduleItem.update({ where: { id }, data: { queuePosition: index + 1, version: { increment: 1 } } });
-    await writeAudit(tx, { action: 'schedule.reordered', actorId: input.actorId, eventId: input.eventId, entityType: 'Court', entityId: input.courtId, after: { itemIds: input.itemIds } });
-    await queueOutbox(tx, { topic: 'court.queue.updated', aggregateType: 'Court', aggregateId: input.courtId, payload: { eventId: input.eventId, courtId: input.courtId }, deduplicationKey: `court:${input.courtId}:reorder:${Date.now()}` });
+    const current = await tx.scheduleItem.findMany({ where: { courtId: input.courtId, court: { eventId: input.eventId } }, select: { id: true, queuePosition: true, status: true, version: true } });
+    const problem = validateQueueReorder(current, input.items);
+    if (problem?.kind === 'finished') jsonError('This court queue is finished and can no longer be changed.', 409);
+    if (problem?.kind === 'incomplete') jsonError('Queue list is incomplete.', 409);
+    if (problem?.kind === 'stale') jsonError('Queue changed. Refresh and try again.', 409);
+    if (problem?.kind === 'frozen') jsonError('Active and completed matches keep their queue position.', 409);
+    const orderedIds = input.items.map((item) => item.id);
+    await renumberQueue(tx, input.courtId, orderedIds);
+    const maxVersion = Math.max(...input.items.map((item) => item.version)) + 1;
+    await writeAudit(tx, { action: 'schedule.reordered', actorId: input.actorId, eventId: input.eventId, entityType: 'Court', entityId: input.courtId, before: { itemIds: current.sort((a, b) => a.queuePosition - b.queuePosition).map((item) => item.id) }, after: { itemIds: orderedIds } });
+    await queueOutbox(tx, { topic: 'court.queue.updated', aggregateType: 'Court', aggregateId: input.courtId, payload: { eventId: input.eventId, courtId: input.courtId }, deduplicationKey: `court:${input.courtId}:reorder:v${maxVersion}` });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'schedule.reorder', commandId: input.commandId, hash });
   });
 }
 
-export async function updateScheduleItem(input: { eventId: string; itemId: string; actorId: string; courtId?: string; judgeId?: string | null; plannedStartAt?: Date | null; plannedEndAt?: Date | null; expectedVersion: number }) {
+export async function updateScheduleItem(input: { eventId: string; itemId: string; actorId: string; canManageAllJudges: boolean; courtId?: string; queuePosition?: number; judgeId?: string | null; plannedStartAt?: Date | null; plannedEndAt?: Date | null; expectedVersion: number; commandId: string }) {
+  const hash = payloadHash(input);
   return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'schedule.item.update', input.commandId, hash);
+    if (replay) return tx.scheduleItem.findUniqueOrThrow({ where: { id: input.itemId } });
     await assertEventEditable(tx, input.eventId);
     const item = await tx.scheduleItem.findFirst({ where: { id: input.itemId, court: { eventId: input.eventId } } });
     if (!item) jsonError('Schedule item not found.', 404);
     if (item.version !== input.expectedVersion) jsonError('Schedule item changed. Refresh and try again.', 409);
-    if (item.status === ScheduleItemStatus.IN_PROGRESS || item.status === ScheduleItemStatus.COMPLETED) jsonError('Active or completed schedule items cannot be moved.', 409);
-    let queuePosition = item.queuePosition;
-    if (input.courtId && input.courtId !== item.courtId) {
-      const court = await tx.court.findFirst({ where: { id: input.courtId, eventId: input.eventId, active: true } });
+    if (isFrozen(item)) jsonError('Active or completed schedule items cannot be moved.', 409);
+    const targetCourtId = input.courtId ?? item.courtId;
+    const movingCourt = targetCourtId !== item.courtId;
+    if (movingCourt) {
+      const court = await tx.court.findFirst({ where: { id: targetCourtId, eventId: input.eventId, active: true } });
       if (!court) jsonError('Court not found.', 404);
-      const last = await tx.scheduleItem.aggregate({ where: { courtId: court.id }, _max: { queuePosition: true } });
-      queuePosition = (last._max.queuePosition ?? 0) + 1;
+      await assertCourtQueueMutable(tx, targetCourtId);
     }
-    const updated = await tx.scheduleItem.update({ where: { id: item.id }, data: { ...(input.courtId ? { courtId: input.courtId, queuePosition } : {}), ...(input.judgeId !== undefined ? { assignedJudgeId: input.judgeId } : {}), ...(input.plannedStartAt !== undefined ? { plannedStartAt: input.plannedStartAt } : {}), ...(input.plannedEndAt !== undefined ? { plannedEndAt: input.plannedEndAt } : {}), version: { increment: 1 } } });
-    await writeAudit(tx, { action: 'match.rescheduled', actorId: input.actorId, eventId: input.eventId, entityType: 'ScheduleItem', entityId: item.id, before: { courtId: item.courtId, plannedStartAt: item.plannedStartAt?.toISOString() }, after: { courtId: updated.courtId, plannedStartAt: updated.plannedStartAt?.toISOString() } });
-    await queueOutbox(tx, { topic: 'schedule.updated', aggregateType: 'ScheduleItem', aggregateId: item.id, payload: { eventId: input.eventId, courtId: updated.courtId, itemId: item.id, version: updated.version }, deduplicationKey: `schedule-item:${item.id}:v${updated.version}` });
-    return updated;
+    if (input.judgeId) {
+      await ensureEventJudge(tx, input.eventId, input.judgeId, { id: input.actorId, canManageAllJudges: input.canManageAllJudges });
+    }
+
+    const sourceCourtId = item.courtId;
+    const updated = await tx.scheduleItem.update({
+      where: { id: item.id },
+      data: {
+        ...(input.judgeId !== undefined ? { assignedJudgeId: input.judgeId } : {}),
+        ...(input.plannedStartAt !== undefined ? { plannedStartAt: input.plannedStartAt } : {}),
+        ...(input.plannedEndAt !== undefined ? { plannedEndAt: input.plannedEndAt } : {}),
+        version: { increment: 1 },
+      },
+    });
+
+    if (movingCourt || input.queuePosition !== undefined) {
+      // Park the item on a negative position so neither renumber pass collides with it.
+      await tx.scheduleItem.update({ where: { id: item.id }, data: { courtId: targetCourtId, queuePosition: -1 } });
+      if (movingCourt) {
+        const sourceRemaining = await tx.scheduleItem.findMany({ where: { courtId: sourceCourtId, id: { not: item.id } }, orderBy: { queuePosition: 'asc' }, select: { id: true } });
+        await renumberQueue(tx, sourceCourtId, sourceRemaining.map((row) => row.id));
+      }
+      const targetItems = await tx.scheduleItem.findMany({ where: { courtId: targetCourtId, id: { not: item.id } }, orderBy: { queuePosition: 'asc' }, select: { id: true, queuePosition: true, status: true } });
+      const lowest = firstMovablePosition(targetItems);
+      const requested = input.queuePosition ?? targetItems.length + 1;
+      if (requested < lowest) jsonError('Matches cannot be placed before the active match.', 409);
+      const insertAt = Math.min(Math.max(requested, lowest), targetItems.length + 1);
+      const orderedIds = targetItems.map((row) => row.id);
+      orderedIds.splice(insertAt - 1, 0, item.id);
+      await renumberQueue(tx, targetCourtId, orderedIds);
+    }
+
+    const result = await tx.scheduleItem.findUniqueOrThrow({ where: { id: item.id } });
+    await writeAudit(tx, { action: 'match.rescheduled', actorId: input.actorId, eventId: input.eventId, entityType: 'ScheduleItem', entityId: item.id, before: { courtId: item.courtId, queuePosition: item.queuePosition, plannedStartAt: item.plannedStartAt?.toISOString() }, after: { courtId: result.courtId, queuePosition: result.queuePosition, plannedStartAt: result.plannedStartAt?.toISOString() } });
+    await queueOutbox(tx, { topic: 'schedule.updated', aggregateType: 'ScheduleItem', aggregateId: item.id, payload: { eventId: input.eventId, courtId: result.courtId, itemId: item.id, version: result.version }, deduplicationKey: `schedule-item:${item.id}:v${result.version}` });
+    if (movingCourt) await queueOutbox(tx, { topic: 'court.queue.updated', aggregateType: 'Court', aggregateId: sourceCourtId, payload: { eventId: input.eventId, courtId: sourceCourtId }, deduplicationKey: `court:${sourceCourtId}:vacated:${item.id}:v${result.version}` });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'schedule.item.update', commandId: input.commandId, hash });
+    return result;
   });
 }
 
@@ -155,9 +337,38 @@ export async function listJudgeAssignments(judgeId: string) {
   return prisma.courtJudgeAssignment.findMany({ where: { judgeUserId: judgeId, revokedAt: null, endsAt: { gte: new Date() } }, include: { court: { include: { event: true } } }, orderBy: { startsAt: 'asc' } });
 }
 
+/**
+ * A judge's match day in one read: every live assignment, plus the state of the
+ * court queue behind it. The assignments list alone only answers "where should
+ * I be" — it cannot say whether a match is running, so the judge home had no
+ * way to lead with the match actually in front of the judge.
+ *
+ * The queue itself stays authorized per court by `requireJudgeQueue`; this is a
+ * read of queues the judge is already assigned to.
+ */
+export async function getJudgeHome(judgeId: string) {
+  const assignments = await listJudgeAssignments(judgeId);
+  const queues = await Promise.all(assignments.map((assignment) => courtQueue(assignment.courtId)));
+  return assignments.map((assignment, index) => ({ assignment, items: queues[index]! }));
+}
+
+function courtQueue(courtId: string) {
+  return prisma.scheduleItem.findMany({ where: { courtId }, include: { match: { include: scheduleMatchInclude }, court: true }, orderBy: { queuePosition: 'asc' } });
+}
+
 export async function requireJudgeQueue(judgeId: string, eventId: string, courtId: string) {
   const now = new Date();
   const assignment = await prisma.courtJudgeAssignment.findFirst({ where: { judgeUserId: judgeId, courtId, court: { eventId }, revokedAt: null, startsAt: { lte: now }, endsAt: { gte: now } } });
   if (!assignment) jsonError('Court assignment not found.', 404);
-  return prisma.scheduleItem.findMany({ where: { courtId }, include: { match: { include: { participantA: { include: { owner: true, teammate: true } }, participantB: { include: { owner: true, teammate: true } }, bracket: { include: { eventCategory: { include: { category: true } } } } } }, court: true }, orderBy: { queuePosition: 'asc' } });
+  return courtQueue(courtId);
+}
+
+/**
+ * The same queue for an actor who runs the event rather than a court, so an
+ * admin or organiser can score without first assigning themselves to a court.
+ */
+export async function requireEventCourtQueue(eventId: string, courtId: string) {
+  const court = await prisma.court.findFirst({ where: { id: courtId, eventId }, select: { id: true } });
+  if (!court) jsonError('Court not found.', 404);
+  return courtQueue(courtId);
 }

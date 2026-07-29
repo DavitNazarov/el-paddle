@@ -15,6 +15,8 @@ import {
   MatchSide,
   ScoreAction,
   ScheduleItemStatus,
+  ScoringMode,
+  SlotEventAction,
   OpponentRequestStatus,
 } from '../src/generated/prisma/client';
 
@@ -150,10 +152,34 @@ type BuiltMatch = {
   version: number;
   startedAt: Date | null;
   completedAt: Date | null;
+  scoringMode: ScoringMode;
+  slotCount: number | null;
   // helper-only fields (not persisted directly):
   judgeUserId: string | null;
   emitScoreEvents: boolean;
+  slots: { slotNumber: number; winnerSide: MatchSide }[];
 };
+
+/** Slot wins a round races to, so the fixtures show the per-round format in use. */
+function slotCountForRound(round: MatchRound) {
+  if (round === MatchRound.FINAL) return 3;
+  if (round === MatchRound.SEMIFINAL) return 2;
+  return 1;
+}
+
+/**
+ * A plausible slot sequence in which `winnerSide` reaches `slotCount` wins last, taking
+ * `loserSlots` along the way.
+ */
+function slotSequence(winnerSide: MatchSide, slotCount: number, loserSlots: number) {
+  const loserSide = winnerSide === MatchSide.A ? MatchSide.B : MatchSide.A;
+  const sides = [
+    ...Array.from({ length: slotCount - 1 }, () => winnerSide),
+    ...Array.from({ length: Math.min(loserSlots, slotCount - 1) }, () => loserSide),
+    winnerSide,
+  ];
+  return sides.map((side, index) => ({ slotNumber: index + 1, winnerSide: side }));
+}
 
 // -------------------------------------------------------------------------
 // Prisma upsert helpers
@@ -242,6 +268,13 @@ async function main() {
     });
     judges.push({ id: j.id, name: `${j.name} ${j.surname}` });
   }
+
+  const organiser = await upsertUser({
+    email: 'organiser@example.com',
+    name: 'Nino',
+    surname: 'Organizatori',
+    role: UserRole.ORGANISER,
+  });
 
   const lukaInvited = await upsertUser({
     email: 'luka.invited@example.com',
@@ -353,10 +386,15 @@ async function main() {
 
   // Delete in dependency order (matches reference registrations with RESTRICT).
   await prisma.scoreEvent.deleteMany({ where: { match: { bracket: { eventId: { in: seedEventIds } } } } });
+  await prisma.slotEvent.deleteMany({ where: { match: { bracket: { eventId: { in: seedEventIds } } } } });
+  await prisma.matchSlot.deleteMany({ where: { match: { bracket: { eventId: { in: seedEventIds } } } } });
+  await prisma.bracketRoundConfig.deleteMany({ where: { bracket: { eventId: { in: seedEventIds } } } });
   await prisma.matchParticipantSnapshot.deleteMany({ where: { match: { bracket: { eventId: { in: seedEventIds } } } } });
   await prisma.scheduleItem.deleteMany({ where: { match: { bracket: { eventId: { in: seedEventIds } } } } });
   await prisma.match.deleteMany({ where: { bracket: { eventId: { in: seedEventIds } } } });
   await prisma.bracket.deleteMany({ where: { eventId: { in: seedEventIds } } });
+  await prisma.eventOrganiser.deleteMany({ where: { eventId: { in: seedEventIds } } });
+  await prisma.eventJudge.deleteMany({ where: { eventId: { in: seedEventIds } } });
   await prisma.courtJudgeAssignment.deleteMany({ where: { court: { eventId: { in: seedEventIds } } } });
   await prisma.court.deleteMany({ where: { eventId: { in: seedEventIds } } });
   await prisma.opponentRequest.deleteMany({ where: { eventId: { in: seedEventIds } } });
@@ -392,6 +430,9 @@ async function main() {
   const judgeAssignmentRows: any[] = [];
   const scheduleRows: any[] = [];
   const scoreEventRows: any[] = [];
+  const matchSlotRows: any[] = [];
+  const slotEventRows: any[] = [];
+  const roundConfigRows: any[] = [];
   const opponentRequestRows: any[] = [];
 
   // ---- Registration factory ----------------------------------------------
@@ -480,6 +521,11 @@ async function main() {
       completedAt: status === BracketStatus.COMPLETED ? atHour(baseDate, 20) : null,
     });
 
+    // Per-round slot defaults matching the format the fixtures were scored with.
+    for (const round of ROUNDS_BY_SIZE[size]) {
+      roundConfigRows.push({ bracketId, round, slotCount: slotCountForRound(round) });
+    }
+
     const slots = seedSlots(size);
     const teamForSeed = (seed: number): Team | null => (seed <= teams.length ? teams[seed - 1] : null);
 
@@ -506,8 +552,11 @@ async function main() {
         version: 0,
         startedAt: null,
         completedAt: null,
+        scoringMode: ScoringMode.SLOTS,
+        slotCount: null,
         judgeUserId: null,
         emitScoreEvents: false,
+        slots: [],
       }));
     });
 
@@ -596,14 +645,18 @@ async function main() {
             m.scoreB = 0;
           } else {
             m.resultType = MatchResultType.NORMAL;
-            m.scoreA = aWins ? 6 : loserPoints;
-            m.scoreB = aWins ? loserPoints : 6;
+            const slotCount = slotCountForRound(m.round);
+            const loserSlots = Math.min(loserPoints % slotCount, slotCount - 1);
+            m.slotCount = slotCount;
+            m.slots = slotSequence(aWins ? MatchSide.A : MatchSide.B, slotCount, loserSlots);
+            m.scoreA = m.slots.filter((slot) => slot.winnerSide === MatchSide.A).length;
+            m.scoreB = m.slots.filter((slot) => slot.winnerSide === MatchSide.B).length;
             if (liveScoring && judgePool && judgePool.length) {
               m.judgeUserId = judgePool[m.matchNumber % judgePool.length].id;
               m.emitScoreEvents = true;
             }
           }
-          m.version = m.scoreA + m.scoreB;
+          m.version = m.slots.length + 1;
           recordResult(winnerTeam, loserTeam);
           promote(m, winnerTeam.regId);
         } else if (isDraft) {
@@ -615,9 +668,11 @@ async function main() {
           if (frontierInProgress) {
             m.status = MatchStatus.IN_PROGRESS;
             m.startedAt = atHour(baseDate, 15);
-            m.scoreA = 4;
-            m.scoreB = 3;
-            m.version = 7;
+            m.slotCount = 2;
+            m.slots = [{ slotNumber: 1, winnerSide: MatchSide.A }];
+            m.scoreA = 1;
+            m.scoreB = 0;
+            m.version = 2;
             if (judgePool && judgePool.length) {
               m.judgeUserId = judgePool[0].id;
               m.emitScoreEvents = true;
@@ -680,23 +735,34 @@ async function main() {
           });
         }
 
-        // Score-event history for scored matches.
-        if (m.emitScoreEvents && m.judgeUserId) {
-          const seq = scoreSequence(m.scoreA, m.scoreB);
-          let v = 0;
-          for (const step of seq) {
-            v += 1;
-            scoreEventRows.push({
+        // Decided slots plus their append-only history, for matches a judge scored.
+        if (m.slots.length && m.judgeUserId) {
+          let slotsA = 0;
+          let slotsB = 0;
+          for (const slot of m.slots) {
+            const winnerEntryId = (slot.winnerSide === MatchSide.A ? m.participantAEntryId : m.participantBEntryId)!;
+            matchSlotRows.push({
               matchId: m.id,
-              judgeUserId: m.judgeUserId,
-              action: ScoreAction.INCREMENT,
-              side: step.side,
-              scoreABefore: step.aBefore,
-              scoreAAfter: step.aAfter,
-              scoreBBefore: step.bBefore,
-              scoreBAfter: step.bAfter,
-              matchVersion: v,
-              commandId: nextCommandId('score'),
+              slotNumber: slot.slotNumber,
+              winnerSide: slot.winnerSide,
+              winnerEntryId,
+              decidedById: m.judgeUserId,
+            });
+            const before = { a: slotsA, b: slotsB };
+            if (slot.winnerSide === MatchSide.A) slotsA += 1; else slotsB += 1;
+            slotEventRows.push({
+              matchId: m.id,
+              actorId: m.judgeUserId,
+              action: SlotEventAction.DECIDED,
+              slotNumber: slot.slotNumber,
+              winnerSide: slot.winnerSide,
+              winnerEntryId,
+              slotsABefore: before.a,
+              slotsBBefore: before.b,
+              slotsAAfter: slotsA,
+              slotsBAfter: slotsB,
+              matchVersion: slot.slotNumber + 1,
+              commandId: nextCommandId('slot'),
             });
           }
         }
@@ -1066,6 +1132,8 @@ async function main() {
         version: m.version,
         startedAt: m.startedAt,
         completedAt: m.completedAt,
+        scoringMode: m.scoringMode,
+        slotCount: m.slotCount,
       },
     });
   }
@@ -1073,7 +1141,25 @@ async function main() {
   await prisma.matchParticipantSnapshot.createMany({ data: snapshotRows });
   await prisma.scheduleItem.createMany({ data: scheduleRows });
   await prisma.scoreEvent.createMany({ data: scoreEventRows });
+  await prisma.bracketRoundConfig.createMany({ data: roundConfigRows });
+  await prisma.matchSlot.createMany({ data: matchSlotRows });
+  await prisma.slotEvent.createMany({ data: slotEventRows });
   await prisma.opponentRequest.createMany({ data: opponentRequestRows });
+
+  // ---- Per-event staff: judge pools and one organiser hand-off ------------
+  await prisma.eventJudge.createMany({
+    data: seedEventIds.flatMap((eventId) =>
+      judges.map((judge) => ({ eventId, userId: judge.id, createdById: admin.id })),
+    ),
+    skipDuplicates: true,
+  });
+  await prisma.eventOrganiser.create({
+    data: {
+      eventId: 'seed_event_summer_slam_live',
+      userId: organiser.id,
+      assignedById: admin.id,
+    },
+  });
 
   // ---- Apply win/loss/matches tallies to users ---------------------------
   const statUserIds = new Set<string>([...winTally.keys(), ...lossTally.keys(), ...playedTally.keys()]);
@@ -1098,10 +1184,11 @@ async function main() {
   console.log(`Login password for active mock users: ${seedPassword}`);
   console.log('Admin login: admin@example.com');
   console.log('Judges: judge1@example.com … judge5@example.com');
+  console.log('Organiser: organiser@example.com (runs the live Summer Slam event only)');
   console.log('Athletes: athlete001@example.com … athlete036@example.com');
   console.log('Categories: A, B, C, B + C');
   console.log(`Events seeded: ${seedEventIds.length} (completed, ongoing/live, registration-closed, registration-open, draft, archived).`);
-  console.log(`Registrations: ${registrationRows.length}, matches: ${matchRows.length}, score events: ${scoreEventRows.length}.`);
+  console.log(`Registrations: ${registrationRows.length}, matches: ${matchRows.length}, decided slots: ${matchSlotRows.length}.`);
 }
 
 main()

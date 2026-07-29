@@ -1,10 +1,6 @@
-import type { Metadata } from 'next';
-import { AdminUsersClient } from '@/components/admin/AdminUsersClient';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Users — Admin — El Padel',
-};
-
+/** Accounts are managed one role at a time; players are the busiest list. */
 export default function AdminUsersPage() {
-  return <AdminUsersClient />;
+  redirect('/admin/users/players');
 }

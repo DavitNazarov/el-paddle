@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Building2, ClipboardList, Mail, Phone, UserCheck } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -12,35 +11,28 @@ import {
   EmptyState,
   FeedbackBanner,
   FilterChip,
-  RegistrationStatusBadge,
-  SurfaceCard,
   formControlClassName,
   softButtonClassName,
   modalSoftButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
 import { Reveal } from '@/components/padel/home/motion';
+import { QueueMeter } from '@/components/shared/dashboard/DashboardSignals';
+import { SkeletonCards } from '@/components/shared/dashboard/Feedback';
 import { apiFetch, createCommandId } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import { AdminShell } from './AdminShell';
+import { AdminRegistrationCard, isAwaitingReview } from './AdminRegistrationCard';
+import { EventOrganiserPanel } from './EventOrganiserPanel';
 import { CommandButton, StatusLabel, TournamentPanel, TournamentSectionHeader } from '@/components/tournament/TournamentUI';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import type { EventDto, RegistrationDto, RegistrationFilter } from '@/types/admin';
 
-const reviewTransitions: Partial<Record<RegistrationDto['status'], RegistrationDto['status'][]>> = {
-  PENDING: ['APPROVED', 'DECLINED'],
-  APPROVED: ['DECLINED'],
-  NEEDS_CHANGES: ['PENDING', 'APPROVED', 'DECLINED'],
-  WAITLISTED: ['APPROVED', 'DECLINED'],
-};
-
-function canReviewAs(registration: RegistrationDto, status: RegistrationDto['status']) {
-  return reviewTransitions[registration.status]?.includes(status) ?? false;
-}
-
 export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
-  const { dictionary, t, formatDate } = useI18n();
+  const { dictionary, locale, formatDate } = useI18n();
   const admin = dictionary.dashboard.admin;
+  const review = tournamentCopy[locale].admin.review;
   const copy = admin.registrationsPage;
   const [registrations, setRegistrations] = useState<RegistrationDto[]>([]);
   const [event, setEvent] = useState<EventDto | null>(null);
@@ -62,6 +54,8 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
     }),
     [registrations],
   );
+
+  const awaitingCount = useMemo(() => registrations.filter(isAwaitingReview).length, [registrations]);
 
   const filtered = useMemo(() => {
     if (filter === 'ALL') return registrations;
@@ -179,7 +173,14 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
       </Button>
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
-      {isCompleted ? <FeedbackBanner kind="success">This completed event is read-only. Reopen it to change registrations.</FeedbackBanner> : null}
+      {isCompleted ? <FeedbackBanner kind="success">{review.readOnly}</FeedbackBanner> : null}
+
+      {/* Approving the entries is the point at which an event is ready to hand over. */}
+      {eventId ? (
+        <div className="mb-6">
+          <EventOrganiserPanel eventId={eventId} />
+        </div>
+      ) : null}
 
       {event ? (
         <TournamentPanel className="mb-6">
@@ -208,6 +209,21 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
         </TournamentPanel>
       ) : null}
 
+      {/* A reviewer wants to know how much of the queue is left, not just how
+          many entries exist. The meter counts entries that have a decision. */}
+      {registrations.length ? (
+        <div className="mb-6 rounded-xl border border-[var(--dash-border)] bg-white px-5 py-4">
+          <QueueMeter
+            label={review.progress}
+            done={registrations.length - awaitingCount}
+            total={registrations.length}
+            valueLabel={awaitingCount === 0
+              ? review.queueClear
+              : fillTemplate(review.decided, { done: registrations.length - awaitingCount, total: registrations.length })}
+          />
+        </div>
+      ) : null}
+
       <div className="mb-6 flex flex-wrap gap-2">
         <FilterChip active={filter === 'ALL'} count={registrations.length} onClick={() => setFilter('ALL')}>
           {admin.registrations.filterAll}
@@ -224,7 +240,7 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
       </div>
 
       {loading ? (
-        <EmptyState title={admin.registrations.loading} icon={ClipboardList} />
+        <SkeletonCards count={3} columns={2} label={admin.registrations.loading} />
       ) : !registrations.length ? (
         <EmptyState title={admin.registrations.emptyTitle} description={admin.registrations.emptyDescription} icon={ClipboardList} />
       ) : !filtered.length ? (
@@ -240,70 +256,16 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
         />
       ) : (
         <div className="grid gap-4">
-          {filtered.map((registration, index) => {
-            const actionBusy = busy === registration.id;
-            return (
-              <Reveal key={registration.id} delay={Math.min(index * 0.04, 0.2)}>
-                <SurfaceCard>
-                  <div className="grid gap-4 p-4 sm:p-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <RegistrationStatusBadge status={registration.status} />
-                        <Badge className="border-[rgba(213,201,177,0.18)] bg-transparent text-[rgba(213,201,177,0.7)]">
-                          {registration.category.name}
-                        </Badge>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 sm:justify-end">
-                        <Button
-                          variant="red"
-                          className="rounded-md"
-                          disabled={isCompleted || actionBusy || !canReviewAs(registration, 'APPROVED')}
-                          onClick={() => setRegistrationStatus(registration, 'APPROVED')}
-                        >
-                          <UserCheck className="h-4 w-4" />
-                          {admin.registrations.approve}
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          className="rounded-md"
-                          disabled={isCompleted || actionBusy || !canReviewAs(registration, 'DECLINED')}
-                          onClick={() => setRegistrationStatus(registration, 'DECLINED')}
-                        >
-                          {admin.registrations.decline}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className={cn(softButtonClassName, 'rounded-md')}
-                          disabled={isCompleted || actionBusy || !canReviewAs(registration, 'PENDING')}
-                          onClick={() => setRegistrationStatus(registration, 'PENDING')}
-                        >
-                          {admin.registrations.pending}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="grid divide-y divide-[rgba(213,201,177,0.1)] overflow-hidden rounded-xl border border-[rgba(213,201,177,0.1)] bg-[rgba(213,201,177,0.04)] md:grid-cols-2 md:divide-x md:divide-y-0">
-                      <TeamBlock title={copy.playerOne} name={registration.owner.fullName} email={registration.owner.email} phone={registration.ownerPhone} club={registration.owner.club?.name ?? copy.noClub} />
-                      <TeamBlock
-                        title={copy.playerTwo}
-                        name={registration.teammate.fullName}
-                        email={registration.teammate.email}
-                        phone={registration.teammatePhone || admin.registrations.noTeammatePhone}
-                        club={registration.teammate.club?.name ?? copy.noClub}
-                      />
-                    </div>
-
-                    {registration.declineReason ? (
-                      <p className="rounded-xl border border-[var(--padel-ember)]/30 bg-[var(--padel-ember)]/10 px-3 py-2 text-sm text-[var(--padel-gold-2)]">
-                        {t('dashboard.admin.registrations.reason', { reason: registration.declineReason })}
-                      </p>
-                    ) : null}
-                  </div>
-                </SurfaceCard>
-              </Reveal>
-            );
-          })}
+          {filtered.map((registration, index) => (
+            <Reveal key={registration.id} delay={Math.min(index * 0.04, 0.2)}>
+              <AdminRegistrationCard
+                registration={registration}
+                readOnly={isCompleted}
+                busy={busy === registration.id}
+                onReview={(status) => { void setRegistrationStatus(registration, status); }}
+              />
+            </Reveal>
+          ))}
         </div>
       )}
 
@@ -326,7 +288,7 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
         }
       >
         <p className="rounded-lg border border-[rgba(88,16,16,0.12)] bg-white/55 p-4 text-sm leading-6 text-[rgba(88,16,16,0.72)]">
-          {counts.approved} {counts.approved === 1 ? 'approved team' : 'approved teams'}
+          {fillTemplate(review.approvedTeams, { count: counts.approved })}
         </p>
       </DashboardModal>
 
@@ -384,40 +346,5 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
         </DashboardField>
       </DashboardModal>
     </AdminShell>
-  );
-}
-
-function TeamBlock({
-  title,
-  name,
-  email,
-  phone,
-  club,
-}: {
-  title: string;
-  name: string;
-  email: string;
-  phone: string;
-  club: string;
-}) {
-  return (
-    <div className="min-w-0 p-4 sm:p-5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--padel-gold)]">{title}</p>
-      <p className="mt-2 text-lg font-semibold leading-tight text-[var(--padel-ivory)]">{name}</p>
-      <div className="mt-3 grid gap-1.5 text-sm text-[rgba(213,201,177,0.62)]">
-        <p className="flex min-w-0 items-center gap-2">
-          <Mail aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[rgba(213,201,177,0.42)]" />
-          <span className="truncate">{email}</span>
-        </p>
-        <p className="flex min-w-0 items-center gap-2">
-          <Phone aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[rgba(213,201,177,0.42)]" />
-          <span className="truncate">{phone}</span>
-        </p>
-        <p className="flex min-w-0 items-center gap-2 font-medium text-[var(--padel-gold)]">
-          <Building2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{club}</span>
-        </p>
-      </div>
-    </div>
   );
 }

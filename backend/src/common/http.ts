@@ -128,3 +128,21 @@ export function asyncHandler(
     Promise.resolve(handler(request, response, next)).catch(next);
   };
 }
+
+/**
+ * Mark an anonymous, publication-gated GET as cacheable (F5). A short max-age
+ * keeps newly (un)published data fresh within a minute; stale-while-revalidate
+ * lets a shared cache serve instantly while it refreshes in the background. CORS
+ * already emits `Vary: Origin`, so per-origin caching is correct. Never call this
+ * on authenticated or user-specific responses. Call it only on the success path
+ * so errors and database-unavailable fallbacks are never cached.
+ */
+export function setPublicCache(
+  response: Response,
+  { maxAge = 60, staleWhileRevalidate = 300 }: { maxAge?: number; staleWhileRevalidate?: number } = {},
+) {
+  response.setHeader(
+    'Cache-Control',
+    `public, max-age=${maxAge}, stale-while-revalidate=${staleWhileRevalidate}`,
+  );
+}

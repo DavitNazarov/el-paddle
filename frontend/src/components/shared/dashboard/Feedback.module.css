@@ -1,0 +1,248 @@
+/*
+ * Message states: notices, page banners, and loading skeletons.
+ *
+ * Four tones, and every one of them carries an icon and a word — colour is
+ * never the only thing separating "saved" from "failed". Loading shows the
+ * shape of the content that is coming rather than the word "Loading", so the
+ * layout does not jump when the data lands.
+ */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-tile);
+  background: var(--dash-tint);
+  padding: 0.8rem 1rem;
+}
+
+.noticeIcon {
+  display: inline-flex;
+  height: 1.25rem;
+  width: 1.25rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.05rem;
+  color: var(--dash-muted);
+}
+
+.noticeIcon svg {
+  height: 1rem;
+  width: 1rem;
+}
+
+.noticeBody {
+  min-width: 0;
+  flex: 1;
+}
+
+.noticeTitle {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 650;
+  line-height: 1.3rem;
+  color: var(--dash-text);
+}
+
+.noticeText {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+  line-height: 1.3rem;
+  color: var(--dash-muted);
+}
+
+.noticeTitle + .noticeText {
+  margin-top: 0.2rem;
+}
+
+.noticeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.notice[data-tone='info'] {
+  border-color: rgba(61, 103, 150, 0.26);
+  background: var(--dash-info-soft);
+}
+
+.notice[data-tone='info'] .noticeIcon {
+  color: var(--dash-info);
+}
+
+.notice[data-tone='success'] {
+  border-color: rgba(22, 128, 106, 0.28);
+  background: var(--dash-teal-soft);
+}
+
+.notice[data-tone='success'] .noticeIcon {
+  color: var(--dash-teal);
+}
+
+.notice[data-tone='warning'] {
+  border-color: rgba(168, 103, 18, 0.3);
+  background: var(--dash-amber-soft);
+}
+
+.notice[data-tone='warning'] .noticeIcon {
+  color: var(--dash-amber);
+}
+
+.notice[data-tone='error'] {
+  border-color: rgba(194, 65, 59, 0.32);
+  background: var(--dash-coral-soft);
+}
+
+.notice[data-tone='error'] .noticeIcon {
+  color: var(--dash-coral);
+}
+
+/* Page banner: the same notice, given a spine and a dismiss control, so a
+   result reported at the top of a screen is unmistakably about the whole page. */
+.banner {
+  position: relative;
+  margin-bottom: var(--space-5);
+  padding-left: 1.15rem;
+  animation: bannerIn 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.banner::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 999px 0 0 999px;
+  background: currentcolor;
+}
+
+.banner[data-tone='info']::before { background: var(--dash-info); }
+.banner[data-tone='success']::before { background: var(--dash-teal); }
+.banner[data-tone='warning']::before { background: var(--dash-amber); }
+.banner[data-tone='error']::before { background: var(--dash-coral); }
+
+@keyframes bannerIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dismiss {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  color: var(--dash-faint);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dismiss:hover {
+  background: rgba(43, 26, 24, 0.06);
+  color: var(--dash-text);
+}
+
+.dismiss:focus-visible {
+  outline: 2px solid var(--padel-focus-ring);
+  outline-offset: 2px;
+}
+
+.dismiss svg {
+  height: 0.9rem;
+  width: 0.9rem;
+}
+
+/* ---- Loading skeletons ---- */
+.skeleton {
+  display: block;
+  overflow: hidden;
+  position: relative;
+  border-radius: 0.4rem;
+  background: var(--dash-tint-strong);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  border-top: 1px solid var(--dash-border);
+  padding: var(--space-4) 1.25rem;
+}
+
+.skeletonRow:first-child {
+  border-top: 0;
+}
+
+.skeletonRowText {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 0.5rem;
+}
+
+.skeletonCards {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.skeletonCard {
+  display: grid;
+  gap: 0.75rem;
+  min-height: 11.5rem;
+  align-content: start;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+  padding: var(--space-4);
+}
+
+/* Reduced motion keeps the placeholder — it just stops moving. Removing it
+   would swap a stable layout for a sudden one. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+
+  .banner {
+    animation: none;
+  }
+}
+
+@media (min-width: 40rem) {
+  .skeletonCards[data-columns='4'],
+  .skeletonCards[data-columns='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 80rem) {
+  .skeletonCards[data-columns='4'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

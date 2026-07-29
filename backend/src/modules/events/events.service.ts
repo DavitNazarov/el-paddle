@@ -1,21 +1,29 @@
 import { startOfToday } from '../../common/dates.js';
-import { eventInclude } from '../../common/includes.js';
+import { eventInclude, entryUserSelect } from '../../common/includes.js';
 import { isNotFoundError, jsonError } from '../../common/http.js';
 import { prisma } from '../../database/prisma.js';
 import { EventStatus, NotificationType, type Prisma } from '../../generated/prisma/client.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 
-export async function listEvents({ adminScope }: { adminScope: boolean }) {
+// Bound both scopes so a large event history can never trigger an unbounded
+// scan (F8). Far above any realistic tournament count; the admin list is not
+// paginated, so this is a safety cap rather than a page size.
+const EVENT_LIST_CAP = 1000;
+
+export async function listEvents({ adminScope, organiserId }: { adminScope: boolean; organiserId?: string }) {
   return prisma.event.findMany({
-    where: adminScope
-      ? {}
-      : {
-          isPublished: true,
-          date: { gte: startOfToday() },
-        },
+    where: organiserId
+      ? { organisers: { some: { userId: organiserId, revokedAt: null } } }
+      : adminScope
+        ? {}
+        : {
+            isPublished: true,
+            date: { gte: startOfToday() },
+          },
     orderBy: { date: 'asc' },
     include: eventInclude,
+    take: EVENT_LIST_CAP,
   });
 }
 
@@ -121,7 +129,7 @@ export async function changeEventStatus(input: {
     await writeAudit(tx, { action: 'event.status.updated', actorId: input.actorId, eventId: event.id, entityType: 'Event', entityId: event.id, before: { status: event.status }, after: { status: input.status }, publicReason: input.reason });
     await queueOutbox(tx, { topic: 'event.status.updated', aggregateType: 'Event', aggregateId: event.id, payload: { eventId: event.id, status: input.status, version: updated.version }, deduplicationKey: `event:${event.id}:status:v${updated.version}` });
 
-    const registrations = await tx.eventRegistration.findMany({ where: { eventId: event.id, status: 'APPROVED' }, include: { owner: true, teammate: true } });
+    const registrations = await tx.eventRegistration.findMany({ where: { eventId: event.id, status: 'APPROVED' }, include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } });
     const contacts = new Map(registrations.flatMap((entry) => [entry.owner, entry.teammate]).map((user) => [user.id, user]));
     await queueNotifications(tx, [...contacts.values()].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.EVENT_STATUS_CHANGED, title: `Event status: ${input.status.replaceAll('_', ' ')}`, message: `${event.title} has moved to ${input.status.replaceAll('_', ' ').toLowerCase()}.`, entityType: 'Event', entityId: event.id, eventId: event.id, actionPath: `/dashboard/events/${event.id}`, version: updated.version })));
     await saveCommandReceipt(tx, { actorId: input.actorId, action: 'event.status', commandId: input.commandId, hash, response: { eventId: event.id, version: updated.version } });

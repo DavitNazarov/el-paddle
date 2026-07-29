@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Ban, Plus, Search, Shield, Trash2, Undo2, UserRound, Users } from 'lucide-react';
+import { Ban, Gavel, Plus, Search, Shield, Trash2, Undo2, UserCog, UserRound, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,11 +9,10 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   DashboardField,
   DashboardModal,
+  DataTable,
   EmptyState,
   FeedbackBanner,
-  FilterChip,
   SectionHeading,
-  SurfaceCard,
   formControlClassName,
 } from '@/components/shared/dashboard/DashboardUI';
 import { apiFetch } from '@/lib/api';
@@ -21,26 +20,32 @@ import { useI18n } from '@/components/shared/I18nProvider';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { useClubOptions } from '@/hooks/useClubOptions';
 import { AdminShell } from './AdminShell';
-import type { AdminUserDto, UserRoleFilter } from '@/types/admin';
+import type { AdminUserDto } from '@/types/admin';
 import type { UserRole } from '@/types/auth';
 
-const emptyForm = {
-  email: '',
-  name: '',
-  surname: '',
-  role: 'USER' as UserRole,
-  password: '',
-  clubId: '',
+const emptyForm = { email: '', name: '', surname: '', password: '', clubId: '' };
+
+const roleIcons: Record<UserRole, typeof Users> = {
+  ADMIN: Shield,
+  ORGANISER: UserCog,
+  JUDGE: Gavel,
+  USER: UserRound,
 };
 
-export function AdminUsersClient() {
+/**
+ * One screen per role. Roles carry different powers and different fields — a
+ * player must belong to a club, only a player can be disqualified — so a single
+ * list with a role filter made every column mean "sometimes".
+ */
+export function AdminUsersClient({ role }: { role: UserRole }) {
   const { dictionary, t } = useI18n();
   const admin = dictionary.dashboard.admin;
   const copy = admin.usersPage;
+  const roleCopy = copy.roles[role];
+  const RoleIcon = roleIcons[role];
   const { clubs } = useClubOptions();
   const [users, setUsers] = useState<AdminUserDto[]>([]);
   const [currentUserId, setCurrentUserId] = useState('');
-  const [filter, setFilter] = useState<UserRoleFilter>('ALL');
   const [search, setSearch] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [createOpen, setCreateOpen] = useState(false);
@@ -72,28 +77,21 @@ export function AdminUsersClient() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const counts = useMemo(
-    () => ({
-      all: users.length,
-      players: users.filter((user) => user.role === 'USER').length,
-      admins: users.filter((user) => user.role === 'ADMIN').length,
-      disqualified: users.filter((user) => user.isDisqualified).length,
-    }),
-    [users],
-  );
+  // Only players belong to a club, so the column is dead weight on every other
+  // role's screen.
+  const showsClub = role === 'USER';
+
+  const roleUsers = useMemo(() => users.filter((user) => user.role === role), [role, users]);
 
   const visible = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
-    return users.filter((user) => {
-      const matchesRole = filter === 'ALL' || user.role === filter;
-      const matchesSearch =
-        !normalizedSearch ||
-        [user.fullName, user.email, user.club?.name, user.role, user.status, user.isDisqualified ? 'disqualified' : '']
-          .filter(Boolean)
-          .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch));
-      return matchesRole && matchesSearch;
-    });
-  }, [filter, search, users]);
+    if (!normalizedSearch) return roleUsers;
+    return roleUsers.filter((user) =>
+      [user.fullName, user.email, user.club?.name, user.status, user.isDisqualified ? 'disqualified' : '']
+        .filter(Boolean)
+        .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch)),
+    );
+  }, [roleUsers, search]);
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,7 +101,7 @@ export function AdminUsersClient() {
     const response = await apiFetch('/api/admin/users', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, role }),
     });
     const result = (await response.json()) as { error?: string; invited?: boolean };
     setBusy(false);
@@ -176,10 +174,6 @@ export function AdminUsersClient() {
     await load();
   }
 
-  function roleLabel(role: UserRole) {
-    return role === 'ADMIN' ? copy.roleAdmin : role === 'JUDGE' ? 'Judge' : copy.rolePlayer;
-  }
-
   function statusLabel(user: AdminUserDto) {
     if (user.isDisqualified) return copy.statusDisqualified;
     if (user.status === 'ACTIVE') return copy.statusActive;
@@ -188,184 +182,175 @@ export function AdminUsersClient() {
   }
 
   return (
-    <AdminShell title={copy.title} description={copy.description} eyebrow={copy.eyebrow}>
+    <AdminShell title={roleCopy.title} description={roleCopy.description} eyebrow={copy.eyebrow}>
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          <FilterChip active={filter === 'ALL'} count={counts.all} onClick={() => setFilter('ALL')}>
-            {copy.filterAll}
-          </FilterChip>
-          <FilterChip active={filter === 'USER'} count={counts.players} onClick={() => setFilter('USER')}>
-            {copy.filterPlayers}
-          </FilterChip>
-          <FilterChip active={filter === 'ADMIN'} count={counts.admins} onClick={() => setFilter('ADMIN')}>
-            {copy.filterAdmins}
-          </FilterChip>
-        </div>
-        <Button
-          variant="red"
-          className="rounded-md"
-          onClick={() => {
-            setForm(emptyForm);
-            setCreateOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          {copy.showCreate}
-        </Button>
-      </div>
+      <SectionHeading
+        title={roleCopy.listTitle}
+        description={roleCopy.listDescription}
+        actions={
+          <Button
+            variant="red"
+            className="min-h-11 rounded-md"
+            onClick={() => {
+              setForm(emptyForm);
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            {roleCopy.showCreate}
+          </Button>
+        }
+      />
 
-      <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <SectionHeading title={copy.listTitle} description={copy.listDescription} />
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-[var(--dash-muted)]">
+          {t('common.total').replace('{count}', String(roleUsers.length))}
+        </p>
         <div className="relative w-full sm:max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[rgba(213,201,177,0.45)]" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--dash-faint)]" />
           <Input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={copy.searchPlaceholder}
             aria-label={copy.searchPlaceholder}
-            className="h-10 rounded-md border-[var(--dash-border)] bg-white pl-9 text-[var(--dash-text)] placeholder:text-[var(--dash-faint)] focus-visible:border-[var(--dash-primary)] focus-visible:ring-[var(--padel-focus-ring)]"
+            className="h-11 rounded-md border-[var(--dash-border)] bg-white pl-9 text-[var(--dash-text)] placeholder:text-[var(--dash-faint)] focus-visible:border-[var(--dash-primary)] focus-visible:ring-[var(--padel-focus-ring)]"
           />
         </div>
       </div>
       <div className="mt-4 grid gap-4">
-        {loading ? <EmptyState title={copy.loadingTitle} description={copy.loadingDescription} icon={Users} /> : null}
+        {loading ? <EmptyState title={copy.loadingTitle} description={copy.loadingDescription} icon={RoleIcon} /> : null}
         {!loading && !visible.length ? (
           <EmptyState
-            title={copy.emptyTitle}
-            description={copy.emptyDescription}
-            icon={Users}
+            title={roleCopy.emptyTitle}
+            description={roleCopy.emptyDescription}
+            icon={RoleIcon}
             action={
-              <Button variant="red" className="rounded-md" onClick={() => setCreateOpen(true)}>
-                {copy.showCreate}
+              <Button variant="red" className="min-h-11 rounded-md" onClick={() => setCreateOpen(true)}>
+                {roleCopy.showCreate}
               </Button>
             }
           />
         ) : null}
 
         {!loading && visible.length ? (
-          <SurfaceCard className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[850px] table-fixed border-collapse text-left">
-                <colgroup>
-                  <col className="w-[30%]" />
-                  <col className="w-[19%]" />
-                  <col className="w-[13%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[132px] 2xl:w-[340px]" />
-                </colgroup>
-                <thead className="bg-[#fdf9f7] text-xs uppercase tracking-[0.14em] text-[var(--dash-faint)]">
-                  <tr>
-                    <th scope="col" className="px-5 py-4 font-medium">{copy.columnUser}</th>
-                    <th scope="col" className="px-5 py-4 font-medium">{copy.columnClub}</th>
-                    <th scope="col" className="px-5 py-4 font-medium">{copy.columnRole}</th>
-                    <th scope="col" className="px-5 py-4 font-medium">{copy.columnStatus}</th>
-                    <th scope="col" className="sticky right-0 z-10 border-l border-[var(--dash-border)] bg-[#fdf9f7] px-5 py-4 text-right font-medium shadow-[-8px_0_14px_-10px_rgba(43,26,24,0.08)]">
-                      {copy.columnActions}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--dash-border)]">
-                  {visible.map((user) => (
-                    <tr key={user.id} className="group bg-white transition-colors hover:bg-[#fdf9f7]">
-                      <td className="px-5 py-4 align-middle">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="truncate font-medium text-[var(--dash-text)]" title={user.fullName}>
-                            {user.fullName}
-                          </span>
-                          {user.id === currentUserId ? (
-                            <Badge className="shrink-0 border-[rgba(61,103,150,0.25)] bg-[var(--dash-info-soft)] text-[var(--dash-info)]">
-                              {copy.you}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 truncate text-sm text-[var(--dash-muted)]" title={user.email}>{user.email}</p>
-                      </td>
-                      <td className="px-5 py-4 align-middle text-sm text-[var(--dash-muted)]">
-                        <span className="block truncate" title={user.club?.name}>{user.club?.name ?? '—'}</span>
-                      </td>
-                      <td className="px-5 py-4 align-middle">
-                        <Badge className="border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]">
-                          {user.role === 'ADMIN' ? <Shield className="mr-1 h-3 w-3" /> : <UserRound className="mr-1 h-3 w-3" />}
-                          {roleLabel(user.role)}
+          <DataTable
+            rows={visible}
+            rowKey={(user) => user.id}
+            actionsHeader={copy.columnActions}
+            columns={[
+              {
+                key: 'user',
+                header: copy.columnUser,
+                width: showsClub ? 'w-[38%]' : 'w-[62%]',
+                cell: (user) => (
+                  <>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="truncate font-medium text-[var(--dash-text)]" title={user.fullName}>
+                        {user.fullName}
+                      </span>
+                      {user.id === currentUserId ? (
+                        <Badge className="shrink-0 border-[rgba(61,103,150,0.25)] bg-[var(--dash-info-soft)] text-[var(--dash-info)]">
+                          {copy.you}
                         </Badge>
-                      </td>
-                      <td className="px-5 py-4 align-middle">
-                        <Badge className={user.isDisqualified ? 'border-[rgba(194,65,59,0.25)] bg-[var(--dash-coral-soft)] text-[var(--dash-coral)]' : 'border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]'}>
-                          {statusLabel(user)}
-                        </Badge>
-                        {user.isDisqualified ? (
-                          <p className="mt-2 text-xs leading-5 text-[var(--dash-muted)]">
-                            {copy.disqualifiedUntil.replace('{date}', new Date(user.disqualifiedUntil!).toLocaleDateString())}
-                            {user.disqualificationReason ? ` — ${user.disqualificationReason}` : ''}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="sticky right-0 z-10 border-l border-[var(--dash-border)] bg-white px-5 py-4 align-middle shadow-[-8px_0_14px_-10px_rgba(43,26,24,0.08)] transition-colors group-hover:bg-[#fdf9f7]">
-                        <div className="flex items-center justify-end gap-2">
-                          {user.role === 'USER' ? (
-                            user.isDisqualified ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#fdf9f7]"
-                                aria-label={copy.clearDisqualify}
-                                title={copy.clearDisqualify}
-                                disabled={busy}
-                                onClick={() => {
-                                  void clearDisqualification(user);
-                                }}
-                              >
-                                <Undo2 className="h-4 w-4" />
-                                <span className="hidden 2xl:inline">{copy.clearDisqualify}</span>
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#fdf9f7]"
-                                aria-label={copy.disqualify}
-                                title={copy.disqualify}
-                                onClick={() => {
-                                  setDisqualifyForm({ until: '', reason: '' });
-                                  setDisqualifying(user);
-                                }}
-                              >
-                                <Ban className="h-4 w-4" />
-                                <span className="hidden 2xl:inline">{copy.disqualify}</span>
-                              </Button>
-                            )
-                          ) : null}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-md border-[rgba(194,65,59,0.28)] bg-white text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]"
-                            aria-label={copy.delete}
-                            title={copy.delete}
-                            onClick={() => setDeleting(user)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            <span className="hidden 2xl:inline">{copy.delete}</span>
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </SurfaceCard>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 truncate text-sm text-[var(--dash-muted)]" title={user.email}>{user.email}</p>
+                  </>
+                ),
+              },
+              ...(showsClub
+                ? [
+                    {
+                      key: 'club',
+                      header: copy.columnClub,
+                      width: 'w-[24%]',
+                      cell: (user: AdminUserDto) => (
+                        <span className="block truncate text-sm text-[var(--dash-muted)]" title={user.club?.name}>
+                          {user.club?.name ?? '—'}
+                        </span>
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                key: 'status',
+                header: copy.columnStatus,
+                width: 'w-[18%]',
+                cell: (user) => (
+                  <>
+                    <Badge className={user.isDisqualified ? 'border-[rgba(194,65,59,0.25)] bg-[var(--dash-coral-soft)] text-[var(--dash-coral)]' : 'border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]'}>
+                      {statusLabel(user)}
+                    </Badge>
+                    {user.isDisqualified ? (
+                      <p className="mt-2 text-xs leading-5 text-[var(--dash-muted)]">
+                        {copy.disqualifiedUntil.replace('{date}', new Date(user.disqualifiedUntil!).toLocaleDateString())}
+                        {user.disqualificationReason ? ` — ${user.disqualificationReason}` : ''}
+                      </p>
+                    ) : null}
+                  </>
+                ),
+              },
+            ]}
+            renderActions={(user) => (
+              <>
+                {user.role === 'USER' ? (
+                  user.isDisqualified ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#fdf9f7]"
+                      aria-label={copy.clearDisqualify}
+                      title={copy.clearDisqualify}
+                      disabled={busy}
+                      onClick={() => {
+                        void clearDisqualification(user);
+                      }}
+                    >
+                      <Undo2 className="h-4 w-4" />
+                      <span className="hidden 2xl:inline">{copy.clearDisqualify}</span>
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:border-[var(--dash-border-strong)] hover:bg-[#fdf9f7]"
+                      aria-label={copy.disqualify}
+                      title={copy.disqualify}
+                      onClick={() => {
+                        setDisqualifyForm({ until: '', reason: '' });
+                        setDisqualifying(user);
+                      }}
+                    >
+                      <Ban className="h-4 w-4" />
+                      <span className="hidden 2xl:inline">{copy.disqualify}</span>
+                    </Button>
+                  )
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-md border-[rgba(194,65,59,0.28)] bg-white text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]"
+                  aria-label={copy.delete}
+                  title={copy.delete}
+                  onClick={() => setDeleting(user)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="hidden 2xl:inline">{copy.delete}</span>
+                </Button>
+              </>
+            )}
+          />
         ) : null}
       </div>
 
       <DashboardModal
         open={createOpen}
         onOpenChange={setCreateOpen}
-        title={copy.createTitle}
-        description={copy.createDescription}
+        title={roleCopy.createTitle}
+        description={roleCopy.createDescription}
         size="lg"
         footer={
           <ModalFormFooter
@@ -408,25 +393,7 @@ export function AdminUsersClient() {
               className={formControlClassName}
             />
           </DashboardField>
-          <DashboardField label={copy.fieldRole} id="create-user-role">
-            <select
-              id="create-user-role"
-              value={form.role}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  role: event.target.value as UserRole,
-                  clubId: event.target.value === 'ADMIN' ? '' : current.clubId,
-                }))
-              }
-              className={formControlClassName}
-            >
-              <option value="USER">{copy.rolePlayer}</option>
-              <option value="JUDGE">Judge</option>
-              <option value="ADMIN">{copy.roleAdmin}</option>
-            </select>
-          </DashboardField>
-          {form.role === 'USER' ? (
+          {showsClub ? (
             <DashboardField label={copy.fieldClub} id="create-user-club">
               <select
                 id="create-user-club"

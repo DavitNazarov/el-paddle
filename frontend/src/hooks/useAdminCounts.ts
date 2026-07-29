@@ -13,6 +13,7 @@ const emptyCounts: AdminCounts = {
   events: 0,
   clubs: 0,
   categories: 0,
+  applications: 0,
 };
 
 export function useAdminCounts() {

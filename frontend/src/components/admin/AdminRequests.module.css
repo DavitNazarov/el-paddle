@@ -1,0 +1,135 @@
+/*
+ * Opponent-request review. A pairing is two entries facing each other, so the
+ * row keeps that shape instead of flattening into table columns where the
+ * direction of the request has to be read off a header.
+ */
+
+.pairing {
+  display: grid;
+  gap: 0.75rem;
+  border-top: 1px solid var(--dash-border);
+  padding: var(--space-4) 1.25rem;
+}
+
+.pairing:first-child {
+  border-top: 0;
+}
+
+/* Requests still holding the administrator up keep a spine, so a long history
+   does not bury the handful that need an answer. */
+.pairing[data-awaiting='true'] {
+  background: rgba(168, 103, 18, 0.04);
+  box-shadow: inset 3px 0 0 var(--dash-amber);
+}
+
+.sides {
+  display: grid;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.side {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  gap: 0.15rem;
+}
+
+.sideLabel {
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--dash-faint);
+}
+
+.sideName {
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.3rem;
+  color: var(--dash-text);
+}
+
+.arrow {
+  height: 1rem;
+  width: 1rem;
+  justify-self: start;
+  color: var(--dash-faint);
+}
+
+.pairingFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pairingActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.pairingReason {
+  min-width: 0;
+}
+
+/* Category request windows */
+.windowRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  border-top: 1px solid var(--dash-border);
+  padding: 0.85rem 1.25rem;
+}
+
+.windowRow:first-child {
+  border-top: 0;
+}
+
+.windowText {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.windowName {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--dash-text);
+}
+
+.windowHint {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+  color: var(--dash-muted);
+}
+
+.windowActions {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (min-width: 40rem) {
+  .sides {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .arrow {
+    justify-self: center;
+  }
+
+  .windowActions {
+    width: auto;
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+}

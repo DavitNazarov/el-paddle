@@ -10,7 +10,7 @@ El Padel is a club and tournament management platform. The core tournament flow 
 event setup → registration → opponent requests → bracket → schedule → judging → results
 ```
 
-The system has four audiences: public visitors, players, judges, and administrators.
+The system has five audiences: public visitors, players, judges, organisers, and administrators.
 
 ## Workspace map
 
@@ -40,6 +40,10 @@ The system has four audiences: public visitors, players, judges, and administrat
 
 ## Domain invariants
 
+- New club signups are applications. Nothing exists in `User`, `Club`, or `ClubMember` until an admin approves; rejection deletes the `ClubApplication` outright, so the same email may apply again. Approval materialises the account, club (applicant as LEADER), and group-mate invite in one transaction, then deletes the application.
+- Organisers hold no global capability. Every power is checked against an `EventOrganiser` link via `requireEventCapability`, and their capability set is pinned by a test. They cannot create or edit events, review registrations, correct results, reopen events, or manage accounts, clubs, and club requests.
+- A judge may only be assigned to an event in that event's `EventJudge` pool. An actor with global `JUDGE_MANAGE` gets the link created implicitly; an organiser is confined to the pool they built.
+- Scoring authorization is per match: judges through their court assignment, admins always, organisers on events handed to them. Only a judge is bound to one match at a time; the court queue order and one-match-per-court rules bind everyone.
 - Event lifecycle moves forward through explicit allowed transitions; the only backward transition is an explicit reopen of a completed event, which requires the `EVENT_STATE_CORRECT` capability.
 - Registration, bracket, match, schedule, and request writes use optimistic `version` checks where supported.
 - Retried commands must include a stable `commandId`; command receipts prevent duplicate application.
@@ -48,7 +52,12 @@ The system has four audiences: public visitors, players, judges, and administrat
 - Brackets support 2–16 approved entries; the single-elimination graph sizes to 2, 4, 8, or 16 slots and fills the gap with byes.
 - A locked bracket snapshots participant identity for historical accuracy.
 - Judges can score only assigned matches and must process a court queue in order.
-- Scores remain between zero and six. A score of six completes a normal match and advances the winner.
+- Matches are decided in slots: `slotCount` is the number of slot wins to race to (1, 2, or 3), and at most `2 * slotCount - 1` slots are ever played, so a decider always exists.
+- For `SLOTS` matches `Match.scoreA`/`scoreB` hold the slot-win tally and must always equal the `MatchSlot` rows. `MatchSlot` is current state; `SlotEvent` is the append-only history.
+- The slot format resolves as match override, then bracket round default, then one. It is snapshotted onto the match when it starts and is immutable from then on.
+- Undo removes only the last slot. A judge may undo while the match is in progress; reopening a completed match is admin-only, requires a reason, and is refused when the downstream match has started or the court or judge is busy.
+- Historical matches keep `scoringMode = POINTS` with scores between zero and six, where six completes the match.
+- `Match.nextMatchSlot` means the side of the next match a winner advances into — never a scoring slot.
 - Completed result corrections must not overwrite a downstream match that has already started.
 - Public event page, registration roster, bracket, schedule, live scoring, and final results have independent publication controls.
 
@@ -122,5 +131,6 @@ For UI changes, verify no horizontal overflow, readable empty/error states, keyb
 - `docs/ARCHITECTURE.md`: system structure and data flow
 - `docs/API.md`: endpoint groups and request conventions
 - `docs/TOURNAMENT_OPERATIONS.md`: end-to-end operational workflow
+- `docs/DASHBOARD_DESIGN.md`: dashboard design system, screen archetypes, and per-role intent
 - `DEPLOY.md`: production deployment and recovery
 

@@ -8,10 +8,12 @@ import {
   type Event,
   type EventRegistration,
   type Match,
+  type MatchRound,
   type ScheduleItem,
   type User,
 } from '../generated/prisma/client.js';
-import { toPublicUser } from '../modules/auth/auth.service.js';
+import { toPublicUser, type PublicUserSource } from '../modules/auth/auth.service.js';
+import { maxSlots, slotWinsNeeded } from '../modules/matches/slot-engine.js';
 
 type CategoryWithEventCount = Category & {
   _count?: { eventLinks: number };
@@ -32,7 +34,15 @@ export type EventWithCategoryLinks = Event & {
   }[];
 };
 
-export function serializeEvent(event: EventWithCategoryLinks) {
+/**
+ * Bank details are financial PII (F3). They are only needed when a single event
+ * is opened to pay/register or manage, so they are opt-in and omitted by default
+ * — list payloads (dashboard, public and browse lists) must never fan them out.
+ */
+export function serializeEvent(
+  event: EventWithCategoryLinks,
+  options: { includeBankDetails?: boolean } = {},
+) {
   return {
     id: event.id,
     title: event.title,
@@ -41,8 +51,12 @@ export function serializeEvent(event: EventWithCategoryLinks) {
     description: event.description ?? '',
     arrivalTime: event.arrivalTime?.toISOString() ?? null,
     participationFee: event.participationFee,
-    bankAccountIban: event.bankAccountIban,
-    bankAccountReceiver: event.bankAccountReceiver,
+    ...(options.includeBankDetails
+      ? {
+          bankAccountIban: event.bankAccountIban,
+          bankAccountReceiver: event.bankAccountReceiver,
+        }
+      : {}),
     isPublished: event.isPublished,
     status: event.status,
     version: event.version,
@@ -56,11 +70,11 @@ export function serializeEvent(event: EventWithCategoryLinks) {
 }
 
 export type RegistrationFull = EventRegistration & {
-  event: Event;
+  event: Pick<Event, 'id' | 'title' | 'date' | 'location' | 'status'>;
   category: Category;
-  owner: User & { clubMemberships?: { club: { id: string; name: string; slug: string } }[] };
-  teammate: User & { clubMemberships?: { club: { id: string; name: string; slug: string } }[] };
-  reviewedBy?: User | null;
+  owner: PublicUserSource;
+  teammate: PublicUserSource;
+  reviewedBy?: PublicUserSource | null;
 };
 
 export function serializeRegistration(registration: RegistrationFull) {
@@ -89,8 +103,24 @@ export function serializeRegistration(registration: RegistrationFull) {
   };
 }
 
+/** Roster identity — the only user columns the public roster reads. */
+type RosterMember = {
+  id: string;
+  name: string | null;
+  surname: string | null;
+  clubMemberships?: { club: { id: string; name: string; slug: string } }[];
+};
+
+/** Shape the public roster query loads — no event, reviewer, or contact fields. */
+export type PublicRosterEntry = {
+  id: string;
+  category: Category;
+  owner: RosterMember;
+  teammate: RosterMember;
+};
+
 /** Public event roster — deliberately excludes contact and review details. */
-export function serializePublicRegistrationTeam(registration: RegistrationFull) {
+export function serializePublicRegistrationTeam(registration: PublicRosterEntry) {
   const ownerClub = registration.owner.clubMemberships?.[0]?.club;
   const teammateClub = registration.teammate.clubMemberships?.[0]?.club;
   const club = ownerClub ?? teammateClub ?? null;
@@ -110,17 +140,35 @@ export function serializePublicRegistrationTeam(registration: RegistrationFull) 
   };
 }
 
+/** Only what serializeEntrySummary (id/name/surname) and notifications (email) read. */
+type EntryUser = Pick<User, 'id' | 'name' | 'surname' | 'email'>;
+
 type EntryWithUsers = EventRegistration & {
-  owner: User;
-  teammate: User;
+  owner: EntryUser;
+  teammate: EntryUser;
   category?: Category;
 };
+
+/** The event fields serializeMatch emits — a subset of matchEventSelect. */
+type MatchEventSummary = Pick<
+  Event,
+  | 'id'
+  | 'title'
+  | 'date'
+  | 'location'
+  | 'description'
+  | 'status'
+  | 'timeZone'
+  | 'publicLiveScoringEnabled'
+  | 'resultsPublishedAt'
+> & { categories?: { category: Category }[] };
 
 type MatchWithEntries = Match & {
   participantA?: EntryWithUsers | null;
   participantB?: EntryWithUsers | null;
   winner?: EntryWithUsers | null;
   loser?: EntryWithUsers | null;
+  slots?: { slotNumber: number; winnerSide: 'A' | 'B'; winnerEntryId: string; decidedAt: Date }[];
   snapshots?: {
     side: 'A' | 'B';
     clubId: string;
@@ -136,17 +184,18 @@ type MatchWithEntries = Match & {
     generation: number;
     version: number;
     publishedAt: Date | null;
-    event?: Event & { categories?: { category: Category }[] };
+    event?: MatchEventSummary;
     eventCategory?: { category: Category };
   };
 };
 
 type BracketWithMatches = Bracket & {
   matches?: MatchWithEntries[];
+  roundConfigs?: { round: MatchRound; slotCount: number }[];
   eventCategory?: { category: Category };
 };
 
-function serializePlayerIdentity(user: User) {
+function serializePlayerIdentity(user: Pick<User, 'id' | 'name' | 'surname'>) {
   return {
     id: user.id,
     fullName: [user.name, user.surname].filter(Boolean).join(' ') || 'Player',
@@ -180,6 +229,17 @@ export function serializeMatch(match: MatchWithEntries) {
     nextMatchSlot: match.nextMatchSlot,
     scoreA: match.scoreA,
     scoreB: match.scoreB,
+    scoringMode: match.scoringMode,
+    slotCount: match.slotCount,
+    slotCountOverride: match.slotCountOverride,
+    slotsToWin: match.slotCount === null ? null : slotWinsNeeded(match.slotCount),
+    maxSlots: match.slotCount === null ? null : maxSlots(match.slotCount),
+    slots: (match.slots ?? []).map((slot) => ({
+      slotNumber: slot.slotNumber,
+      winnerSide: slot.winnerSide,
+      winnerEntryId: slot.winnerEntryId,
+      decidedAt: slot.decidedAt.toISOString(),
+    })),
     status: match.status,
     resultType: match.resultType,
     resultReason: match.resultReason,
@@ -249,6 +309,25 @@ export function serializeMatch(match: MatchWithEntries) {
   };
 }
 
+/**
+ * Match-history lists (F4): every match in a list shares the same handful of
+ * events, so the event is hoisted to a de-duplicated top-level `events` array
+ * and each match references it by `bracket.eventId` instead of embedding a full
+ * copy N times. Single-match responses keep the embedded event via serializeMatch.
+ */
+export function serializeMatchList(matches: MatchWithEntries[]) {
+  const events = new Map<string, { id: string; title: string }>();
+  const serialized = matches.map((match) => {
+    const item = serializeMatch(match);
+    if (!item.bracket?.event) return item;
+    const { id, title } = item.bracket.event;
+    events.set(id, { id, title });
+    const { event: _event, ...bracket } = item.bracket;
+    return { ...item, bracket };
+  });
+  return { matches: serialized, events: [...events.values()] };
+}
+
 export function serializeMatchDetail(match: MatchWithEntries, redactResult = false) {
   const serialized = serializeMatch(match);
   if (!redactResult) return { ...serialized, resultVisible: true };
@@ -256,6 +335,7 @@ export function serializeMatchDetail(match: MatchWithEntries, redactResult = fal
     ...serialized,
     scoreA: null,
     scoreB: null,
+    slots: [],
     resultType: null,
     resultReason: null,
     winnerEntryId: null,
@@ -276,7 +356,7 @@ type CourtWithScheduleItems = Court & {
     id: string;
     startsAt: Date;
     endsAt: Date;
-    judge: User;
+    judge: Pick<User, 'id' | 'name' | 'surname'>;
   }[];
 };
 
@@ -328,6 +408,7 @@ export function serializeBracket(bracket: BracketWithMatches) {
     lockedAt: bracket.lockedAt?.toISOString() ?? null,
     publishedAt: bracket.publishedAt?.toISOString() ?? null,
     completedAt: bracket.completedAt?.toISOString() ?? null,
+    slotDefaults: Object.fromEntries((bracket.roundConfigs ?? []).map((config) => [config.round, config.slotCount])),
     eventCategory: bracket.eventCategory
       ? { category: serializeCategory(bracket.eventCategory.category) }
       : undefined,
@@ -335,11 +416,23 @@ export function serializeBracket(bracket: BracketWithMatches) {
   };
 }
 
+/** The four fields the saved-teammate dropdown reads — not a full profile (F7). */
+export function serializeTeammateOption(
+  user: Pick<User, 'id' | 'email' | 'name' | 'surname' | 'phone'>,
+) {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: [user.name, user.surname].filter(Boolean).join(' ') || user.email,
+    phone: user.phone ?? '',
+  };
+}
+
 export type ClubFull = Club & {
-  members: (ClubMember & { user: User })[];
+  members: (ClubMember & { user: PublicUserSource })[];
 };
 
-function serializeClubMemberPublic(member: ClubMember & { user: User }) {
+function serializeClubMemberPublic(member: ClubMember & { user: PublicUserSource }) {
   const user = toPublicUser(member.user);
   if (user.role === UserRole.ADMIN) return null;
   return {

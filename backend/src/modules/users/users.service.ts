@@ -3,6 +3,7 @@ import { jsonError } from '../../common/http.js';
 import { sendAccountInviteEmail } from '../../common/notifications.js';
 import {
   addDays,
+  compareSecret,
   createInviteToken,
   hashSecret,
   hashToken,
@@ -15,21 +16,7 @@ import { cursorArgs, toPage, type ListRange } from '../../common/pagination.js';
 
 export { calculatePlayerStats as calculatePublicPlayerStats } from './player-stats.js';
 
-export function isDisqualified(user: Pick<User, 'disqualifiedUntil'>) {
-  return Boolean(user.disqualifiedUntil && user.disqualifiedUntil.getTime() > Date.now());
-}
-
-export function assertNotDisqualified(user: Pick<User, 'disqualifiedUntil' | 'disqualificationReason'>) {
-  if (!isDisqualified(user)) return;
-  const until = user.disqualifiedUntil!.toISOString().slice(0, 10);
-  const reason = user.disqualificationReason?.trim();
-  jsonError(
-    reason
-      ? `You are disqualified until ${until}. Reason: ${reason}`
-      : `You are disqualified until ${until}.`,
-    403,
-  );
-}
+export { assertNotDisqualified, isDisqualified } from '../../common/disqualification.js';
 
 const userWithClubInclude = {
   clubMemberships: {
@@ -141,7 +128,9 @@ export async function createUserByAdmin(input: CreateUserInput) {
       ? UserRole.ADMIN
       : input.role === UserRole.JUDGE
         ? UserRole.JUDGE
-        : roleForEmail(email, UserRole.USER);
+        : input.role === UserRole.ORGANISER
+          ? UserRole.ORGANISER
+          : roleForEmail(email, UserRole.USER);
 
   let clubId: string | undefined;
   if (role === UserRole.USER) {
@@ -197,6 +186,93 @@ export async function createUserByAdmin(input: CreateUserInput) {
   return { user: full!, invited: true as const };
 }
 
+/** The account fields a user may read and edit about themselves. */
+export async function getOwnAccount(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true, surname: true, phone: true, passwordHash: true },
+  });
+  if (!user) jsonError('User not found.', 404);
+  return {
+    email: user.email,
+    name: user.name ?? '',
+    surname: user.surname ?? '',
+    phone: user.phone ?? '',
+    // Google-only accounts have no password yet, so the form must not ask for
+    // a current one. The hash itself never leaves the server.
+    hasPassword: Boolean(user.passwordHash),
+  };
+}
+
+type OwnProfileInput = {
+  name: string;
+  surname: string;
+  phone: string;
+};
+
+/**
+ * Self-service profile edit. Email, role, and status stay out of reach: they
+ * are verification- and admin-controlled.
+ */
+export async function updateOwnProfile(userId: string, input: OwnProfileInput) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true },
+  });
+  if (!user) jsonError('User not found.', 404);
+  // Players are contacted by phone about their registrations, so they cannot
+  // clear it. Staff accounts never needed one.
+  if (user.role === UserRole.USER && !input.phone) {
+    jsonError('Phone number is required.');
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      name: input.name,
+      surname: input.surname,
+      phone: input.phone || null,
+    },
+  });
+
+  const full = await getUserWithClub(userId);
+  if (!full) jsonError('User not found.', 404);
+  return full;
+}
+
+type OwnPasswordInput = {
+  currentPassword: string;
+  newPassword: string;
+};
+
+/**
+ * Change the caller's own password. Every outstanding session is invalidated in
+ * the same write; the route re-issues a cookie for the device that made the
+ * change.
+ */
+export async function changeOwnPassword(userId: string, input: OwnPasswordInput) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, passwordHash: true },
+  });
+  if (!user) jsonError('User not found.', 404);
+
+  if (user.passwordHash) {
+    if (!input.currentPassword) jsonError('Enter your current password.');
+    const ok = await compareSecret(input.currentPassword, user.passwordHash);
+    if (!ok) jsonError('Current password is incorrect.', 401);
+  }
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash: await hashSecret(input.newPassword),
+      sessionVersion: { increment: 1 },
+    },
+    select: { id: true, sessionVersion: true },
+  });
+}
+
 export async function deleteUserAccount(userId: string, actorId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) jsonError('User not found.', 404);
@@ -220,8 +296,8 @@ type DisqualifyInput = {
 export async function setUserDisqualification(userId: string, input: DisqualifyInput) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) jsonError('User not found.', 404);
-  if (user.role === UserRole.ADMIN || user.role === UserRole.JUDGE) {
-    jsonError('Admins cannot be disqualified.', 400);
+  if (user.role !== UserRole.USER) {
+    jsonError('Only players can be disqualified.', 400);
   }
 
   if (input.until && input.until.getTime() <= Date.now()) {

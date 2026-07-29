@@ -15,6 +15,7 @@ import type { BracketDto, CourtDto, MatchDto, PublicRegistrationTeamDto } from '
 import { EmptyTournamentState, StatusLabel, TournamentPanel, TournamentSectionHeader } from './TournamentUI';
 import { useTournamentRealtime } from '@/hooks/useTournamentRealtime';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { visibleSlots } from '@/lib/matchResult';
 import { fillTemplate, tournamentCopy, tournamentRound, tournamentStatus } from '@/lib/i18n/tournament';
 
 const rounds: MatchDto['round'][] = ['ROUND_OF_16', 'QUARTERFINAL', 'SEMIFINAL', 'FINAL'];
@@ -225,7 +226,27 @@ function ScheduleMatchCard({ item }: { item: CourtDto['scheduleItems'][number] }
         <div className="hidden text-center text-xs font-semibold uppercase tracking-[0.18em] text-[var(--padel-muted)] md:block">{copy.common.versus}</div>
         <ScheduleSide label={copy.common.sideB} name={sideB} score={hasScore ? match.scoreB : null} />
       </div>
+      <SlotChips match={match} />
     </Link>
+  );
+}
+
+/** Compact per-slot winners, so a slot tally reads as more than two numbers. */
+function SlotChips({ match }: { match: MatchDto }) {
+  const { locale } = useI18n();
+  const copy = tournamentCopy[locale];
+  const slots = visibleSlots(match);
+  if (!slots.length) return null;
+  return (
+    <ul className="mt-3 flex flex-wrap gap-1.5" aria-label={copy.publicEvent.slotWinners}>
+      {slots.map((slot) => (
+        <li key={slot.slotNumber} className="inline-flex items-center gap-1 rounded-sm border border-[var(--padel-line)] px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums text-[var(--padel-muted)]">
+          {fillTemplate(copy.publicEvent.slotShort, { number: slot.slotNumber })}
+          <span aria-hidden="true">·</span>
+          {slot.winnerSide}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -295,5 +316,5 @@ function PublicBracketBoard({ bracket }: { bracket: BracketDto }) {
 function PublicMatchCard({ bracket, match }: { bracket: BracketDto; match: MatchDto }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale];
-  return <Link href={`/matches/${match.id}`} className="block rounded-sm border border-[var(--padel-line)] bg-[var(--padel-red)]/28 p-4 transition-colors hover:bg-[var(--padel-red)]/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"><div className="flex items-center justify-between gap-2"><span className="text-xs text-[var(--padel-muted)]">{copy.common.match} {match.matchNumber}</span><StatusLabel>{tournamentStatus(locale, match.status)}</StatusLabel></div><p className="mt-4 min-h-10 text-sm font-semibold leading-5">{pairLabel(bracket, match, 'A', locale)}</p><p className="my-1 text-xs text-[var(--padel-muted)]">{copy.common.versus}</p><p className="min-h-10 text-sm font-semibold leading-5">{pairLabel(bracket, match, 'B', locale)}</p>{match.status === 'IN_PROGRESS' || match.status === 'COMPLETED' ? <p className="mt-4 font-mono text-2xl font-semibold tabular-nums">{match.scoreA}-{match.scoreB}</p> : null}</Link>;
+  return <Link href={`/matches/${match.id}`} className="block rounded-sm border border-[var(--padel-line)] bg-[var(--padel-red)]/28 p-4 transition-colors hover:bg-[var(--padel-red)]/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-gold)]"><div className="flex items-center justify-between gap-2"><span className="text-xs text-[var(--padel-muted)]">{copy.common.match} {match.matchNumber}</span><StatusLabel>{tournamentStatus(locale, match.status)}</StatusLabel></div><p className="mt-4 min-h-10 text-sm font-semibold leading-5">{pairLabel(bracket, match, 'A', locale)}</p><p className="my-1 text-xs text-[var(--padel-muted)]">{copy.common.versus}</p><p className="min-h-10 text-sm font-semibold leading-5">{pairLabel(bracket, match, 'B', locale)}</p>{match.status === 'IN_PROGRESS' || match.status === 'COMPLETED' ? <p className="mt-4 font-mono text-2xl font-semibold tabular-nums">{match.scoreA}-{match.scoreB}</p> : null}<SlotChips match={match} /></Link>;
 }

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Router } from 'express';
 import {
   AccountProvider,
+  ClubApplicationStatus,
   UserRole,
   UserStatus,
 } from '../../generated/prisma/client.js';
@@ -13,12 +14,10 @@ import {
   isValidEmail,
   jsonError,
 } from '../../common/http.js';
-import { sendVerificationCodeEmail, sendClubMateInviteEmail } from '../../common/notifications.js';
+import { sendVerificationCodeEmail } from '../../common/notifications.js';
 import {
-  addDays,
   addMinutes,
   compareSecret,
-  createInviteToken,
   createVerificationCode,
   hashSecret,
   hashToken,
@@ -31,6 +30,7 @@ import {
   clearOAuthLegalCookie,
   clearSessionCookie,
   getCurrentUser,
+  isStaffRole,
   OAUTH_STATE_COOKIE,
   OAUTH_LEGAL_COOKIE,
   reconcileUserRole,
@@ -39,13 +39,15 @@ import {
   roleForEmail,
   setOAuthStateCookie,
   setOAuthLegalCookie,
+  setApplicationCookie,
   setSessionCookie,
   toPublicUser,
 } from './auth.service.js';
-import { createClubForPlayer, requireClubId, setPlayerClub } from '../clubs/clubs.service.js';
+import { createClubForPlayer, inviteClubMate, requireClubId, setPlayerClub } from '../clubs/clubs.service.js';
+import { startGoogleApplication } from '../club-applications/club-applications.service.js';
 import { serializeClub } from '../../common/serializers.js';
 import { clubInclude } from '../../common/includes.js';
-import { assertNotDisqualified, isDisqualified } from '../users/users.service.js';
+import { assertNotDisqualified } from '../../common/disqualification.js';
 import { rateLimit } from '../../common/rateLimit.js';
 import { auditLog, requestIp } from '../../common/audit.js';
 import {
@@ -339,6 +341,16 @@ authRouter.post('/api/auth/login', authStrictLimit, asyncHandler(async (request,
   const dummyPasswordHash = '$2b$12$z/h1scIxzol03OmOW9jXjuFQJsKy5gJoC63nzQMqnimKqCKneaeQC';
   const ok = await compareSecret(password, user?.passwordHash ?? dummyPasswordHash);
   if (!user?.passwordHash) {
+    // An applicant has no account yet, so "invalid password" would just confuse
+    // them. Say plainly that their request is still with an admin.
+    const application = await prisma.clubApplication.findUnique({
+      where: { email },
+      select: { status: true },
+    });
+    if (application?.status === ClubApplicationStatus.SUBMITTED) {
+      auditLog({ event: 'auth.login', outcome: 'denied', email, ip, detail: 'application_pending' });
+      jsonError('Your club request is still under review. We will email you the decision.', 403);
+    }
     auditLog({ event: 'auth.login', outcome: 'failure', email, ip, detail: 'unknown_user' });
     jsonError('Invalid email or password.', 401);
   }
@@ -494,8 +506,7 @@ authRouter.post('/api/auth/invite/complete', asyncHandler(async (request, respon
 
 authRouter.post('/api/account/club', asyncHandler(async (request, response) => {
   const current = await requireUser(request);
-  if (current.role === UserRole.ADMIN) jsonError('Admins do not belong to clubs.', 400);
-  if (current.role === UserRole.JUDGE) jsonError('Judges do not belong to clubs.', 400);
+  if (isStaffRole(current.role)) jsonError('Staff accounts do not belong to clubs.', 400);
   if (current.club) jsonError('Club is already set.', 409);
   assertNotDisqualified({
     disqualifiedUntil: current.disqualifiedUntil ? new Date(current.disqualifiedUntil) : null,
@@ -511,81 +522,23 @@ authRouter.post('/api/account/club', asyncHandler(async (request, response) => {
 
 authRouter.post('/api/account/club/mate', asyncHandler(async (request, response) => {
   const current = await requireUser(request);
-  if (current.role === UserRole.ADMIN) jsonError('Admins do not belong to clubs.', 400);
-  if (current.role === UserRole.JUDGE) jsonError('Judges do not belong to clubs.', 400);
+  if (isStaffRole(current.role)) jsonError('Staff accounts do not belong to clubs.', 400);
   if (!current.club) jsonError('Create your club first.', 400);
   assertNotDisqualified({
     disqualifiedUntil: current.disqualifiedUntil ? new Date(current.disqualifiedUntil) : null,
     disqualificationReason: current.disqualificationReason,
   });
 
-  const email = cleanEmail(request.body.email);
-  const name = cleanString(request.body.name);
-  const surname = cleanString(request.body.surname);
-  const phone = cleanString(request.body.phone);
-
-  if (!isValidEmail(email)) jsonError('Enter a valid teammate email.');
-  if (!name || !surname) jsonError('Teammate name and surname are required.');
-  if (email === current.email) jsonError('You cannot add yourself as a group mate.');
-
-  const existing = await prisma.user.findUnique({
-    where: { email },
-    include: { clubMemberships: { take: 1 } },
+  const { mate, invited } = await inviteClubMate({
+    clubId: current.club.id,
+    clubName: current.club.name,
+    inviterName: current.fullName || current.email,
+    inviterEmail: current.email,
+    email: cleanEmail(request.body.email),
+    name: cleanString(request.body.name),
+    surname: cleanString(request.body.surname),
+    phone: cleanString(request.body.phone),
   });
-
-  if (existing && roleForEmail(existing.email, existing.role) === UserRole.ADMIN) {
-    jsonError('Admins cannot be added as group mates.', 403);
-  }
-  if (existing && isDisqualified(existing)) {
-    jsonError('This user is currently disqualified.', 403);
-  }
-  // Never silently move an existing active account into another club.
-  if (existing?.status === UserStatus.ACTIVE) {
-    jsonError('This user already has an account. They must join the club themselves.', 409);
-  }
-  if (existing?.clubMemberships.length && existing.clubMemberships[0].clubId !== current.club.id) {
-    jsonError('This user already belongs to another club.', 409);
-  }
-
-  const inviteToken = createInviteToken();
-  const mate = await prisma.$transaction(async (tx) => {
-    const user = existing
-      ? await tx.user.update({
-          where: { id: existing.id },
-          data: {
-            name: existing.name || name,
-            surname: existing.surname || surname,
-            phone: phone || existing.phone,
-          },
-        })
-      : await tx.user.create({
-          data: {
-            email,
-            name,
-            surname,
-            phone: phone || null,
-            status: UserStatus.INVITED,
-          },
-        });
-
-    await setPlayerClub(user.id, current.club!.id, '', tx);
-
-    if (!existing || existing.status === UserStatus.INVITED) {
-      await tx.inviteToken.create({
-        data: {
-          userId: user.id,
-          tokenHash: hashToken(inviteToken),
-          expiresAt: addDays(14),
-        },
-      });
-    }
-
-    return user;
-  });
-
-  if (!existing || existing.status === UserStatus.INVITED) {
-    await sendClubMateInviteEmail(email, current.fullName || current.email, current.club.name, inviteToken);
-  }
 
   const club = await prisma.club.findUnique({
     where: { id: current.club.id },
@@ -595,7 +548,7 @@ authRouter.post('/api/account/club/mate', asyncHandler(async (request, response)
   response.status(201).json({
     mate: toPublicUser(mate),
     club: club ? serializeClub(club) : null,
-    invited: !existing || existing.status === UserStatus.INVITED,
+    invited,
   });
 }));
 
@@ -711,6 +664,9 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
       response.redirect(frontendRedirect('/register?error=legal-consent-required'));
       return null;
     }
+    // A brand-new Google signup files a club request like anyone else; no User
+    // row exists until an admin approves it.
+    if (!existing) return { newcomer: true as const };
     const acceptedAt = accountNeedsAcceptance ? new Date() : undefined;
     const nextUser = existing
       ? await tx.user.update({
@@ -758,6 +714,22 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
   });
 
   if (!user) return;
+
+  if ('newcomer' in user) {
+    const application = await startGoogleApplication({
+      email,
+      name: names.name,
+      surname: names.surname,
+      googleAccountId: profile.id,
+    });
+    setApplicationCookie(response, application.id);
+    response.redirect(frontendRedirect(
+      application.status === ClubApplicationStatus.SUBMITTED
+        ? '/register/status'
+        : '/register?step=club',
+    ));
+    return;
+  }
 
   await reconcileUserRole(user.id);
   setSessionCookie(response, user);

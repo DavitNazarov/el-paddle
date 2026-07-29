@@ -57,7 +57,7 @@ export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProp
       }
 
       const destination =
-        data.user?.role === 'ADMIN'
+        data.user?.role === 'ADMIN' || data.user?.role === 'ORGANISER'
           ? '/admin'
           : data.user?.role === 'JUDGE'
             ? '/judge'

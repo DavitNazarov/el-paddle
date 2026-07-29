@@ -1,0 +1,177 @@
+/*
+ * The events board behind the admin and organiser homes. Each event is one row
+ * that answers two questions at a glance: how far has it got, and what is it
+ * waiting on. Nothing else earns a place in the row.
+ */
+
+.board {
+  display: grid;
+}
+
+.row {
+  display: grid;
+  gap: 0.75rem;
+  border-top: 1px solid var(--dash-border);
+  padding: var(--space-4) 1.25rem;
+  transition: background 0.15s ease;
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row:hover {
+  background: rgba(164, 22, 26, 0.025);
+}
+
+/* A running event is the one an administrator is most likely to be looking
+   for, so it keeps a spine while the rest of the board stays flat. */
+.row[data-live='true'] {
+  box-shadow: inset 3px 0 0 var(--dash-primary);
+}
+
+.rowTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.title {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--dash-text);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 1rem;
+  font-size: 0.78rem;
+  color: var(--dash-muted);
+}
+
+.meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.meta svg {
+  height: 0.8rem;
+  width: 0.8rem;
+  flex: none;
+  color: var(--dash-faint);
+}
+
+.rowFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 999px;
+  background: var(--dash-tint);
+  padding: 0.15rem 0.55rem;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  color: var(--dash-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chip svg {
+  height: 0.7rem;
+  width: 0.7rem;
+}
+
+.chip[data-tone='warning'] {
+  border-color: rgba(168, 103, 18, 0.28);
+  background: var(--dash-amber-soft);
+  color: var(--dash-amber);
+}
+
+.chip[data-tone='live'] {
+  border-color: rgba(164, 22, 26, 0.28);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
+}
+
+.quiet {
+  font-size: 0.75rem;
+  color: var(--dash-faint);
+}
+
+.open {
+  display: inline-flex;
+  min-height: 2.75rem;
+  margin-left: auto;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  padding: 0 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--dash-text);
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.open:hover {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-primary-soft);
+}
+
+.open:focus-visible {
+  outline: 2px solid var(--padel-focus-ring);
+  outline-offset: 2px;
+}
+
+.open svg {
+  height: 0.85rem;
+  width: 0.85rem;
+  color: var(--dash-faint);
+  transition: transform 0.15s ease;
+}
+
+.open:hover svg {
+  transform: translateX(2px);
+}
+
+@media (min-width: 60rem) {
+  .row {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem var(--space-5);
+  }
+
+  .rowFoot {
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .open svg {
+    transition: none;
+  }
+}

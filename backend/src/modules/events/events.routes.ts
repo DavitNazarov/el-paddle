@@ -9,6 +9,7 @@ import {
   isDatabaseConnectionError,
   jsonError,
   requireParamId,
+  setPublicCache,
 } from '../../common/http.js';
 import { serializeEvent } from '../../common/serializers.js';
 import {
@@ -22,7 +23,9 @@ import {
   updateEvent,
   updateTournamentPublication,
 } from './events.service.js';
-import { requireCapability, userHasCapability } from '../../common/capabilities.js';
+import { requireCapability, requireEventCapability, requireEventReadCapability, userHasCapability } from '../../common/capabilities.js';
+import { requestIp } from '../../common/audit.js';
+import { assignEventOrganiser, listEventOrganisers, listOrganiserCandidates, revokeEventOrganiser } from './event-organisers.service.js';
 import { requireCommandId } from '../../common/commands.js';
 
 export const eventsRouter = Router();
@@ -108,25 +111,69 @@ function parseEventDetails(body: Record<string, unknown>, { requireAll }: { requ
 
 eventsRouter.get('/api/events', asyncHandler(async (request, response) => {
   const user = await getCurrentUser(request);
-  const adminScope = request.query.scope === 'admin' && user?.role === UserRole.ADMIN;
-  const events = await listEvents({ adminScope });
-  response.json({ events: events.map(serializeEvent) });
+  const wantsAdminScope = request.query.scope === 'admin';
+  const adminScope = wantsAdminScope && user?.role === UserRole.ADMIN;
+  // An organiser's "admin" list is exactly the events handed to them.
+  const organiserId = wantsAdminScope && user?.role === UserRole.ORGANISER ? user.id : undefined;
+  const events = await listEvents({ adminScope, organiserId });
+  // Bank details are only for admin management of an event, never the browse list (F3).
+  response.json({ events: events.map((event) => serializeEvent(event, { includeBankDetails: adminScope })) });
+}));
+
+eventsRouter.get('/api/admin/organisers', asyncHandler(async (request, response) => {
+  await requireCapability(request, Capability.USER_MANAGE);
+  response.json({ organisers: await listOrganiserCandidates() });
+}));
+
+eventsRouter.get('/api/admin/events/:eventId/organisers', asyncHandler(async (request, response) => {
+  const eventId = requireParamId(request.params.eventId);
+  // Organisers may see who else is running the event with them.
+  await requireEventReadCapability(request, eventId, Capability.USER_MANAGE);
+  response.json({ organisers: await listEventOrganisers(eventId) });
+}));
+
+// Handing an event over grants power, so it stays an admin act even though the
+// organiser's own work is scoped to the event.
+eventsRouter.post('/api/admin/events/:eventId/organisers', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.USER_MANAGE);
+  const eventId = requireParamId(request.params.eventId);
+  await assignEventOrganiser({
+    eventId,
+    userId: requireParamId(request.body.userId, 'organiser id'),
+    actorId: admin.id,
+    ip: requestIp(request),
+  });
+  response.status(201).json({ organisers: await listEventOrganisers(eventId) });
+}));
+
+eventsRouter.delete('/api/admin/events/:eventId/organisers/:userId', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.USER_MANAGE);
+  const eventId = requireParamId(request.params.eventId);
+  await revokeEventOrganiser({
+    eventId,
+    userId: requireParamId(request.params.userId),
+    actorId: admin.id,
+    ip: requestIp(request),
+  });
+  response.json({ organisers: await listEventOrganisers(eventId) });
 }));
 
 eventsRouter.patch('/api/admin/events/:id/tournament-publication', asyncHandler(async (request, response) => {
   const admin = await requireCapability(request, Capability.EVENT_PUBLISH);
   const event = await updateTournamentPublication({ eventId: requireParamId(request.params.id), actorId: admin.id, publicLiveScoringEnabled: typeof request.body.publicLiveScoringEnabled === 'boolean' ? request.body.publicLiveScoringEnabled : undefined, resultsPublished: typeof request.body.resultsPublished === 'boolean' ? request.body.resultsPublished : undefined, expectedVersion: Number(request.body.expectedVersion) });
-  response.json({ event: serializeEvent(event) });
+  response.json({ event: serializeEvent(event, { includeBankDetails: true }) });
 }));
 
 eventsRouter.get('/api/events/:id', asyncHandler(async (request, response) => {
   const user = await getCurrentUser(request);
   const event = await getEventById(requireParamId(request.params.id), user?.role === UserRole.ADMIN);
-  response.json({ event: serializeEvent(event) });
+  // Authenticated single-event view carries bank details so the register modal can render them (F3).
+  response.json({ event: serializeEvent(event, { includeBankDetails: Boolean(user) }) });
 }));
 
 eventsRouter.get('/api/public/events/:id', asyncHandler(async (request, response) => {
   const event = await getEventById(requireParamId(request.params.id), false);
+  setPublicCache(response);
   response.json({ event: serializeEvent(event) });
 }));
 
@@ -147,7 +194,7 @@ eventsRouter.post('/api/events', asyncHandler(async (request, response) => {
     createdById: admin.id,
   });
 
-  response.status(201).json({ event: serializeEvent(event) });
+  response.status(201).json({ event: serializeEvent(event, { includeBankDetails: true }) });
 }));
 
 eventsRouter.patch('/api/events/:id', asyncHandler(async (request, response) => {
@@ -180,7 +227,7 @@ eventsRouter.patch('/api/events/:id', asyncHandler(async (request, response) => 
   }
 
   const event = await updateEvent(requireParamId(request.params.id), data, expectedVersion);
-  response.json({ event: serializeEvent(event) });
+  response.json({ event: serializeEvent(event, { includeBankDetails: true }) });
 }));
 
 eventsRouter.delete('/api/events/:id', asyncHandler(async (request, response) => {
@@ -190,11 +237,12 @@ eventsRouter.delete('/api/events/:id', asyncHandler(async (request, response) =>
 }));
 
 eventsRouter.patch('/api/admin/events/:id/status', asyncHandler(async (request, response) => {
-  const admin = await requireCapability(request, Capability.EVENT_STATUS_MANAGE);
+  const eventId = requireParamId(request.params.id);
+  const admin = await requireEventCapability(request, eventId, Capability.EVENT_STATUS_MANAGE);
   const status = cleanString(request.body.status).toUpperCase() as EventStatus;
   if (!Object.values(EventStatus).includes(status)) jsonError('Invalid event status.');
   const event = await changeEventStatus({
-    eventId: requireParamId(request.params.id),
+    eventId,
     status,
     actorId: admin.id,
     canRollbackCompleted: await userHasCapability(admin.id, admin.role, Capability.EVENT_STATE_CORRECT),
@@ -202,15 +250,16 @@ eventsRouter.patch('/api/admin/events/:id/status', asyncHandler(async (request, 
     expectedVersion: Number(request.body.expectedVersion),
     commandId: requireCommandId(request.body.commandId),
   });
-  response.json({ event: serializeEvent(event) });
+  response.json({ event: serializeEvent(event, { includeBankDetails: true }) });
 }));
 
 eventsRouter.get('/api/public/events', asyncHandler(async (_request, response) => {
   try {
     const { upcoming, previous } = await listPublicEvents();
+    setPublicCache(response);
     response.json({
       upcoming: upcoming ? serializeEvent(upcoming) : null,
-      previous: previous.map(serializeEvent),
+      previous: previous.map((event) => serializeEvent(event)),
     });
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
@@ -224,6 +273,7 @@ eventsRouter.get('/api/public/events', asyncHandler(async (_request, response) =
 eventsRouter.get('/api/public/sitemap-events', asyncHandler(async (_request, response) => {
   try {
     const events = await listPublishedEventsForSitemap();
+    setPublicCache(response, { maxAge: 300, staleWhileRevalidate: 3600 });
     response.json({
       events: events.map((event) => ({
         id: event.id,

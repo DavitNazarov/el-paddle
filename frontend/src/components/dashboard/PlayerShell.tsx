@@ -10,6 +10,7 @@ import {
   ListChecks,
   LogOut,
   Settings,
+  ShieldCheck,
   Building2,
   History,
 } from 'lucide-react';
@@ -122,7 +123,8 @@ export function PlayerShell({
         name: user.fullName,
         email: user.email,
         items: [
-          { label: player.sidebar.settings, href: '/dashboard/settings', icon: Settings },
+          { label: player.sidebar.settings, href: '/dashboard/settings#profile', icon: Settings },
+          { label: dictionary.dashboard.account.sectionSecurity, href: '/dashboard/settings#security', icon: ShieldCheck },
           { label: t('common.logout'), onClick: logout, icon: LogOut, danger: true },
         ],
       }}

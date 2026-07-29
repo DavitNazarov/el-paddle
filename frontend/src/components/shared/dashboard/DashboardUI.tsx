@@ -1,12 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Bell, CheckCircle2, ChevronDown, CircleDashed, PanelLeftClose, PanelLeftOpen, XCircle } from 'lucide-react';
+import { Bell, ChevronDown, CircleDashed, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { motion, useReducedMotion, useScroll, useSpring } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { DashboardStyles } from './DashboardStyles';
+import { PageNotice, type NoticeTone } from './Feedback';
 
 type ProfileItem = {
   label: string;
@@ -225,10 +225,33 @@ export function DashboardShell({
   children,
 }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const hasSidebar = Boolean(sidebarContent || sidebarFooter);
   const { t } = useI18n();
   const sidebarToggleLabel = sidebarOpen ? t('dashboard.shell.collapse') : t('dashboard.shell.expand');
   const reduceMotion = useReducedMotion();
+
+  // Phones get the same navigation as desktop, as an off-canvas drawer rather
+  // than a second, differently-shaped menu that can drift out of sync. Closing
+  // on link activation beats reacting to the pathname: the panel disappears
+  // with the tap instead of one render after the route resolves.
+  const closeDrawerOnNavigation = (event: ReactMouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('a')) setDrawerOpen(false);
+  };
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDrawerOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [drawerOpen]);
 
   return (
     <main className="dash-app">
@@ -295,16 +318,77 @@ export function DashboardShell({
           </aside>
         ) : null}
 
+        {hasSidebar && drawerOpen ? (
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <button
+              type="button"
+              aria-label={t('dashboard.shell.closeMenu')}
+              onClick={() => setDrawerOpen(false)}
+              className="absolute inset-0 h-full w-full bg-[rgba(43,26,24,0.45)] backdrop-blur-[2px]"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={sidebarSubtitle}
+              className="dash-sidebar dash-drawer absolute inset-y-0 left-0 flex w-[17rem] max-w-[85vw] flex-col"
+              onClick={closeDrawerOnNavigation}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--dash-border)] px-5 py-4">
+                <div className="min-w-0">
+                  <Link href="/" className="font-display text-xl font-semibold tracking-normal text-[var(--dash-text)]">
+                    {sidebarTitle}
+                  </Link>
+                  <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--dash-faint)]">
+                    {sidebarSubtitle}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  aria-label={t('dashboard.shell.closeMenu')}
+                  onClick={() => setDrawerOpen(false)}
+                  className="h-11 w-11 shrink-0 rounded-md text-[var(--dash-text)] hover:bg-[var(--dash-tint)]"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              {sidebarContent ? (
+                <nav aria-label={sidebarSubtitle} className="flex-1 overflow-y-auto px-3 py-4">
+                  {sidebarContent}
+                </nav>
+              ) : null}
+              {sidebarFooter ? (
+                <div className="border-t border-[var(--dash-border)] p-4">{sidebarFooter}</div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <section className="min-w-0">
           <header className="dash-header sticky top-0 z-20">
             <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <motion.div
-                  className="min-w-0"
+                  className="flex min-w-0 items-start gap-3"
                   initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                 >
+                  {hasSidebar ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      aria-label={t('dashboard.shell.openMenu')}
+                      aria-expanded={drawerOpen}
+                      onClick={() => setDrawerOpen(true)}
+                      className="mt-0.5 h-11 w-11 shrink-0 rounded-md border-[var(--dash-border)] bg-white text-[var(--dash-text)] hover:bg-[var(--dash-tint)] lg:hidden"
+                    >
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  ) : null}
+                  <div className="min-w-0">
                   <p className="dash-kicker">{eyebrow}</p>
                   <h1 className="mt-2 text-2xl font-semibold leading-tight tracking-normal text-[var(--dash-text)] sm:text-[1.75rem]">
                     {title}
@@ -312,6 +396,7 @@ export function DashboardShell({
                   <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--dash-muted)] sm:line-clamp-none line-clamp-2">
                     {description}
                   </p>
+                  </div>
                 </motion.div>
                 <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                   <LanguageSwitcher
@@ -366,6 +451,86 @@ export function SurfaceCard({ className, children, featured = false, interactive
   );
 }
 
+type DataTableColumn<T> = {
+  /** Stable identity for the column; also the React key. */
+  key: string;
+  header: string;
+  /** Tailwind width class applied to the matching <col>. */
+  width?: string;
+  cell: (row: T) => ReactNode;
+};
+
+type DataTableProps<T> = {
+  columns: DataTableColumn<T>[];
+  rows: T[];
+  rowKey: (row: T) => string;
+  /** Widest the table may shrink to before the wrapper scrolls it. */
+  minWidthClassName?: string;
+  actionsHeader?: string;
+  actionsWidth?: string;
+  renderActions?: (row: T) => ReactNode;
+};
+
+/**
+ * The admin directory table. Row actions live in a column pinned to the right
+ * edge so they stay reachable while the rest of the table scrolls sideways on
+ * narrow screens — the wrapper scrolls, never the page.
+ */
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  minWidthClassName = 'min-w-[700px]',
+  actionsHeader,
+  actionsWidth = 'w-[132px] 2xl:w-[340px]',
+  renderActions,
+}: DataTableProps<T>) {
+  return (
+    <SurfaceCard className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className={cn('w-full table-fixed border-collapse text-left', minWidthClassName)}>
+          <colgroup>
+            {columns.map((column) => (
+              <col key={column.key} className={column.width} />
+            ))}
+            {renderActions ? <col className={actionsWidth} /> : null}
+          </colgroup>
+          <thead className="dash-table__head text-xs uppercase tracking-[0.14em] text-[var(--dash-faint)]">
+            <tr>
+              {columns.map((column) => (
+                <th key={column.key} scope="col" className="px-5 py-4 font-medium">
+                  {column.header}
+                </th>
+              ))}
+              {renderActions ? (
+                <th scope="col" className="dash-table__sticky px-5 py-4 text-right font-medium">
+                  {actionsHeader}
+                </th>
+              ) : null}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--dash-border)]">
+            {rows.map((row) => (
+              <tr key={rowKey(row)} className="dash-table__row group bg-white transition-colors hover:bg-[#fdf9f7]">
+                {columns.map((column) => (
+                  <td key={column.key} className="px-5 py-4 align-middle">
+                    {column.cell(row)}
+                  </td>
+                ))}
+                {renderActions ? (
+                  <td className="dash-table__sticky dash-table__sticky--body px-5 py-4 align-middle">
+                    <div className="flex items-center justify-end gap-2">{renderActions(row)}</div>
+                  </td>
+                ) : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </SurfaceCard>
+  );
+}
+
 export function SectionHeading({
   eyebrow,
   title,
@@ -412,40 +577,26 @@ export function DashboardField({
   );
 }
 
+/**
+ * The result of the last action, reported at the top of a screen. Delegates to
+ * the shared banner so every dashboard reports outcomes identically; `kind`
+ * now spans all four tones rather than only success and failure.
+ */
 export function FeedbackBanner({
   kind,
+  title,
   children,
+  onDismiss,
 }: {
-  kind: 'success' | 'error';
+  kind: NoticeTone;
+  title?: string;
   children: ReactNode;
+  onDismiss?: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [children, kind]);
-
   return (
-    <Alert
-      ref={ref}
-      variant={kind === 'error' ? 'destructive' : 'default'}
-      className={cn(
-        'mb-5 rounded-xl border',
-        kind === 'success' &&
-          'border-[rgba(22,128,106,0.28)] bg-[var(--dash-teal-soft)] text-[var(--dash-teal)]',
-        kind === 'error' &&
-          'border-[rgba(194,65,59,0.28)] bg-[var(--dash-coral-soft)] text-[var(--dash-coral)]',
-      )}
-    >
-      <div className="flex items-start gap-3">
-        {kind === 'success' ? (
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--dash-teal)]" />
-        ) : (
-          <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--dash-coral)]" />
-        )}
-        <AlertDescription className="text-inherit">{children}</AlertDescription>
-      </div>
-    </Alert>
+    <PageNotice tone={kind} title={title} onDismiss={onDismiss}>
+      {children}
+    </PageNotice>
   );
 }
 
@@ -578,6 +729,35 @@ export function AttentionRow({
       </div>
       {action}
     </div>
+  );
+}
+
+/**
+ * Compact state chip: an icon paired with its label, so the tone is a
+ * reinforcement of the wording rather than the only signal.
+ */
+export function InfoChip({
+  icon: Icon,
+  tone = 'neutral',
+  children,
+}: {
+  icon?: LucideIcon;
+  tone?: 'neutral' | 'positive' | 'warning';
+  children: ReactNode;
+}) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'gap-1.5 px-2.5 py-1 font-medium',
+        tone === 'neutral' && 'border-[var(--dash-border)] bg-[var(--dash-tint)] text-[var(--dash-muted)]',
+        tone === 'positive' && 'border-[rgba(22,128,106,0.28)] bg-[var(--dash-teal-soft)] text-[var(--dash-teal)]',
+        tone === 'warning' && 'border-[rgba(168,103,18,0.28)] bg-[var(--dash-amber-soft)] text-[var(--dash-amber)]',
+      )}
+    >
+      {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
+      {children}
+    </Badge>
   );
 }
 

@@ -469,14 +469,27 @@
   padding: 0.35rem;
 }
 
+/* Flex rather than fixed columns: the winner check and the move button are both optional. */
 .participant {
-  display: grid;
-  grid-template-columns: 1.4rem minmax(0, 1fr) auto 1.5rem;
+  display: flex;
   min-height: 3rem;
   align-items: center;
   gap: 0.45rem;
   padding: 0.45rem 0.5rem;
   border-radius: 0.45rem;
+}
+
+.participant > .pairName,
+.participant > .pairHandle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.participant > .sideLabel,
+.participant > .winnerCheck,
+.participant > .moveButton,
+.participant > .score {
+  flex: 0 0 auto;
 }
 
 .participant + .participant {
@@ -587,6 +600,167 @@
 @keyframes shimmer {
   from { transform: translateX(-100%); }
   to { transform: translateX(100%); }
+}
+
+/* Slot format controls: round defaults in the round header, overrides on each match card. */
+.slotControl {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.slotControl select {
+  min-height: 2.75rem;
+  max-width: 100%;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.45rem;
+  background: #fff;
+  color: var(--dash-text);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.slotControl select:disabled {
+  background: #f4f5f8;
+  color: var(--dash-faint);
+}
+
+.slotControl select:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.roundSlotControl {
+  grid-column: 1 / -1;
+  margin-top: 0.15rem;
+}
+
+.roundSlotControl label {
+  color: var(--dash-faint);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.matchFormat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-top: 1px solid var(--dash-border);
+  background: #fbfbfd;
+}
+
+.formatBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--dash-muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.slotChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Draft-only participant placement: drag a pair onto another first-round slot to move or swap. */
+.pairHandle {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.05rem;
+  text-align: start;
+  cursor: grab;
+}
+
+.pendingParticipant .pairHandle {
+  color: var(--dash-faint);
+  font-style: italic;
+  font-weight: 550;
+}
+
+.pairHandle:focus-visible,
+.moveButton:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
+  border-radius: 0.3rem;
+}
+
+.moveButton {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--dash-faint);
+  cursor: pointer;
+}
+
+.moveButton:hover:not(:disabled) {
+  background: #f7ede9;
+  color: var(--dash-primary);
+}
+
+.moveButton svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.participant.dropTarget {
+  outline: 2px dashed var(--dash-primary);
+  outline-offset: -2px;
+  background: var(--dash-primary-soft);
+}
+
+.participant.dragging {
+  opacity: 0.45;
+}
+
+.dragGhost {
+  display: inline-flex;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dash-primary);
+  border-radius: 0.5rem;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(43, 26, 24, 0.18);
+  color: var(--dash-primary);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.slotChips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.3rem;
+  background: #fff;
+  color: var(--dash-muted);
+  font-size: 0.55rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (min-width: 40rem) {

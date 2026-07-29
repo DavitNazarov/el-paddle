@@ -12,12 +12,12 @@ import {
 } from '@/components/shared/dashboard/DashboardUI';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { apiFetch, createCommandId, readApiJson } from '@/lib/api';
-import type { PublicUser } from '@/types/auth';
 import type { RegistrationDto } from '@/types/dashboard';
 
 type ClubLineupEditorProps = {
   registration: RegistrationDto;
-  clubPlayers: PublicUser[];
+  // Only identity is needed to pick a replacement; club members arrive slim (F7).
+  clubPlayers: Array<{ id: string; fullName: string }>;
   onClose: () => void;
   onUpdated: () => Promise<void> | void;
   onConflict?: () => Promise<void> | void;

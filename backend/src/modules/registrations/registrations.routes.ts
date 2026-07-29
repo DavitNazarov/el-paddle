@@ -8,10 +8,11 @@ import {
   isValidEmail,
   jsonError,
   requireParamId,
+  setPublicCache,
 } from '../../common/http.js';
 import { auditLog, requestIp } from '../../common/audit.js';
 import { requireParticipationLegalAcceptance } from '../../common/legal.js';
-import { requireCapability } from '../../common/capabilities.js';
+import { requireCapability, requireEventReadCapability } from '../../common/capabilities.js';
 import { requireCommandId } from '../../common/commands.js';
 import { parseListRange } from '../../common/pagination.js';
 import { serializeEvent, serializePublicRegistrationTeam, serializeRegistration } from '../../common/serializers.js';
@@ -124,8 +125,10 @@ registrationsRouter.patch('/api/admin/registrations/:id', asyncHandler(async (re
 }));
 
 registrationsRouter.get('/api/admin/events/:eventId/registrations', asyncHandler(async (request, response) => {
-  await requireCapability(request, Capability.REGISTRATION_REVIEW);
   const eventId = requireParamId(request.params.eventId, 'event id');
+  // Read-only for organisers: an admin approves the entries before hand-off,
+  // but the organiser still needs the roster to seed a bracket.
+  await requireEventReadCapability(request, eventId, Capability.REGISTRATION_REVIEW);
   const page = await listAdminRegistrations(eventId, parseListRange(request.query));
   response.json({ registrations: page.items.map(serializeRegistration), nextCursor: page.nextCursor });
 }));
@@ -140,11 +143,12 @@ registrationsRouter.patch('/api/admin/events/:eventId/registration-roster-public
     expectedVersion: Number(request.body.expectedVersion),
     commandId: requireCommandId(request.body.commandId),
   });
-  response.json({ event: serializeEvent(event) });
+  response.json({ event: serializeEvent(event, { includeBankDetails: true }) });
 }));
 
 registrationsRouter.get('/api/public/events/:eventId/registered-teams', asyncHandler(async (request, response) => {
   const registrations = await listPublicRegistrationRoster(requireParamId(request.params.eventId, 'event id'));
+  setPublicCache(response);
   response.json({ teams: registrations.map(serializePublicRegistrationTeam) });
 }));
 

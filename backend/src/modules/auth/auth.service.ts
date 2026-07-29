@@ -8,7 +8,10 @@ import { prisma } from '../../database/prisma.js';
 export const SESSION_COOKIE = 'elpadel_session';
 export const OAUTH_STATE_COOKIE = 'elpadel_oauth_state';
 export const OAUTH_LEGAL_COOKIE = 'elpadel_oauth_legal';
+/** Carries a pending club application; it is not a session and grants no account access. */
+export const APPLICATION_COOKIE = 'elpadel_application';
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+export const APPLICATION_MAX_AGE_SECONDS = 60 * 60 * 2;
 
 export type PublicUser = {
   id: string;
@@ -29,6 +32,8 @@ export type PublicUser = {
     wins: number;
     losses: number;
   };
+  /** Events an organiser currently runs. Empty for every other role. */
+  organiserEventIds: string[];
 };
 
 export type UserClubSummary = {
@@ -37,10 +42,32 @@ export type UserClubSummary = {
   slug: string;
 };
 
-type UserWithOptionalClub = User & {
+/**
+ * The exact columns `toPublicUser` reads. Declared structurally (a `Pick`, not
+ * the full `User`) so slim `select` contracts — which never load `passwordHash`
+ * — satisfy it just as a fully-loaded row does (F1). A full `User` is still
+ * assignable here; the extra columns are simply ignored.
+ */
+export type PublicUserSource = Pick<
+  User,
+  | 'id'
+  | 'email'
+  | 'name'
+  | 'surname'
+  | 'phone'
+  | 'role'
+  | 'status'
+  | 'emailVerifiedAt'
+  | 'matchesPlayed'
+  | 'wins'
+  | 'losses'
+  | 'disqualifiedUntil'
+  | 'disqualificationReason'
+> & {
   clubMemberships?: {
     club: UserClubSummary;
   }[];
+  organiserEvents?: { eventId: string }[];
 };
 
 type SessionPayload = JwtPayload & {
@@ -95,12 +122,18 @@ export function roleForEmail(
   if (options?.emailVerified === false) return UserRole.USER;
   if (currentRole === UserRole.ADMIN) return UserRole.ADMIN;
   if (currentRole === UserRole.JUDGE) return UserRole.JUDGE;
+  if (currentRole === UserRole.ORGANISER) return UserRole.ORGANISER;
   return adminEmails().has(email.trim().toLowerCase())
     ? UserRole.ADMIN
     : UserRole.USER;
 }
 
-export function toPublicUser(user: UserWithOptionalClub): PublicUser {
+/** Staff never hold a club membership or player statistics. */
+export function isStaffRole(role: UserRole) {
+  return role === UserRole.ADMIN || role === UserRole.JUDGE || role === UserRole.ORGANISER;
+}
+
+export function toPublicUser(user: PublicUserSource): PublicUser {
   const name = user.name ?? '';
   const surname = user.surname ?? '';
   const fullName = [name, surname].filter(Boolean).join(' ') || user.email;
@@ -111,7 +144,7 @@ export function toPublicUser(user: UserWithOptionalClub): PublicUser {
       : null;
   const club = user.clubMemberships?.[0]?.club ?? null;
   const stats =
-    role === UserRole.ADMIN || role === UserRole.JUDGE
+    isStaffRole(role)
       ? { matchesPlayed: 0, wins: 0, losses: 0 }
       : {
           matchesPlayed: user.matchesPlayed,
@@ -132,8 +165,9 @@ export function toPublicUser(user: UserWithOptionalClub): PublicUser {
     disqualifiedUntil,
     disqualificationReason: disqualifiedUntil ? (user.disqualificationReason ?? '') : '',
     isDisqualified: Boolean(disqualifiedUntil),
-    club: role === UserRole.ADMIN || role === UserRole.JUDGE ? null : club,
+    club: isStaffRole(role) ? null : club,
     stats,
+    organiserEventIds: user.organiserEvents?.map((link) => link.eventId) ?? [],
   };
 }
 
@@ -177,6 +211,38 @@ export function setOAuthLegalCookie(response: Response) {
     ...baseCookieOptions,
     maxAge: 10 * 60 * 1000,
   });
+}
+
+export function setApplicationCookie(response: Response, applicationId: string) {
+  const token = jwt.sign({ app: applicationId }, getSessionSecret(), {
+    algorithm: 'HS256',
+    subject: applicationId,
+    expiresIn: APPLICATION_MAX_AGE_SECONDS,
+  });
+  clearLegacyHostOnlyCookie(response, APPLICATION_COOKIE);
+  response.cookie(APPLICATION_COOKIE, token, {
+    ...baseCookieOptions,
+    maxAge: APPLICATION_MAX_AGE_SECONDS * 1000,
+  });
+}
+
+/** The pending application this browser is filling in, or null. */
+export function readApplicationId(request: Request) {
+  const token = request.cookies?.[APPLICATION_COOKIE] as string | undefined;
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, getSessionSecret(), {
+      algorithms: ['HS256'],
+    }) as JwtPayload & { app?: string };
+    return payload.app ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearApplicationCookie(response: Response) {
+  response.clearCookie(APPLICATION_COOKIE, baseCookieOptions);
+  clearLegacyHostOnlyCookie(response, APPLICATION_COOKIE);
 }
 
 export function clearSessionCookie(response: Response) {
@@ -228,6 +294,9 @@ export async function getCurrentUser(request: Request) {
         },
         take: 1,
       },
+      // The frontend gates organiser screens per event; loading the links here
+      // saves every admin page a second round trip.
+      organiserEvents: { where: { revokedAt: null }, select: { eventId: true } },
     },
   });
   if (!user) return null;

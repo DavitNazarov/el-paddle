@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 async function getPlayers() {
-  const response = await fetch(apiUrl('/api/public/players'), { cache: 'no-store' });
+  const response = await fetch(apiUrl('/api/public/players'), { next: { revalidate: 120 } });
   if (!response.ok) throw new Error('Could not load players.');
   const data = (await response.json()) as { players?: PublicPlayer[] };
   return data.players ?? [];

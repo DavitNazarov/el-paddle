@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { formatMatchResult } from '@/lib/matchResult';
 import { fillTemplate, tournamentCopy, tournamentRound, tournamentStatus } from '@/lib/i18n/tournament';
 import type { EventDto } from '@/types/dashboard';
 import type { MatchDto } from '@/types/tournament';
@@ -31,6 +32,8 @@ export function MatchHistoryClient({ endpoint = '/api/matches', tone = 'brand' }
   const [events, setEvents] = useState<EventDto[]>([]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [matches, setMatches] = useState<MatchDto[]>([]);
+  // Event titles are hoisted out of the match rows and sent once per response (F4).
+  const [eventTitles, setEventTitles] = useState<Record<string, string>>({});
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
 
@@ -66,21 +69,33 @@ export function MatchHistoryClient({ endpoint = '/api/matches', tone = 'brand' }
     }
     const scopedEndpoint = eventScoped ? `${endpoint}?eventId=${encodeURIComponent(selectedEventId)}` : endpoint;
     const response = await apiFetch(scopedEndpoint, { cache: 'no-store' });
-    const data = await response.json() as { matches?: MatchDto[]; error?: string };
-    if (!response.ok) setError(data.error ?? copy.loadError); else setMatches(data.matches ?? []);
+    const data = await response.json() as { matches?: MatchDto[]; events?: { id: string; title: string }[]; error?: string };
+    if (!response.ok) {
+      setError(data.error ?? copy.loadError);
+    } else {
+      setMatches(data.matches ?? []);
+      setEventTitles(Object.fromEntries((data.events ?? []).map((event) => [event.id, event.title])));
+    }
   }, [copy.loadError, endpoint, eventScoped, selectedEventId]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
 
+  const eventTitleFor = useCallback(
+    (match: MatchDto) =>
+      match.bracket?.event?.title ??
+      (match.bracket?.eventId ? eventTitles[match.bracket.eventId] : undefined),
+    [eventTitles],
+  );
+
   const filtered = useMemo(() => matches.filter((match) => {
     const haystack = [
-      match.bracket?.event?.title,
+      eventTitleFor(match),
       match.bracket?.eventCategory.category.name,
       match.round,
       match.resultType,
       ...match.snapshots.flatMap((snapshot) => [snapshot.ownerName, snapshot.teammateName, snapshot.clubName]),
     ].join(' ').toLowerCase();
     return haystack.includes(query.toLowerCase());
-  }), [matches, query]);
+  }), [matches, query, eventTitleFor]);
   const selectedEvent = events.find((event) => event.id === selectedEventId);
 
   return (
@@ -134,7 +149,7 @@ export function MatchHistoryClient({ endpoint = '/api/matches', tone = 'brand' }
         />
         {filtered.length ? (
           <div className={cn('grid gap-4 p-4 sm:p-5 lg:grid-cols-2', dashboardTone && 'bg-[#fbfcfe]')}>
-            {filtered.map((match) => <MatchResultCard key={match.id} match={match} tone={tone} />)}
+            {filtered.map((match) => <MatchResultCard key={match.id} match={match} tone={tone} eventTitle={eventTitleFor(match)} />)}
           </div>
         ) : (
           <EmptyTournamentState title={copy.empty} detail={copy.emptyDescription} />
@@ -144,13 +159,15 @@ export function MatchHistoryClient({ endpoint = '/api/matches', tone = 'brand' }
   );
 }
 
-function MatchResultCard({ match, tone }: { match: MatchDto; tone: 'brand' | 'dashboard' }) {
+function MatchResultCard({ match, tone, eventTitle }: { match: MatchDto; tone: 'brand' | 'dashboard'; eventTitle?: string }) {
   const { locale, formatDate } = useI18n();
   const copy = tournamentCopy[locale];
   const sideA = matchSide(match, 'A');
   const sideB = matchSide(match, 'B');
   const winnerSide = match.scoreA > match.scoreB ? 'A' : match.scoreB > match.scoreA ? 'B' : null;
   const dashboardTone = tone === 'dashboard';
+  // Slot matches read "2–1 in slots" so a low tally is not mistaken for a point score.
+  const resultLabel = match.scoringMode === 'SLOTS' ? formatMatchResult(match, locale) : null;
 
   return (
     <Link
@@ -165,7 +182,7 @@ function MatchResultCard({ match, tone }: { match: MatchDto; tone: 'brand' | 'da
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className={cn('text-xs font-semibold uppercase tracking-[0.18em]', dashboardTone ? 'text-[var(--dash-primary)]' : 'text-[var(--padel-gold)]')}>
-            {match.bracket?.event?.title ?? copy.history.eventFallback}
+            {eventTitle ?? copy.history.eventFallback}
           </p>
           <h2 className={cn('mt-2 text-lg font-semibold', dashboardTone ? 'text-[var(--dash-text)]' : 'text-[var(--padel-ivory)]')}>
             {match.bracket?.eventCategory.category.name ?? copy.history.categoryFallback} · {tournamentRound(locale, match.round)}
@@ -182,6 +199,7 @@ function MatchResultCard({ match, tone }: { match: MatchDto; tone: 'brand' | 'da
       <div className={cn('mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4', dashboardTone ? 'border-[var(--dash-border)]' : 'border-[var(--padel-line)]')}>
         <div className="flex flex-wrap gap-2">
           <Badge variant="gold" className={cn(dashboardTone && 'border-[var(--dash-border)] bg-[var(--dash-primary-soft)] text-[var(--dash-primary)]')}>{copy.common.match} {match.matchNumber}</Badge>
+          {resultLabel ? <Badge variant="gold" className={cn(dashboardTone && 'border-[var(--dash-border)] bg-[#f5f7fa] text-[var(--dash-muted)]')}>{resultLabel}</Badge> : null}
           {match.completedAt ? <Badge variant="gold" className={cn(dashboardTone && 'border-[var(--dash-border)] bg-[#f5f7fa] text-[var(--dash-muted)]')}>{formatDate(match.completedAt)}</Badge> : null}
         </div>
         <span className={cn('inline-flex items-center gap-2 text-sm font-semibold', dashboardTone ? 'text-[var(--dash-primary)]' : 'text-[var(--padel-gold)]')}>

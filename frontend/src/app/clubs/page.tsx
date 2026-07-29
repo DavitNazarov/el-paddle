@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 async function getClubs() {
-  const response = await fetch(apiUrl('/api/public/clubs'), { cache: 'no-store' });
+  const response = await fetch(apiUrl('/api/public/clubs'), { next: { revalidate: 120 } });
   if (!response.ok) throw new Error('Could not load clubs.');
   const data = (await response.json()) as { clubs?: PublicClub[] };
   return data.clubs ?? [];

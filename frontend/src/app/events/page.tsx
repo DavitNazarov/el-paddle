@@ -20,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
 type PublicEventsResponse = { upcoming: EventDto | null; previous: EventDto[] };
 
 async function getEvents() {
-  const response = await fetch(apiUrl('/api/public/events'), { cache: 'no-store' });
+  const response = await fetch(apiUrl('/api/public/events'), { next: { revalidate: 60 } });
   if (!response.ok) throw new Error('Could not load events.');
   const data = (await response.json()) as PublicEventsResponse;
   return { upcoming: data.upcoming ?? null, previous: Array.isArray(data.previous) ? data.previous : [] };

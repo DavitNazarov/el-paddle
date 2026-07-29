@@ -1,0 +1,516 @@
+/*
+ * Shared dashboard signal surfaces: the stage rail, the signal card, the state
+ * row, and the queue meter. Every role home is built from these, so a rail on
+ * the judge console and a rail on the event workspace are the same object
+ * rather than two lookalikes that drift apart.
+ *
+ * These only render inside the light admin/dashboard shell (.dash-app), so they
+ * read the dashboard tokens directly instead of re-declaring a palette.
+ */
+
+/* ---- Stage rail: vertical on phones, horizontal from tablet width up ---- */
+.rail {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.railStep {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.7rem;
+  padding-bottom: 0.9rem;
+}
+
+.railStep:last-child {
+  padding-bottom: 0;
+}
+
+.railStep::before {
+  content: '';
+  position: absolute;
+  left: 0.6875rem;
+  top: 1.6rem;
+  bottom: -0.1rem;
+  width: 2px;
+  background: var(--dash-border);
+}
+
+.railStep:last-child::before {
+  display: none;
+}
+
+.railStep[data-state='done']::before {
+  background: rgba(164, 22, 26, 0.45);
+}
+
+.railDot {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  height: 1.5rem;
+  width: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--dash-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--dash-faint);
+}
+
+.railDot svg {
+  height: 0.7rem;
+  width: 0.7rem;
+}
+
+.railStep[data-state='done'] .railDot {
+  border-color: var(--dash-primary);
+  background: var(--dash-primary);
+  color: #fff;
+}
+
+.railStep[data-state='current'] .railDot {
+  border-color: var(--dash-primary);
+  color: var(--dash-primary);
+  box-shadow: 0 0 0 4px var(--dash-primary-soft);
+}
+
+.railLabel {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  color: var(--dash-muted);
+}
+
+.railStep[data-state='current'] .railLabel {
+  font-weight: 700;
+  color: var(--dash-text);
+}
+
+.railNote {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dash-primary);
+}
+
+/* ---- Stage dots: the rail compressed to fit inside a list row ---- */
+.dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.dot {
+  height: 0.45rem;
+  width: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--dash-border-strong);
+  background: transparent;
+}
+
+.dot[data-state='done'] {
+  border-color: rgba(164, 22, 26, 0.45);
+  background: rgba(164, 22, 26, 0.45);
+}
+
+.dot[data-state='current'] {
+  height: 0.6rem;
+  width: 0.6rem;
+  border-color: var(--dash-primary);
+  background: var(--dash-primary);
+}
+
+.dotsLabel {
+  margin-left: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--dash-text);
+}
+
+/* ---- Signal card: a destination that states its own workload ---- */
+.signalGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.signalCard {
+  position: relative;
+  display: flex;
+  min-height: 11.5rem;
+  flex-direction: column;
+  gap: 0.55rem;
+  overflow: hidden;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+  padding: var(--space-4);
+  box-shadow: 0 1px 2px rgba(43, 26, 24, 0.035);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.signalCard:hover {
+  border-color: var(--dash-border-strong);
+  box-shadow: 0 10px 26px rgba(43, 26, 24, 0.07);
+  transform: translateY(-2px);
+}
+
+.signalCard:focus-visible {
+  outline: 2px solid var(--padel-focus-ring);
+  outline-offset: 2px;
+}
+
+/* The card the role is currently being asked to work in gets a spine, not just
+   a tint, so the emphasis survives a greyscale or low-contrast screen. */
+.signalCard[data-focus='true'] {
+  border-color: rgba(164, 22, 26, 0.34);
+  background: linear-gradient(180deg, rgba(164, 22, 26, 0.06), #fff 60%);
+}
+
+.signalCard[data-focus='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--dash-primary);
+}
+
+.signalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.signalIcon {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-tile);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
+}
+
+.signalIcon svg {
+  height: 1rem;
+  width: 1rem;
+}
+
+.signalIndex {
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  color: var(--dash-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.signalTitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--dash-text);
+}
+
+.signalDetail {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.15rem;
+  color: var(--dash-muted);
+}
+
+.signalFoot {
+  display: flex;
+  margin-top: auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-top: 1px solid var(--dash-border);
+  padding-top: 0.7rem;
+}
+
+.signalValue {
+  min-width: 0;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.signalValue[data-muted='true'] {
+  font-weight: 550;
+  color: var(--dash-faint);
+}
+
+.signalArrow {
+  height: 1rem;
+  width: 1rem;
+  flex: none;
+  color: var(--dash-faint);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.signalCard:hover .signalArrow {
+  transform: translateX(3px);
+  color: var(--dash-primary);
+}
+
+.flag {
+  display: inline-flex;
+  margin-top: 0.55rem;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid rgba(168, 103, 18, 0.28);
+  border-radius: 999px;
+  background: var(--dash-amber-soft);
+  padding: 0.15rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dash-amber);
+}
+
+.flag svg {
+  height: 0.65rem;
+  width: 0.65rem;
+}
+
+/* ---- State row: one public/togglable surface per line ---- */
+.stateRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  border-top: 1px solid var(--dash-border);
+  padding: 0.85rem 1.25rem;
+}
+
+.stateRow:first-child {
+  border-top: 0;
+}
+
+.stateIcon {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: var(--dash-tint);
+  color: var(--dash-faint);
+}
+
+.stateIcon svg {
+  height: 0.9rem;
+  width: 0.9rem;
+}
+
+.stateIcon[data-live='true'] {
+  border-color: rgba(22, 128, 106, 0.28);
+  background: var(--dash-teal-soft);
+  color: var(--dash-teal);
+}
+
+.stateText {
+  display: block;
+  min-width: 0;
+  flex: 1 1 13rem;
+}
+
+.stateLabel {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--dash-text);
+}
+
+.stateHint {
+  margin: 0.1rem 0 0;
+  font-size: 0.73rem;
+  line-height: 1.1rem;
+  color: var(--dash-muted);
+}
+
+/* Phones give the controls their own full-width row: a right-aligned chip with
+   a wrapped button underneath reads as two unrelated fragments. */
+.stateActions {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stateChip {
+  display: inline-flex;
+  align-items: center;
+}
+
+.manageLink {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  padding: 0 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--dash-text);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.manageLink:hover {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-primary-soft);
+}
+
+.manageLink:focus-visible {
+  outline: 2px solid var(--padel-focus-ring);
+  outline-offset: 2px;
+}
+
+.manageLink svg {
+  height: 0.85rem;
+  width: 0.85rem;
+  color: var(--dash-faint);
+}
+
+/* ---- Queue meter: "4 of 11 done" as a bar plus the literal numbers ---- */
+.meter {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.meterHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.meterLabel {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dash-faint);
+}
+
+.meterValue {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.meterTrack {
+  overflow: hidden;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--dash-tint-strong);
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dash-primary);
+  transition: width 480ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.meterFill[data-complete='true'] {
+  background: var(--dash-teal);
+}
+
+@media (min-width: 40rem) {
+  .signalGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stateActions {
+    width: auto;
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+
+  /* Reserve the state column so chips line up down the board instead of
+     drifting with each button's width. */
+  .stateChip {
+    min-width: 7rem;
+  }
+}
+
+@media (min-width: 48rem) {
+  .rail {
+    grid-template-columns: repeat(var(--rail-steps, 4), minmax(0, 1fr));
+  }
+
+  .railStep {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+    padding-bottom: 0;
+    padding-right: 0.75rem;
+  }
+
+  .railStep::before {
+    left: 1.75rem;
+    right: 0.25rem;
+    top: 0.6875rem;
+    bottom: auto;
+    width: auto;
+    height: 2px;
+  }
+
+  .railLabel {
+    line-height: 1.15rem;
+  }
+}
+
+@media (min-width: 80rem) {
+  .signalGrid[data-columns='4'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .signalGrid[data-columns='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (hover: none) {
+  .signalCard:active {
+    border-color: var(--dash-border-strong);
+    transform: scale(0.99);
+  }
+
+  .manageLink:active {
+    background: var(--dash-primary-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signalCard,
+  .signalArrow,
+  .meterFill {
+    transition: none;
+  }
+
+  .signalCard:hover {
+    transform: none;
+  }
+}

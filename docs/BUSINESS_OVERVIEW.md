@@ -14,7 +14,8 @@ event setup → registration → opponent requests → bracket → schedule → 
 | Players | Create or join a club, enter events as a two-person club team, negotiate first-round opponents, follow their matches |
 | Club leaders | Manage the club roster, approve join requests, edit the club's registered team |
 | Judges | Work assigned courts in assigned time windows and score matches |
-| Administrators | Configure events, review entries and pairings, run brackets and schedules, resolve exceptions, publish each surface |
+| Organisers | Run one event at a time, on the events an admin hands them: bracket, schedule, judges, opponent requests, lifecycle, and live scoring |
+| Administrators | Approve who joins the platform, configure events, review entries, hand events to organisers, resolve exceptions, publish each surface |
 
 ## The club-centric model
 
@@ -23,13 +24,24 @@ Clubs are the organizing principle of participation:
 - Every player belongs to exactly one club. A new player must create a club (becoming its **leader**) or request to join one before entering events.
 - A club fields **one team per event**: an owner/teammate pair from the same club. A second pair from the same club cannot enter.
 - The leader has real responsibilities: approving join requests, replacing a registered player with another eligible member (which sends the entry back to admin review), and resolving affected registrations before removing a member. Removal is blocked mid-tournament (ongoing event or locked bracket).
-- Admins and judges are staff, not athletes — they never belong to clubs, cannot be teammates, and hold no player statistics.
+- Admins, organisers, and judges are staff, not athletes — they never belong to clubs, cannot be teammates, and hold no player statistics.
 
 Teammates without an account are invited by email and complete their profile through a tokenized invite link; a team entry can proceed while the invitation is pending.
 
 ## Money
 
 There are no in-app payments. Each event defines a participation fee in GEL together with a Georgian IBAN and receiver name; players pay by bank transfer outside the platform, and administrators verify payment as part of registration review. Registration requires versioned acceptance of the participation terms, refund policy, and physical-risk acknowledgement.
+
+## Joining the platform
+
+Access is granted by a person, not by filling in a form. A newcomer applies: they confirm their email with a code, name the club they want to create, and optionally name a group mate. They then see a confirmation screen and receive an email saying the request is with an administrator.
+
+Nothing is created in the meantime. The request is held on its own, outside the accounts, clubs, and membership tables, so:
+
+- **Approved** — the account, the club (with the applicant as its leader), and the group mate's invitation are all created at once, and the applicant is emailed a link to sign in.
+- **Rejected** — everything the applicant entered is deleted, and they are emailed the administrator's reason. The same email address is free to apply again straight away.
+
+An administrator can also write directly to an applicant while the request is open, for anything that needs clearing up before a decision.
 
 ## The tournament lifecycle
 
@@ -38,7 +50,7 @@ There are no in-app payments. Each event defines a participation fee in GEL toge
 3. **Opponent requests** — after registration closes, admins open a per-category window in which an approved team may request one preferred first-round opponent. The target accepts or refuses; the admin has the final word (approve, reject, or explicitly override a refusal). Pairings only ever affect the first round.
 4. **Bracket** — one single-elimination bracket per category, sized 2, 4, 8, or 16 to fit the 2–16 approved entries, with byes filling the gap. Approved pairings are placed first. Locking the bracket freezes the draw and snapshots every participant's name and club for permanent history; only a locked bracket can be published.
 5. **Schedule** — admins create physical courts, assign judges to courts for time intervals (no overlaps), and queue matches per court. The schedule publishes independently of the bracket.
-6. **Live play** — judges process each court queue strictly in order, one active match per court and per judge. Scores run 0–6; reaching 6 completes the match and advances the winner automatically. Walkovers, withdrawals, and disqualifications require a winner and a reason. Public live scoring is a separate opt-in switch.
+6. **Live play** — judges process each court queue strictly in order, one active match per court and per judge. A match is decided in slots: the administrator sets how many slot wins it takes (1, 2, or 3) per round or per match, and the judge confirms the winner of each slot rather than counting points. Reaching the required slot wins completes the match and advances the winner automatically; a judge can undo the last slot while the match runs, and an administrator can reopen a completed match with a reason. Walkovers, withdrawals, and disqualifications require a winner and a reason. Public live scoring is a separate opt-in switch. Events played before the slot format keep their historical 0–6 scores.
 7. **Results** — completed finals complete the bracket; once every match is finished the event completes and final results can be published. Completed events are read-only unless an authorized admin explicitly reopens them to make corrections.
 
 Each public surface — event page, roster, bracket, schedule, live scoring, results — has its own independent publication switch, so admins can prepare later stages privately.

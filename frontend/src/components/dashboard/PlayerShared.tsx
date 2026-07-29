@@ -218,6 +218,7 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
   const player = dictionary.dashboard.player;
   const {
     registerEvent,
+    registerEventBank,
     setRegisterEvent,
     user,
     eventForm,
@@ -305,13 +306,13 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
               {player.registerModal.bankReceiverLabel}
             </p>
             <p className="mt-1 text-sm font-semibold text-[#2a1f1e]">
-              {registerEvent.bankAccountReceiver}
+              {registerEventBank?.bankAccountReceiver ?? '…'}
             </p>
             <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d5f5c]">
               {player.registerModal.bankAccountLabel}
             </p>
             <p className="mt-1 break-all font-mono text-sm font-semibold tracking-wide text-[#2a1f1e]">
-              {registerEvent.bankAccountIban}
+              {registerEventBank?.bankAccountIban ?? '…'}
             </p>
             <p className="mt-2 text-xs leading-5 text-[#7a6c69]">{player.registerModal.feeNote}</p>
           </div>

@@ -158,6 +158,40 @@ export function DashboardStyles() {
         background: rgba(247, 242, 238, 0.94);
       }
 
+      .dash-drawer {
+        background: #f7f2ee;
+        box-shadow: 0 24px 60px rgba(43, 26, 24, 0.28);
+        animation: dash-drawer-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+
+      @keyframes dash-drawer-in {
+        from {
+          transform: translateX(-100%);
+        }
+
+        to {
+          transform: translateX(0);
+        }
+      }
+
+      /* Grouped navigation: a labelled section per stage of the tournament
+         lifecycle so the sidebar reads as a map, not a flat list of links. */
+      .dash-nav-group + .dash-nav-group {
+        margin-top: 0.85rem;
+        padding-top: 0.85rem;
+        border-top: 1px solid var(--dash-border);
+      }
+
+      .dash-nav-group__label {
+        margin: 0 0 0.4rem;
+        padding: 0 0.75rem;
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--dash-faint);
+      }
+
       .dash-sidebar-link {
         position: relative;
         display: flex;
@@ -330,6 +364,29 @@ export function DashboardStyles() {
       .dash-soft-btn:hover {
         background: rgba(164, 22, 26, 0.08) !important;
         color: var(--dash-text) !important;
+      }
+
+      .dash-table__head {
+        background: #fdf9f7;
+      }
+
+      /* Row actions stay pinned while the table scrolls sideways. */
+      .dash-table__sticky {
+        position: sticky;
+        right: 0;
+        z-index: 10;
+        border-left: 1px solid var(--dash-border);
+        background: #fdf9f7;
+        box-shadow: -8px 0 14px -10px rgba(43, 26, 24, 0.08);
+      }
+
+      .dash-table__sticky--body {
+        background: #ffffff;
+        transition: background 0.15s ease;
+      }
+
+      .dash-table__row:hover .dash-table__sticky--body {
+        background: #fdf9f7;
       }
 
       .dash-table-row {

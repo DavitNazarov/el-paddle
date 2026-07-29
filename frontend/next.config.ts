@@ -21,6 +21,14 @@ function websocketOrigin(value: string) {
 }
 
 const connectSources = ["'self'", apiUrl, websocketOrigin(apiUrl)].filter(Boolean).join(' ');
+
+// React's development build uses eval() for hot reload and callstack reconstruction.
+// Production builds never do, so the relaxation is confined to `next dev`.
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const scriptSources = ["'self'", "'unsafe-inline'", ...(isDevelopment ? ["'unsafe-eval'"] : [])].join(
+  ' ',
+);
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -30,7 +38,7 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src ${scriptSources}`,
   `connect-src ${connectSources}`,
   "worker-src 'self' blob:",
 ].join('; ');

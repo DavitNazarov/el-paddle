@@ -11,9 +11,12 @@ import {
   type Prisma,
 } from '../../generated/prisma/client.js';
 import { clubInclude } from '../../common/includes.js';
-import { isUniqueConstraintError, jsonError } from '../../common/http.js';
+import { isUniqueConstraintError, isValidEmail, jsonError } from '../../common/http.js';
 import { prisma } from '../../database/prisma.js';
 import { slugify, isSafeSlug } from '../../common/slug.js';
+import { isDisqualified } from '../../common/disqualification.js';
+import { addDays, createInviteToken, hashToken } from '../../common/security.js';
+import { sendClubMateInviteEmail } from '../../common/notifications.js';
 import { roleForEmail } from '../auth/auth.service.js';
 import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { cursorArgs, toPage, type ListRange } from '../../common/pagination.js';
@@ -111,39 +114,144 @@ export async function createClub(input: CreateClubInput) {
   }
 }
 
+/**
+ * Pick a free slug for a club name. Runs its own reads, so it must be called
+ * *before* opening a transaction: a unique-violation inside a transaction
+ * aborts it, and retrying the insert on the same client would fail outright.
+ */
+export async function resolveClubSlug(name: string) {
+  const baseSlug = slugify(name) || 'club';
+  if (!isSafeSlug(baseSlug) && baseSlug !== 'club') jsonError('Club name is invalid.');
+  const base = isSafeSlug(baseSlug) ? baseSlug : 'club';
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const slug = attempt === 0 ? base : `${base}-${attempt + 1}`;
+    const taken = await prisma.club.findUnique({ where: { slug }, select: { id: true } });
+    if (!taken) return slug;
+  }
+
+  jsonError('Could not create club. Try a different name.', 409);
+}
+
 export async function createClubForPlayer(
   userId: string,
-  input: { name: string; description?: string },
+  input: { name: string; description?: string; slug?: string },
   client: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
   const name = input.name.trim();
   if (name.length < 2) jsonError('Club name is required.');
 
-  const baseSlug = slugify(name) || 'club';
-  if (!isSafeSlug(baseSlug) && baseSlug !== 'club') jsonError('Club name is invalid.');
-  let slug = isSafeSlug(baseSlug) ? baseSlug : 'club';
-  let attempt = 0;
+  // A caller already inside a transaction resolves the slug up front; the
+  // retry loop below only exists to absorb a race between two direct callers.
+  const slug = input.slug ?? (await resolveClubSlug(name))!;
+  const create = async (candidate: string) => {
+    const club = await client.club.create({
+      data: {
+        name,
+        slug: candidate,
+        description: input.description?.trim() || null,
+      },
+    });
+    await setPlayerClub(userId, club.id, '', client, ClubMembershipRole.LEADER);
+    await client.clubJoinRequest.deleteMany({ where: { userId } });
+    return club;
+  };
 
-  while (attempt < 8) {
-    try {
-      const club = await client.club.create({
-        data: {
-          name,
-          slug,
-          description: input.description?.trim() || null,
-        },
-      });
-      await setPlayerClub(userId, club.id, '', client, ClubMembershipRole.LEADER);
-      await client.clubJoinRequest.deleteMany({ where: { userId } });
-      return club;
-    } catch (error) {
-      if (!isUniqueConstraintError(error)) throw error;
-      attempt += 1;
-      slug = `${baseSlug}-${attempt + 1}`;
-    }
+  if (input.slug || client !== prisma) return create(slug);
+
+  try {
+    return await create(slug);
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+    return create((await resolveClubSlug(name))!);
+  }
+}
+
+type InviteClubMateInput = {
+  clubId: string;
+  clubName: string;
+  inviterName: string;
+  inviterEmail: string;
+  email: string;
+  name: string;
+  surname: string;
+  phone?: string;
+};
+
+/**
+ * Attach a second player to a club and, when they have no account yet, invite
+ * them to set a password. Shared by player self-service and by club-application
+ * approval so both paths create the same INVITED user + token + email.
+ */
+export async function inviteClubMate(input: InviteClubMateInput) {
+  const { clubId, clubName, inviterName, inviterEmail, email, name, surname, phone } = input;
+
+  if (!isValidEmail(email)) jsonError('Enter a valid teammate email.');
+  if (!name || !surname) jsonError('Teammate name and surname are required.');
+  if (email === inviterEmail) jsonError('You cannot add yourself as a group mate.');
+
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    include: { clubMemberships: { take: 1 } },
+  });
+
+  if (existing && roleForEmail(existing.email, existing.role) === UserRole.ADMIN) {
+    jsonError('Admins cannot be added as group mates.', 403);
+  }
+  if (existing && isDisqualified(existing)) {
+    jsonError('This user is currently disqualified.', 403);
+  }
+  // Never silently move an existing active account into another club.
+  if (existing?.status === UserStatus.ACTIVE) {
+    jsonError('This user already has an account. They must join the club themselves.', 409);
+  }
+  if (existing?.clubMemberships.length && existing.clubMemberships[0].clubId !== clubId) {
+    jsonError('This user already belongs to another club.', 409);
   }
 
-  jsonError('Could not create club. Try a different name.', 409);
+  const invited = !existing || existing.status === UserStatus.INVITED;
+  const inviteToken = createInviteToken();
+
+  const mate = await prisma.$transaction(async (tx) => {
+    const user = existing
+      ? await tx.user.update({
+          where: { id: existing.id },
+          data: {
+            name: existing.name || name,
+            surname: existing.surname || surname,
+            phone: phone || existing.phone,
+          },
+        })
+      : await tx.user.create({
+          data: {
+            email,
+            name,
+            surname,
+            phone: phone || null,
+            status: UserStatus.INVITED,
+          },
+        });
+
+    await setPlayerClub(user.id, clubId, '', tx);
+
+    if (invited) {
+      await tx.inviteToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: hashToken(inviteToken),
+          expiresAt: addDays(14),
+        },
+      });
+    }
+
+    return user;
+  });
+
+  if (invited) {
+    await sendClubMateInviteEmail(email, inviterName, clubName, inviteToken);
+  }
+
+  return { mate, invited };
 }
 
 export async function addClubMember(clubId: string, email: string, roleTitle: string) {

@@ -8,6 +8,8 @@ Use this directory as the technical and operational documentation entry point.
 - [Architecture](ARCHITECTURE.md): runtime components, domain boundaries, consistency patterns, authorization, publication model, and deployment topology.
 - [API reference](API.md): request conventions, the full endpoint surface with capability requirements, CSRF usage, and realtime subscriptions.
 - [Tournament operations](TOURNAMENT_OPERATIONS.md): administrator, club-leader, player, and judge workflow from event setup through result publication, plus the incident checklist.
+- [Dashboard design system](DASHBOARD_DESIGN.md): what each role must see and where, the six screen archetypes, the shared component vocabulary, and the remaining redesign backlog.
+- [Environments & deployment workflow](ENVIRONMENTS.md): staging and production topology, the `develop → staging → main` promotion path, seeding mock data, and local/hosting gotchas.
 - [Production deployment](../DEPLOY.md): Docker Compose, Nginx, HTTPS, migrations, updates, backups, and recovery.
 - [Coding-agent guide](../CLAUDE.md): repository conventions, invariants, security rules, and verification requirements.
 
@@ -21,4 +23,4 @@ These are point-in-time artifacts kept for reference. They describe the system a
 
 ## Keeping documentation current
 
-When behavior changes, update the smallest authoritative document alongside the code: `API.md` for route contracts, `ARCHITECTURE.md` for system boundaries, `TOURNAMENT_OPERATIONS.md` for user-facing workflow changes, and `BUSINESS_OVERVIEW.md` when the product model itself shifts.
+When behavior changes, update the smallest authoritative document alongside the code: `API.md` for route contracts, `ARCHITECTURE.md` for system boundaries, `TOURNAMENT_OPERATIONS.md` for user-facing workflow changes, `BUSINESS_OVERVIEW.md` when the product model itself shifts, and `ENVIRONMENTS.md` for anything about running or promoting an environment.

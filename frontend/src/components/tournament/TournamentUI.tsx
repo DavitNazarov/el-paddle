@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowLeft, Check, Circle, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Notice, type NoticeTone } from '@/components/shared/dashboard/Feedback';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import styles from './TournamentUI.module.css';
@@ -69,13 +70,26 @@ export function EmptyTournamentState({ title, detail, action }: { title: string;
   );
 }
 
-export function InlineNotice({ children, kind = 'info' }: { children: ReactNode; kind?: 'info' | 'error' | 'success' }) {
-  const Icon = kind === 'success' ? Check : kind === 'error' ? TriangleAlert : Circle;
+/**
+ * Thin wrapper over the shared `Notice` so tournament screens and dashboard
+ * screens report the same tone the same way. Kept as its own name because it is
+ * used across a lot of call sites that read better with `kind`.
+ */
+export function InlineNotice({
+  children,
+  kind = 'info',
+  title,
+  onDismiss,
+}: {
+  children: ReactNode;
+  kind?: NoticeTone;
+  title?: string;
+  onDismiss?: () => void;
+}) {
   return (
-    <div role={kind === 'error' ? 'alert' : 'status'} className={styles.notice} data-kind={kind}>
-      <Icon className="mt-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <div>{children}</div>
-    </div>
+    <Notice tone={kind} title={title} onDismiss={onDismiss}>
+      {children}
+    </Notice>
   );
 }
 

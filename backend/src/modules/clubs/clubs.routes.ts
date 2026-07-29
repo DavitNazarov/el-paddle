@@ -12,6 +12,7 @@ import {
   isValidEmail,
   jsonError,
   requireParamId,
+  setPublicCache,
 } from '../../common/http.js';
 import { serializeClub, serializePublicClub } from '../../common/serializers.js';
 import { isSafeSlug, slugify } from '../../common/slug.js';
@@ -34,6 +35,7 @@ export const clubsRouter = Router();
 
 clubsRouter.get('/api/public/clubs', asyncHandler(async (_request, response) => {
   const clubs = await listPublicClubs();
+  setPublicCache(response);
   response.json({ clubs: clubs.map(serializeClubOption) });
 }));
 
@@ -171,5 +173,6 @@ clubsRouter.get('/api/public/clubs/:slug', asyncHandler(async (request, response
   const slug = slugify(cleanString(request.params.slug));
   if (!isSafeSlug(slug)) jsonError('Club not found.', 404);
   const club = await getPublicClubBySlug(slug);
+  setPublicCache(response);
   response.json({ club: serializePublicClub(club) });
 }));

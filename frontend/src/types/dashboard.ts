@@ -14,8 +14,10 @@ export type EventDto = {
   description: string;
   arrivalTime?: string | null;
   participationFee: number;
-  bankAccountIban: string;
-  bankAccountReceiver: string;
+  // Financial PII (F3): present only on authenticated single-event and admin
+  // responses. List payloads omit it — fetch a single event when it is needed.
+  bankAccountIban?: string;
+  bankAccountReceiver?: string;
   categories: CategoryDto[];
   status: 'REGISTRATION_OPEN' | 'REGISTRATION_CLOSED' | 'ONGOING' | 'COMPLETED';
   version: number;
@@ -42,11 +44,19 @@ export type RegistrationDto = {
   declineReason: string;
 };
 
+/** Saved-teammate dropdown option — the only club-member fields the dashboard uses (F7). */
+export type TeammateOption = {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string;
+};
+
 export type DashboardData = {
   user: PublicUser;
   events: EventDto[];
   registrations: RegistrationDto[];
-  clubMembers: PublicUser[];
+  clubMembers: TeammateOption[];
   clubMembershipRole: 'LEADER' | 'MEMBER' | null;
 };
 

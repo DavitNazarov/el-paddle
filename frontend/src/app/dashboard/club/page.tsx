@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default async function PlayerClubPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login?next=/dashboard/club');
-  if (user.role === 'ADMIN') redirect('/admin');
+  if (user.role === 'ADMIN' || user.role === 'ORGANISER') redirect('/admin');
   if (user.role === 'JUDGE') redirect('/judge');
   if (!user.club) redirect('/complete-club');
 

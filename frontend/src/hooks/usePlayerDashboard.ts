@@ -30,16 +30,24 @@ function emptyForm(event: EventDto, current?: RegistrationFormState): Registrati
   };
 }
 
-export function usePlayerDashboard(initialUser: PublicUser) {
+export function usePlayerDashboard(
+  initialUser: PublicUser,
+  initialData: DashboardData | null = null,
+) {
   const router = useRouter();
   const { t } = useI18n();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<DashboardData | null>(initialData);
   const [forms, setForms] = useState<Record<string, RegistrationFormState>>({});
   const [registerEvent, setRegisterEvent] = useState<EventDto | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
   const [savingEventId, setSavingEventId] = useState('');
+  // Bank details are omitted from the dashboard list payload (F3); fetch them
+  // from the single-event endpoint only when the register modal opens.
+  const [bankByEvent, setBankByEvent] = useState<
+    Record<string, { bankAccountReceiver: string; bankAccountIban: string }>
+  >({});
 
   const user = data?.user ?? initialUser;
   const events = useMemo(() => data?.events ?? [], [data?.events]);
@@ -88,6 +96,7 @@ export function usePlayerDashboard(initialUser: PublicUser) {
   );
 
   const nextEvent = events[0] ?? null;
+  const registerEventBank = registerEvent ? bankByEvent[registerEvent.id] ?? null : null;
   const winRate =
     user.stats.matchesPlayed > 0
       ? Math.round((user.stats.wins / user.stats.matchesPlayed) * 100)
@@ -109,11 +118,14 @@ export function usePlayerDashboard(initialUser: PublicUser) {
   );
 
   useEffect(() => {
+    // Pages that hydrate from the server render (F6) already have the payload;
+    // skip the mount refetch and let loadDashboard() handle post-mutation refreshes.
+    if (initialData) return;
     const timer = window.setTimeout(() => {
       void loadDashboard(false);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadDashboard]);
+  }, [loadDashboard, initialData]);
 
   function eventForm(event: EventDto): RegistrationFormState {
     return emptyForm(event, forms[event.id]);
@@ -160,6 +172,24 @@ export function usePlayerDashboard(initialUser: PublicUser) {
     }));
   }
 
+  function loadEventBankDetails(eventId: string) {
+    if (bankByEvent[eventId]) return;
+    void apiFetch(`/api/events/${eventId}`, { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { event?: { bankAccountReceiver?: string; bankAccountIban?: string } } | null) => {
+        const bank = data?.event;
+        if (!bank?.bankAccountIban) return;
+        setBankByEvent((current) => ({
+          ...current,
+          [eventId]: {
+            bankAccountReceiver: bank.bankAccountReceiver ?? '',
+            bankAccountIban: bank.bankAccountIban ?? '',
+          },
+        }));
+      })
+      .catch(() => {});
+  }
+
   function openRegister(event: EventDto) {
     if (registeredEventIds.has(event.id)) return;
     setError('');
@@ -171,6 +201,7 @@ export function usePlayerDashboard(initialUser: PublicUser) {
       },
     }));
     setRegisterEvent(event);
+    loadEventBankDetails(event.id);
   }
 
   async function submitRegistration(formEvent: FormEvent<HTMLFormElement>, onSuccess?: () => void) {
@@ -240,6 +271,7 @@ export function usePlayerDashboard(initialUser: PublicUser) {
     setMessage,
     setError,
     registerEvent,
+    registerEventBank,
     setRegisterEvent,
     savingEventId,
     eventForm,

@@ -8,7 +8,7 @@ import {
   UserStatus,
   type Prisma,
 } from '../../generated/prisma/client.js';
-import { registrationInclude } from '../../common/includes.js';
+import { clubSummarySelect, registrationInclude } from '../../common/includes.js';
 import { isUniqueConstraintError, jsonError } from '../../common/http.js';
 import {
   sendTeammateAddedEmail,
@@ -277,6 +277,24 @@ export async function listAdminRegistrations(eventId?: string, range: ListRange 
   return toPage(rows, pageSize);
 }
 
+/**
+ * Public roster is an unauthenticated surface (F2): load only the identity the
+ * roster renders — id, category, and each player's name + single club. No full
+ * user rows (no passwordHash/phone/email), no reviewer, no event, no contact.
+ */
+const rosterMemberSelect = {
+  id: true,
+  name: true,
+  surname: true,
+  clubMemberships: { select: { club: { select: clubSummarySelect } }, take: 1 },
+} satisfies Prisma.UserSelect;
+
+const publicRosterInclude = {
+  category: true,
+  owner: { select: rosterMemberSelect },
+  teammate: { select: rosterMemberSelect },
+} satisfies Prisma.EventRegistrationInclude;
+
 export async function listPublicRegistrationRoster(eventId: string) {
   return prisma.eventRegistration.findMany({
     where: {
@@ -288,7 +306,7 @@ export async function listPublicRegistrationRoster(eventId: string) {
       },
     },
     orderBy: [{ category: { name: 'asc' } }, { createdAt: 'asc' }, { id: 'asc' }],
-    include: registrationInclude,
+    include: publicRosterInclude,
   });
 }
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { categoriesRouter } from './modules/categories/categories.routes.js';
+import { clubApplicationsRouter } from './modules/club-applications/club-applications.routes.js';
 import { clubsRouter } from './modules/clubs/clubs.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { eventsRouter } from './modules/events/events.routes.js';
@@ -22,6 +23,7 @@ router.use(categoriesRouter);
 router.use(eventsRouter);
 router.use(dashboardRouter);
 router.use(registrationsRouter);
+router.use(clubApplicationsRouter);
 router.use(clubsRouter);
 router.use(usersRouter);
 router.use(notificationsRouter);

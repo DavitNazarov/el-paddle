@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { AdminShell } from './AdminShell';
+import { useViewer } from '@/hooks/useViewer';
 import type { CategoryDto, EventDto } from '@/types/admin';
 import { toDatetimeLocalValue } from '@/lib/utils/dates';
 
@@ -74,8 +75,8 @@ function formFromEvent(event: EventDto): EventFormState {
     description: event.description ?? '',
     arrivalTime: toDatetimeLocalValue(event.arrivalTime),
     participationFee: String(event.participationFee),
-    bankAccountIban: event.bankAccountIban,
-    bankAccountReceiver: event.bankAccountReceiver,
+    bankAccountIban: event.bankAccountIban ?? '',
+    bankAccountReceiver: event.bankAccountReceiver ?? '',
     categoryIds: event.categories.map((category) => category.id),
   };
 }
@@ -122,6 +123,10 @@ export function AdminEventsClient() {
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [events, setEvents] = useState<EventDto[]>([]);
   const [filter, setFilter] = useState<EventFilter>('ALL');
+  // Organisers only ever run events an admin handed them, so creating,
+  // editing, publishing and deleting stay out of their copy of this screen.
+  const { viewer } = useViewer();
+  const canManageEvents = viewer?.role === 'ADMIN';
   const [createOpen, setCreateOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventDto | null>(null);
   const [deletingEvent, setDeletingEvent] = useState<EventDto | null>(null);
@@ -283,7 +288,7 @@ export function AdminEventsClient() {
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
-      {!categories.length && !loading ? (
+      {canManageEvents && !categories.length && !loading ? (
         <SurfaceCard featured className="mb-6">
           <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -312,10 +317,12 @@ export function AdminEventsClient() {
             {copy.filterDrafts}
           </FilterChip>
         </div>
-        <Button variant="red" className="rounded-md" onClick={openCreate} disabled={!categories.length}>
-          <Plus className="h-4 w-4" />
-          {copy.showCreate}
-        </Button>
+        {canManageEvents ? (
+          <Button variant="red" className="rounded-md" onClick={openCreate} disabled={!categories.length}>
+            <Plus className="h-4 w-4" />
+            {copy.showCreate}
+          </Button>
+        ) : null}
       </div>
 
       <SectionHeading title={admin.events.pipelineTitle} description={admin.events.pipelineDescription} />
@@ -327,7 +334,7 @@ export function AdminEventsClient() {
             description={admin.events.noEventsDescription}
             icon={CalendarPlus}
             action={
-              categories.length ? (
+              !canManageEvents ? undefined : categories.length ? (
                 <Button variant="red" className="rounded-md" onClick={openCreate}>
                   {copy.showCreate}
                 </Button>
@@ -421,15 +428,17 @@ export function AdminEventsClient() {
                       <Button asChild variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
                         <Link href={`/admin/events/${event.id}`}>Manage tournament</Link>
                       </Button>
-                      <Button
-                        variant="outline"
-                        className={cn(softButtonClassName, 'rounded-md')}
-                        onClick={() => openEdit(event)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        {copy.edit}
-                      </Button>
-                      {event.isPublished ? (
+                      {canManageEvents ? (
+                        <Button
+                          variant="outline"
+                          className={cn(softButtonClassName, 'rounded-md')}
+                          onClick={() => openEdit(event)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          {copy.edit}
+                        </Button>
+                      ) : null}
+                      {!canManageEvents ? null : event.isPublished ? (
                         <Button
                           variant="outline"
                           className={cn('shrink-0 rounded-md', softButtonClassName)}
@@ -450,14 +459,16 @@ export function AdminEventsClient() {
                           {publishBusy ? admin.messages.saving : admin.events.publish}
                         </Button>
                       )}
-                      <Button
-                        variant="outline"
-                        className="shrink-0 rounded-md border-red-900/70 bg-transparent text-red-400 hover:border-red-800 hover:bg-red-950/50 hover:text-red-300 lg:mt-2"
-                        onClick={() => setDeletingEvent(event)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        {copy.delete}
-                      </Button>
+                      {canManageEvents ? (
+                        <Button
+                          variant="outline"
+                          className="shrink-0 rounded-md border-red-900/70 bg-transparent text-red-400 hover:border-red-800 hover:bg-red-950/50 hover:text-red-300 lg:mt-2"
+                          onClick={() => setDeletingEvent(event)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          {copy.delete}
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </div>

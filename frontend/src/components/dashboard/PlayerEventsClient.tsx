@@ -6,15 +6,21 @@ import { useI18n } from '@/components/shared/I18nProvider';
 import { usePlayerDashboard } from '@/hooks/usePlayerDashboard';
 import { CalendarDays, History } from 'lucide-react';
 import type { PublicUser } from '@/types/auth';
-import type { RegistrationDto } from '@/types/dashboard';
+import type { DashboardData, RegistrationDto } from '@/types/dashboard';
 import { ClubLineupEditor } from './ClubLineupEditor';
 import { PlayerShell } from './PlayerShell';
 import { EventCard, RegisterModal } from './PlayerShared';
 
-export function PlayerEventsClient({ initialUser }: { initialUser: PublicUser }) {
+export function PlayerEventsClient({
+  initialUser,
+  initialData = null,
+}: {
+  initialUser: PublicUser;
+  initialData?: DashboardData | null;
+}) {
   const { dictionary, t } = useI18n();
   const player = dictionary.dashboard.player;
-  const api = usePlayerDashboard(initialUser);
+  const api = usePlayerDashboard(initialUser, initialData);
   const [managedEntry, setManagedEntry] = useState<RegistrationDto | null>(null);
   const {
     user,

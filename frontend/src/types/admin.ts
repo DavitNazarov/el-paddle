@@ -28,6 +28,20 @@ export type EventDto = {
   categories: CategoryDto[];
 };
 
+/**
+ * Per-event operational counts from `/api/admin/events/operations`. Scoped to
+ * the events the caller runs, so an organiser's map only holds their own.
+ */
+export type EventOperationsDto = {
+  eventId: string;
+  registrations: { pending: number; approved: number; total: number };
+  requests: { awaiting: number; total: number };
+  brackets: { total: number; locked: number; published: number };
+  courts: { total: number; staffed: number };
+  schedule: { queued: number };
+  matches: { total: number; live: number; completed: number };
+};
+
 export type RegistrationDto = {
   id: string;
   event: { id: string; title: string; date: string; location: string };
@@ -79,4 +93,6 @@ export type AdminCounts = {
   events: number;
   clubs: number;
   categories: number;
+  /** Club requests awaiting an admin decision. Always zero for organisers. */
+  applications: number;
 };
