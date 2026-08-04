@@ -88,9 +88,14 @@ Runs the platform. Wants triage, not totals.
 
 - **Leads with:** the same events board as the organiser. Before any aggregate
   number, the reader wants to know which event is running and which is stuck.
-- **Then:** the cross-event decision queue — entries awaiting review, pairings
-  awaiting approval.
-- **Then, and only then:** platform counts and drafts.
+- **Then:** one queue holding *everything* waiting on an administrator —
+  pairings, entries, club requests, unpublished events — ordered by who is
+  blocked. These were once three separate blocks plus a bare number with nothing
+  to click; they are one job, so they are one list.
+- **Then, and only then:** platform statistics.
+- **No standalone count tiles.** They said what the queue and the board directly
+  above them already said, and a lifetime "approved entries" total carries no
+  action at all. Directory sizes live in the sidebar badges.
 - Individual entries are listed one by one (they are decided in place).
   Pairings are counted per event (the decision is taken inside that event).
   Match the grain to where the action happens.
@@ -112,11 +117,11 @@ seventh without a reason.
 | Archetype | Question | Shape | Built |
 |---|---|---|---|
 | **Console** | "what do I do *right now*?" | One hero object + supporting meters | Judge home, judge queue |
-| **Board** | "where does everything stand?" | Rows, one per entity, each with position + pending work | Admin/organiser home, event pickers |
+| **Board** | "where does everything stand?" | Rows, one per entity, each with position + pending work | Admin/organiser home, event pickers, court board |
 | **Queue** | "what is waiting on my decision?" | Progress meter + spined rows + only-available actions | Registration review, opponent requests |
 | **Workspace** | "how do I drive this one thing forward?" | Lifecycle hero + stage cards + state board | Event workspace |
-| **Directory** | "find and manage many similar things" | Filters + table/cards + row actions | *Not yet redesigned* |
-| **Form** | "change these values" | Grouped fields + explicit save + inline errors | *Not yet redesigned* |
+| **Directory** | "find and manage many similar things" | Filters + table/cards + row actions | Users, clubs, categories, club requests |
+| **Form** | "change these values" | Grouped fields + explicit save + inline errors | Event create/edit, account settings |
 
 ### Console
 The hero object fills the first screenful. Everything else is subordinate and
@@ -184,6 +189,26 @@ Reach for these before writing anything new.
   whether it is live, and the control (or a link to where the control lives).
 - `QueueMeter` — progress through a finite queue. Bar plus literal numbers.
 
+### `components/shared/dashboard/DashboardCharts.tsx`
+- `TrendBars` — grouped vertical bars for one or two series over a fixed set of
+  buckets. `ShareBar` — a 100% stacked bar for a distribution. `StatDelta` — a
+  KPI tile wrapping `Metric` with a period-over-period reading.
+- **A chart is always paired with its numbers.** The `<svg>` is `aria-hidden`
+  (31 focusable bars would be a tab trap on a phone); the accessible
+  representation is a real `<table>` inside `<details>`, and every series total
+  appears in the legend as text. `ShareBar` is deliberately not SVG — flex divs
+  cannot overflow — and its list names every segment, including ones too small
+  to see.
+- **A `null` point is "not tracked", never zero.** It renders as a hatched band
+  and an em dash, so a period nobody measured never draws a flat zero line.
+- Series two carries a **hatch as well as a hue**, so two series stay apart in
+  greyscale. Note the trap: a stylesheet `fill` beats a `fill` attribute, so a
+  pattern must go on an element with no CSS fill rule.
+- Tick labels live **outside** the plot: the SVG is stretched to its container
+  width, which would distort any text inside it. At most five are drawn.
+- `StatDelta` takes `goodDirection`, because a direction alone cannot say
+  whether the news is good — signups up is good, deletions up is not.
+
 ### `components/shared/dashboard/Feedback.tsx`
 - `Notice` — four tones (info/success/warning/error), each with icon, optional
   title, body, actions, dismiss. Errors get `role="alert"`; the rest `status`.
@@ -202,7 +227,15 @@ wrappers over these — improving `Feedback` improves every call site at once.
 - `useEventOperations()` — per-event counts for every event the viewer runs,
   keyed by id, from one grouped read (`GET /api/admin/events/operations`).
 - `useEventWorkspaceSignals(eventId)` — the four stage counts for one event.
-- `useAdminCounts()` — platform totals, shared with the sidebar.
+- `useAdminCounts()` — platform totals, shared with the sidebar. Note it seeds
+  zeros, which breaks rule 2; `useAdminStats` does it correctly and the sidebar
+  is the reason this one has not been changed yet.
+- `useAdminStats()` — platform statistics for one range
+  (`GET /api/admin/stats/platform`). Returns `null` until loaded and after a
+  failure, and withholds the previous range's numbers while a new one is in
+  flight, because last month's figures under a "last 7 days" heading would be a
+  lie. `loading` is derived from which range actually loaded rather than set in
+  the effect, which the `react-hooks/set-state-in-effect` lint rule requires.
 
 ### Backend pattern for new signals
 Read-only aggregate endpoints, scoped exactly like `getAdminSummary`: organisers
@@ -244,8 +277,22 @@ There is no local database, so screens cannot be driven with real data.
 4. **Delete the throwaway route** before finishing.
 
 This forces presentational components to be extractable and prop-driven, which
-is why `JudgeNowCard`, `JudgeQueueList`, `AdminEventBoard`, `PlayerEntryCard`
-and `AdminRegistrationCard` are separate files. Keep doing that.
+is why `JudgeNowCard`, `JudgeQueueList`, `AdminEventBoard`, `PlayerEntryCard`,
+`AdminRegistrationCard`, `BracketDrawStrip`, `BracketTree`, `CourtBoard`,
+`CourtDetail`, `AdminAttentionQueue` and `UnscheduledPool` are separate files.
+Keep doing that.
+
+One caveat learned from `AdminAttentionQueue`: its item type carries React values
+(an icon component, a badge node), so the list must be built inside a client
+component. A server component passing it in gets "Only plain objects can be
+passed to Client Components" — which is exactly what the throwaway preview route
+caught.
+
+The same split applies below the components. A redesigned screen ends up as a
+client that owns state and requests, one `*Model.ts` holding the constants and
+the pure reading (`bracketModel`, `scheduleModel`), presentational components
+that take props, one CSS module per folder, and — where the logic has real
+branches, like drop resolution — a unit test beside the model.
 
 Then: `npm run lint && npm test && npm run build && git diff --check`.
 
@@ -256,47 +303,148 @@ Then: `npm run lint && npm test && npm run build && git diff --check`.
 ### Done
 Event workspace · admin & organiser home · judge home · judge court queue ·
 player home · player entries · the four event-picker routes · registration
-review · opponent requests · the whole message-state system.
+review · opponent requests · bracket · courts & schedule · users, clubs,
+categories and club requests · platform statistics on the admin home ·
+the whole message-state system.
+
+**Platform statistics** sit last on the admin home, below the counts and drafts:
+counts say how much exists now, statistics say how it is moving, which is one
+step further from an action. The reader's sentence is "is the platform growing,
+and is anything quietly rotting?", which is what earns each number its place —
+review latency, players holding no club (they cannot enter anything), events past
+their date, published events with no draw, and the outbox backlog are all
+actionable; lifetime totals and engagement scores were cut. Organisers never see
+the section, and the route refuses them rather than scoping. Two figures are
+honest about their own limits: deletions are only recorded from the tracking
+migration onward, so earlier buckets are `null`; and "signed in recently" carries
+no delta, because `User.lastLoginAt` holds only the latest sign-in and the
+previous period is genuinely unknowable.
+
+**Bracket** notes, since the tree is unlike anything else here. The screen leads
+with `BracketDrawStrip`: one card per category carrying draw stage
+(Draft → Locked → Published as `StageDots`), a `QueueMeter` of matches played,
+and the champion once there is one — so "which draws still need me?" is answered
+before the first tree. `BracketTree` then draws the draw, with the champion's
+route marked by an amber **spine** on every match they won and a matching
+connector between them; the trophy sits on the winning row of the final, and a
+legend names the path. The reseed drag now carries a visible grip inside the
+handle, because a `cursor: grab` is invisible on the phones this is used from;
+the move button remains the keyboard and touch path. Pure reading lives in
+`bracket/bracketModel.ts`, so both components are prop-driven and previewable.
+
+**Courts & schedule** notes. `ScheduleDayHeader` leads with the day as three
+`QueueMeter`s — courts staffed, matches placed, matches played — plus whether
+players can see any of it. Then a **board over a detail**, because a column per
+court grew with its queue and an eight-court event ran to four screens before
+the first question — *which court needs me?* — could be answered. `CourtBoard`
+is one fixed-height tile per court: state word (`courtState`: done · live ·
+unstaffed · idle · ready), judge, a progress bar, and the only two matches
+worth naming (`courtFocus` — what is on court, what is next); the rest is a
+count. The two states that mean *you* are being asked for something —
+`unstaffed`, `idle` — carry the amber spine, and the board heading totals them.
+On phones the tile is a row, so eight courts cost about a screen and a half.
+`CourtDetail` then expands exactly one court, so the page is the same length
+whether the event runs on two courts or ten, and that one queue scrolls inside
+its own panel. A court is on screen twice, so it needs two droppable ids —
+`court:` for the tile, `queue:` for the open panel — both resolving to the same
+court in `targetCourtOf`. Dragging a queued match onto another court's tile is
+still how it moves; the per-row court select remains the keyboard and touch
+path. `UnscheduledPool` is the holding area the old dropdown
+hid; it is a **drop target in both directions**, so dragging a queued match into
+it unschedules (`DELETE /schedule/items/:id`, which the server already refused
+for started matches) and dragging out of it places. Every drop resolves through
+`resolveDrop` in `schedule/scheduleModel.ts` — a pure function returning an
+intent, unit-tested in `scheduleModel.test.ts`, so the frozen-item and
+finished-queue rules live in one place rather than inside a drag handler. Forms
+moved to `ScheduleDialogs.tsx` and own their fields, resetting during render
+rather than in an effect.
+
+**Directory** notes, covering users, clubs, categories and club requests. The
+pattern is built once in `admin/directory/` and applied four times: every screen
+is a client that owns state and requests, over `DirectoryToolbar` (search +
+facet chips) and `DirectoryTable` (shaped loading, empty state, shared
+`DataTable`), with `EditorModal` and `ConfirmModal` for the writes. All the pure
+reading — `filterRows`, `facetOptions`, and each screen's facet reader — lives in
+`directory/directoryModel.ts` and is unit-tested in `directoryModel.test.ts`.
+
+Three things worth keeping. **Facet counts are taken from the search-filtered
+rows**, so a chip never promises more than clicking it would show, and the count
+line is the only thing telling a reader a filter is hiding rows. **The empty
+state knows why it is empty** — nothing yet versus nothing matching gets
+different words and a *Show all* escape, which is why `DirectoryTable` takes both
+the filtered rows and the unfiltered total. **Row actions opt up to 44px** via
+`rowActionClassName`, because the shared `sm` button is 36px and every one of
+these screens was below the touch-target rule.
+
+Club requests are a directory that is also a *queue*. It leads with a
+`QueueMeter` of what can actually be decided — approving or rejecting deletes the
+request, so "decided" is not knowable from this list, but "ready to decide" is —
+and the amber spine (`rowAttention` on `DataTable`, new and available to any
+future queue table) marks only rows in `SUBMITTED`. A request still awaiting the
+applicant's email confirmation gets **no spine and no decision buttons**: the
+server refuses both `approve` and `reject` until then, so offering either would
+invite a failure. Messaging stays available, because that is how you chase it.
+
+**Form** notes, since it is the last archetype and two screens now share it.
+`shared/dashboard/DashboardForm.tsx` holds it: `FormSection` groups fields under
+the question they answer, `Field` takes the control as a **render prop** so
+`aria-invalid` and `aria-describedby` cannot drift from the message actually on
+screen, and `FormActions` states what is unsaved before the reader commits.
+
+The rule that shaped it: **the save is never disabled**. Both screens used to
+grey out save until everything validated, which left a dead button and no clue
+which of eight fields was wrong. Now the first press reveals every error at
+once, each against its own field, and errors stay hidden until then so a fresh
+form is not a wall of red. `validateEventForm` and `validatePassword` return
+error *codes*, not sentences, so they are testable without a locale and the
+client owns every word.
+
+Account settings gained a **Preferences** group holding the language switch.
+It has no save button, and says so: the switch applies at once and is stored on
+the device, not the account. Faking a save there would be exactly the silent
+autosave the archetype forbids.
+
+**Judge match** notes. The one screen where a UI mistake corrupts a result. Both
+pair names are now the largest type on the page — 36px against the score's 28px
+— because they are what a judge checks against the two people walking onto the
+court; the old screen had that inverted, with a 7xl score above 16px names. A
+slot band carries the slot number as a headline plus a dot per possible slot, so
+an interrupted judge finds their place instantly. `matchModel.ts` decides what
+the console may *offer*: `canRecordSlot` and `canUndo` mirror the server, so a
+judge is never shown a control that would be refused, and `previewSlot` phrases
+the confirmation differently when the slot would end the match.
+
+**Player event** notes. Ordered as the competitor asks: am I in
+(`PlayerEntryCard`, the same entry path as the player home), who am I playing
+(their requests), when do I play (their matches). `playerMatches` in
+`event/playerEventModel.ts` keeps only the matches they are actually in and
+attaches the court and time; the old page rendered every match in every draw,
+which is the tournament's view of the event rather than the competitor's.
+Unknown court or time stays `null` rather than becoming a placeholder.
+
+**Notifications** notes. Unread rows are lifted out of the timeline entirely
+rather than tinted where they sit — something from three days ago that still
+needs the reader outranks this morning's notice that does not. Each day heading
+carries its own unread count, and each row states where it leads, so the page
+reads as a set of doorways rather than a log.
 
 ### Remaining, with direction
 
-**Bracket** (`AdminBracketClient`, ~950 lines) — the biggest. Archetype:
-*workspace*. A draw is a tree; the current screen renders it as nested boxes.
-Lead with a per-category strip showing draw state (draft/locked/published) and
-completion, then the tree itself with the champion path emphasised. The
-drag-to-reseed interaction is genuinely good — keep it, but give it a visible
-affordance and keep the keyboard move-button path.
+Nothing. Every dashboard screen and all six archetypes are built.
 
-**Courts & schedule** (`AdminScheduleClient`, ~580 lines) — archetype: *board*
-of courts. Each court is a column with a judge, a queue meter, and its ordered
-matches. Lead with the day: how many courts staffed, how many matches placed
-versus unscheduled. The unscheduled pool deserves to be a visible holding area,
-not a dropdown.
+The next person here is maintaining the system rather than extending it, so the
+job changes shape: when a screen needs a new behaviour, check §5 and the four
+model files (`directoryModel`, `eventsModel`, `matchModel`, `playerEventModel`)
+before adding anything, and keep the split — client owns state and requests, one
+`*Model.ts` per screen folder for the pure reading, prop-driven presentational
+components, one CSS module, a unit test beside the model.
 
-**Users / clubs / categories / applications** — archetype: *directory*. These
-four are near-identical in shape; build **one** directory pattern (filters +
-`DataTable` + row actions + a consistent create/edit modal) and apply it four
-times. Applications additionally needs a *queue* treatment — it is a decision
-surface, so give it the amber spine and a progress meter.
-
-**Events list** (`AdminEventsClient`, ~670 lines) — archetype: *board* + *form*.
-Reuse `AdminEventBoard` for the listing; the create/edit form is the first real
-*form* archetype — establish it here: grouped fields, explicit save, inline
-field errors, no silent autosave.
-
-**Judge match** (`JudgeMatchClient`) — archetype: *console*. Slot scoring is the
-most safety-critical interaction in the product. Huge targets, unmistakable
-current slot, confirm before recording, undo obvious. Test on a phone.
-
-**Player event workspace / events / matches / club** — archetype: *workspace*
-and *board*. Reuse `PlayerNextEvent`'s vocabulary; a player's event page should
-show their entry path, their opponent requests, and their matches, in that order.
-
-**Settings screens (all roles)** — the *form* archetype. Currently thin wrappers.
-Group into Profile / Security / Preferences, explicit save per group.
-
-**Notifications** — archetype: *queue*. Unread first, grouped by day, each row
-linking to the thing it is about.
+One known wart, pre-existing and not introduced by the redesign: `formatDate`
+renders through `I18nProvider`, which reads the stored locale in an effect after
+mount. Any page showing a date therefore logs a React hydration mismatch in dev
+(server renders `1 Sept 2026`, the client re-renders `1 სექ. 2026`). It is
+visible on untouched public pages too. Fixing it means moving the locale into a
+cookie the server can read at render time.
 
 ---
 

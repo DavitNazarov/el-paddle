@@ -42,6 +42,7 @@ import {
   setApplicationCookie,
   setSessionCookie,
   toPublicUser,
+  touchLastLogin,
 } from './auth.service.js';
 import { createClubForPlayer, inviteClubMate, requireClubId, setPlayerClub } from '../clubs/clubs.service.js';
 import { startGoogleApplication } from '../club-applications/club-applications.service.js';
@@ -181,6 +182,7 @@ authRouter.post('/api/admin/bootstrap', bootstrapLimit, asyncHandler(async (requ
     detail: result.created ? 'created' : 'promoted',
   });
   await reconcileUserRole(result.user.id);
+  touchLastLogin(result.user.id);
   setSessionCookie(response, result.user);
   response.status(result.created ? 201 : 200).json({
     created: result.created,
@@ -316,6 +318,7 @@ authRouter.post('/api/auth/verify', authStrictLimit, asyncHandler(async (request
   });
 
   await reconcileUserRole(verifiedUser.id);
+  touchLastLogin(verifiedUser.id);
   setSessionCookie(response, verifiedUser);
   response.json({ user: toPublicUser(verifiedUser) });
 }));
@@ -377,6 +380,7 @@ authRouter.post('/api/auth/login', authStrictLimit, asyncHandler(async (request,
 
   auditLog({ event: 'auth.login', outcome: 'success', userId: user.id, email, ip });
   await reconcileUserRole(user.id);
+  touchLastLogin(user.id);
   setSessionCookie(response, user);
   response.json({ user: toPublicUser(user) });
 }));
@@ -500,6 +504,7 @@ authRouter.post('/api/auth/invite/complete', asyncHandler(async (request, respon
     ip: requestIp(request),
   });
   await reconcileUserRole(user.id);
+  touchLastLogin(user.id);
   setSessionCookie(response, user);
   response.json({ user: toPublicUser(user) });
 }));
@@ -732,6 +737,7 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
   }
 
   await reconcileUserRole(user.id);
+  touchLastLogin(user.id);
   setSessionCookie(response, user);
   const role = roleForEmail(user.email, user.role, { emailVerified: true });
   const isStaff = role === UserRole.ADMIN || role === UserRole.JUDGE;

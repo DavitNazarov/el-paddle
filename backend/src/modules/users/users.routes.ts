@@ -130,7 +130,7 @@ usersRouter.post('/api/admin/users', asyncHandler(async (request, response) => {
 usersRouter.delete('/api/admin/users/:id', asyncHandler(async (request, response) => {
   const admin = await requireCapability(request, Capability.USER_MANAGE);
   const targetId = requireParamId(request.params.id);
-  const result = await deleteUserAccount(targetId, admin.id);
+  const result = await deleteUserAccount(targetId, admin.id, requestIp(request));
   auditLog({
     event: 'admin.user_delete',
     outcome: 'success',
@@ -231,7 +231,7 @@ usersRouter.post('/api/account/password', accountPasswordLimit, asyncHandler(asy
 
 usersRouter.delete('/api/account', asyncHandler(async (request, response) => {
   const current = await requireUser(request);
-  await deleteUserAccount(current.id, current.id);
+  await deleteUserAccount(current.id, current.id, requestIp(request));
   auditLog({
     event: 'account.delete',
     outcome: 'success',

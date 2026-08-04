@@ -345,6 +345,25 @@ export async function reconcileUserRole(userId: string) {
   }
 }
 
+/**
+ * Record that this account just signed in, for the "seen recently" statistic.
+ *
+ * Fire-and-forget on purpose: a sign-in must never fail, nor wait on an extra
+ * round trip, because a statistics column did not update.
+ *
+ * Deliberately not folded into `setSessionCookie`, tempting as that single choke
+ * point is — a password change re-issues the cookie to keep the current device
+ * signed in, and counting that as a login would inflate the metric. Call this
+ * only where a session is issued *as the result of signing in*.
+ */
+export function touchLastLogin(userId: string) {
+  void prisma.user
+    .update({ where: { id: userId }, data: { lastLoginAt: new Date() }, select: { id: true } })
+    .catch((error: unknown) => {
+      console.error('[auth] could not record last login', error);
+    });
+}
+
 export async function requireUser(request: Request) {
   const user = await getCurrentUser(request);
   if (!user) throw new ApiError('Unauthorized', 401);

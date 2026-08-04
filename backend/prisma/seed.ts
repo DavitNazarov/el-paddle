@@ -983,7 +983,7 @@ async function main() {
       { status: RegistrationStatus.WITHDRAWN, withdrawnAt: daysFromNow(-2, 12) },
       { status: RegistrationStatus.CANCELLED, publicStatusReason: 'Cancelled by the team.' },
     ];
-    const openTeams = takeTeams(eventId, statusPlan.length + 4);
+    const openTeams = takeTeams(eventId, statusPlan.length + 6);
     statusPlan.forEach((plan, i) => {
       addRegistration({
         eventId, categoryId: i % 2 === 0 ? catId('A') : catId('B + C'), team: openTeams[i],
@@ -992,15 +992,17 @@ async function main() {
       });
     });
 
-    // Four more approved teams in category A for opponent-request variations.
-    const orTeams = [7, 8, 9, 10].map((idx) =>
+    // Six more approved teams in category A for opponent-request variations.
+    const orTeams = [7, 8, 9, 10, 11, 12].map((idx) =>
       addRegistration({ eventId, categoryId: catId('A'), team: openTeams[idx], status: RegistrationStatus.APPROVED, reviewed: true }),
     );
 
     const pairKey = (x: string, y: string) => [x, y].sort().join(':');
     const orDefs: { from: Team; to: Team; status: OpponentRequestStatus; extra?: Record<string, unknown> }[] = [
       { from: orTeams[0], to: orTeams[1], status: OpponentRequestStatus.PENDING_RESPONSE },
-      { from: orTeams[2], to: orTeams[3], status: OpponentRequestStatus.ACCEPTED_BY_OPPONENT, extra: { respondedByUserId: orTeams[3].ownerId, respondedAt: daysFromNow(-1, 10) } },
+      // Uses two teams of its own: an approval must not collide with the already
+      // approved pairing below, or the accepted row could never be approved.
+      { from: orTeams[4], to: orTeams[5], status: OpponentRequestStatus.ACCEPTED_BY_OPPONENT, extra: { respondedByUserId: orTeams[5].ownerId, respondedAt: daysFromNow(-1, 10) } },
       { from: orTeams[0], to: orTeams[2], status: OpponentRequestStatus.REFUSED_BY_OPPONENT, extra: { respondedByUserId: orTeams[2].ownerId, respondedAt: daysFromNow(-1, 11), responseReason: 'Prefer a different opponent.' } },
       { from: orTeams[1], to: orTeams[3], status: OpponentRequestStatus.APPROVED_BY_ADMIN, extra: { adminDecisionByUserId: admin.id, adminDecisionAt: daysFromNow(-1, 12), adminPublicReason: 'Approved matchup.' } },
       { from: orTeams[0], to: orTeams[3], status: OpponentRequestStatus.EXPIRED, extra: { expiresAt: daysFromNow(-1, 9) } },

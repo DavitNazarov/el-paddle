@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, Tags, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   DashboardField,
-  DashboardModal,
-  DataTable,
-  EmptyState,
   FeedbackBanner,
   SectionHeading,
   formControlClassName,
@@ -19,23 +16,41 @@ import {
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
+import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import { AdminShell } from './AdminShell';
+import { DirectoryTable, rowActionClassName } from './directory/DirectoryTable';
+import { DirectoryToolbar } from './directory/DirectoryToolbar';
+import { ConfirmModal, EditorModal } from './directory/DirectoryModals';
+import {
+  ALL_FACET,
+  CATEGORY_FACET_VALUES,
+  categoryInUse,
+  categoryReader,
+  emptyQuery,
+  facetOptions,
+  filterRows,
+  type DirectoryQuery,
+} from './directory/directoryModel';
+import styles from './directory/Directory.module.css';
 import type { CategoryDto } from '@/types/admin';
 
 const emptyForm = { name: '', description: '' };
 
 export function AdminCategoriesClient() {
-  const { dictionary, t } = useI18n();
+  const { dictionary, locale, t } = useI18n();
   const admin = dictionary.dashboard.admin;
   const copy = admin.categoriesPage;
+  const dir = tournamentCopy[locale].admin.directory;
+
   const [categories, setCategories] = useState<CategoryDto[]>([]);
+  const [query, setQuery] = useState<DirectoryQuery>(emptyQuery);
   const [form, setForm] = useState(emptyForm);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<CategoryDto | null>(null);
   const [deleting, setDeleting] = useState<CategoryDto | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -54,311 +69,259 @@ export function AdminCategoriesClient() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  async function createCategory(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const visible = useMemo(() => filterRows(categories, query, categoryReader), [categories, query]);
+  const facets = useMemo(
+    () =>
+      facetOptions(categories, query, categoryReader, CATEGORY_FACET_VALUES, (value) =>
+        value === ALL_FACET ? dir.all : value === 'IN_USE' ? dir.categoryInUse : dir.categoryUnused,
+      ),
+    [categories, dir, query],
+  );
+
+  /** One writer for the three commands: they differ only in route, method and message. */
+  async function send(path: string, method: string, body: unknown, success: string) {
     setError('');
+    setFormError('');
     setMessage('');
     setBusy(true);
-    const response = await apiFetch('/api/categories', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(form),
+    const response = await apiFetch(path, {
+      method,
+      ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
     });
-    const result = (await response.json()) as { error?: string };
+    const result = (await response.json().catch(() => ({}))) as { error?: string };
     setBusy(false);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.actionFailed);
-      return;
-    }
-    setMessage(admin.messages.categoryCreated);
-    setForm(emptyForm);
-    setCreateOpen(false);
+    if (!response.ok) return result.error ?? admin.messages.actionFailed;
+    setMessage(success);
     await load();
+    return null;
   }
 
-  async function updateCategory(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function createCategory() {
+    const failure = await send('/api/categories', 'POST', form, admin.messages.categoryCreated);
+    if (failure) return setFormError(failure);
+    setForm(emptyForm);
+    setCreateOpen(false);
+  }
+
+  async function updateCategory() {
     if (!editing) return;
-    setError('');
-    setMessage('');
-    setBusy(true);
-    const response = await apiFetch(`/api/categories/${editing.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    const result = (await response.json()) as { error?: string };
-    setBusy(false);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.actionFailed);
-      return;
-    }
-    setMessage(admin.messages.categoryUpdated);
+    const failure = await send(`/api/categories/${editing.id}`, 'PATCH', form, admin.messages.categoryUpdated);
+    if (failure) return setFormError(failure);
     setForm(emptyForm);
     setEditing(null);
-    await load();
   }
 
   async function confirmDelete() {
     if (!deleting) return;
-    setError('');
-    setMessage('');
-    setBusy(true);
-    const response = await apiFetch(`/api/categories/${deleting.id}`, {
-      method: 'DELETE',
-    });
-    const result = (await response.json()) as { error?: string };
-    setBusy(false);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.actionFailed);
-      setDeleting(null);
-      return;
-    }
-    setMessage(admin.messages.categoryDeleted);
+    const failure = await send(`/api/categories/${deleting.id}`, 'DELETE', undefined, admin.messages.categoryDeleted);
+    if (failure) return setFormError(failure);
     setDeleting(null);
-    await load();
+  }
+
+  function openCreate() {
+    setForm(emptyForm);
+    setFormError('');
+    setCreateOpen(true);
   }
 
   function openEdit(category: CategoryDto) {
-    setError('');
-    setMessage('');
     setForm({ name: category.name, description: category.description });
+    setFormError('');
     setEditing(category);
   }
 
-  function openDelete(category: CategoryDto) {
-    setError('');
-    setMessage('');
-    if ((category.eventCount ?? 0) > 0) {
-      setError(admin.messages.categoryInUse);
-      return;
-    }
-    setDeleting(category);
-  }
+  const createButton = (
+    <Button variant="red" className="min-h-11 rounded-md" onClick={openCreate}>
+      <Plus className="h-4 w-4" />
+      {copy.showCreate}
+    </Button>
+  );
+
+  const fields = (idPrefix: string) => (
+    <>
+      <DashboardField label={admin.events.name} id={`${idPrefix}-name`}>
+        <Input
+          id={`${idPrefix}-name`}
+          required
+          value={form.name}
+          onChange={(fieldEvent) => setForm((current) => ({ ...current, name: fieldEvent.target.value }))}
+          placeholder={admin.events.categoryPlaceholder}
+          className={formControlClassName}
+        />
+      </DashboardField>
+      <DashboardField label={admin.events.descriptionLabel} id={`${idPrefix}-description`} hint={t('common.optional')}>
+        <Textarea
+          id={`${idPrefix}-description`}
+          value={form.description}
+          onChange={(fieldEvent) => setForm((current) => ({ ...current, description: fieldEvent.target.value }))}
+          placeholder={admin.events.categoryDescriptionPlaceholder}
+          className={formControlClassName}
+        />
+      </DashboardField>
+    </>
+  );
 
   return (
     <AdminShell title={copy.title} description={copy.description} eyebrow={copy.eyebrow}>
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
-      <SectionHeading
-        title={copy.listTitle}
-        description={copy.listDescription}
-        actions={
-          <Button
-            variant="red"
-            className="min-h-11 rounded-md"
-            onClick={() => {
-              setForm(emptyForm);
-              setCreateOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            {copy.showCreate}
-          </Button>
+      <SectionHeading title={copy.listTitle} description={copy.listDescription} actions={createButton} />
+
+      <DirectoryToolbar
+        id="categories"
+        query={query}
+        onQueryChange={setQuery}
+        facets={facets}
+        searchLabel={dir.searchCategories}
+        countLabel={
+          visible.length === categories.length
+            ? fillTemplate(dir.total, { count: categories.length })
+            : fillTemplate(dir.shown, { shown: visible.length, total: categories.length })
         }
       />
-      <div className="mt-4 grid gap-3">
-        {loading ? <EmptyState title={copy.loading} icon={Tags} /> : null}
-        {!loading && !categories.length ? (
-          <EmptyState
-            title={admin.events.noCategoriesTitle}
-            description={admin.events.noCategoriesDescription}
-            icon={Tags}
-            action={
-              <Button variant="red" className="min-h-11 rounded-md" onClick={() => setCreateOpen(true)}>
-                {copy.showCreate}
+
+      <div className="mt-4">
+        <DirectoryTable
+          loading={loading}
+          rows={visible}
+          total={categories.length}
+          icon={Tags}
+          loadingLabel={copy.loading}
+          rowKey={(category) => category.id}
+          minWidthClassName="min-w-[720px]"
+          actionsHeader={copy.columnActions}
+          empty={{
+            title: admin.events.noCategoriesTitle,
+            description: admin.events.noCategoriesDescription,
+            action: createButton,
+          }}
+          noMatches={{
+            title: dir.noMatches,
+            description: dir.noMatchesDetail,
+            action: (
+              <Button variant="outline" className={cn(softButtonClassName, 'min-h-11 rounded-md')} onClick={() => setQuery(emptyQuery)}>
+                {dir.showAll}
               </Button>
-            }
-          />
-        ) : null}
-        {!loading && categories.length ? (
-          <DataTable
-            rows={categories}
-            rowKey={(category) => category.id}
-            minWidthClassName="min-w-[720px]"
-            actionsHeader={copy.columnActions}
-            columns={[
-              {
-                key: 'name',
-                header: copy.columnName,
-                width: 'w-[30%]',
-                cell: (category) => (
-                  <span className="block truncate font-medium text-[var(--dash-text)]" title={category.name}>
-                    {category.name}
-                  </span>
+            ),
+          }}
+          columns={[
+            {
+              key: 'name',
+              header: copy.columnName,
+              width: 'w-[30%]',
+              cell: (category) => (
+                <span className={styles.primary} title={category.name}>
+                  {category.name}
+                </span>
+              ),
+            },
+            {
+              key: 'description',
+              header: copy.columnDescription,
+              width: 'w-[40%]',
+              cell: (category) => <p className={styles.wrapped}>{category.description || copy.noDescription}</p>,
+            },
+            {
+              key: 'usage',
+              header: copy.columnUsage,
+              width: 'w-[16%]',
+              cell: (category) =>
+                categoryInUse(category) ? (
+                  <Badge className="border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]">
+                    {copy.inUseByEvents.replace('{count}', String(category.eventCount))}
+                  </Badge>
+                ) : (
+                  <span className={styles.faint}>{copy.notInUse}</span>
                 ),
-              },
-              {
-                key: 'description',
-                header: copy.columnDescription,
-                width: 'w-[40%]',
-                cell: (category) => (
-                  <p className="line-clamp-2 text-sm leading-6 text-[var(--dash-muted)]">
-                    {category.description || copy.noDescription}
-                  </p>
-                ),
-              },
-              {
-                key: 'usage',
-                header: copy.columnUsage,
-                width: 'w-[16%]',
-                cell: (category) =>
-                  (category.eventCount ?? 0) > 0 ? (
-                    <Badge className="border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]">
-                      {copy.inUseByEvents.replace('{count}', String(category.eventCount))}
-                    </Badge>
-                  ) : (
-                    <span className="text-sm text-[var(--dash-faint)]">{copy.notInUse}</span>
-                  ),
-              },
-            ]}
-            renderActions={(category) => {
-              const inUse = (category.eventCount ?? 0) > 0;
-              return (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className={cn(softButtonClassName, 'rounded-md')}
-                    aria-label={copy.edit}
-                    title={copy.edit}
-                    onClick={() => openEdit(category)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                    <span className="hidden 2xl:inline">{copy.edit}</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="rounded-md border-[rgba(194,65,59,0.28)] bg-white text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]"
-                    disabled={inUse}
-                    aria-label={copy.delete}
-                    title={inUse ? admin.messages.categoryInUse : copy.delete}
-                    onClick={() => openDelete(category)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="hidden 2xl:inline">{copy.delete}</span>
-                  </Button>
-                </>
-              );
-            }}
-          />
-        ) : null}
+            },
+          ]}
+          renderActions={(category) => (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className={cn(softButtonClassName, rowActionClassName)}
+                aria-label={copy.edit}
+                title={copy.edit}
+                onClick={() => openEdit(category)}
+              >
+                <Pencil className="h-4 w-4" />
+                <span className="hidden 2xl:inline">{copy.edit}</span>
+              </Button>
+              {/* A category an event still points at cannot be deleted, so the action is absent
+                  rather than permanently disabled; the usage column states why. */}
+              {categoryInUse(category) ? null : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 rounded-md border-[rgba(194,65,59,0.28)] bg-white text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]"
+                  aria-label={copy.delete}
+                  title={copy.delete}
+                  onClick={() => {
+                    setFormError('');
+                    setDeleting(category);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="hidden 2xl:inline">{copy.delete}</span>
+                </Button>
+              )}
+            </>
+          )}
+        />
       </div>
 
-      <DashboardModal
+      <EditorModal
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          if (!open) setCreateOpen(false);
+        }}
         title={copy.createTitle}
         description={copy.createDescription}
+        formId="create-category-form"
         size="md"
-        footer={
-          <ModalFormFooter
-            formId="create-category-form"
-            onCancel={() => setCreateOpen(false)}
-            cancelLabel={t('common.cancel')}
-            busy={busy}
-            submitLabel={
-              <>
-                <Plus className="h-4 w-4" />
-                {busy ? admin.messages.saving : admin.events.saveCategory}
-              </>
-            }
-          />
-        }
+        busy={busy}
+        error={formError}
+        cancelLabel={t('common.cancel')}
+        submitLabel={busy ? admin.messages.saving : admin.events.saveCategory}
+        onSubmit={() => void createCategory()}
       >
-        <form id="create-category-form" onSubmit={createCategory} className="space-y-4">
-          <DashboardField label={admin.events.name} id="category-name">
-            <Input
-              id="category-name"
-              required
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder={admin.events.categoryPlaceholder}
-              className={formControlClassName}
-            />
-          </DashboardField>
-          <DashboardField label={admin.events.descriptionLabel} id="category-description" hint={t('common.optional')}>
-            <Textarea
-              id="category-description"
-              value={form.description}
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder={admin.events.categoryDescriptionPlaceholder}
-              className={formControlClassName}
-            />
-          </DashboardField>
-        </form>
-      </DashboardModal>
+        {fields('category')}
+      </EditorModal>
 
-      <DashboardModal
+      <EditorModal
         open={Boolean(editing)}
         onOpenChange={(open) => {
           if (!open) setEditing(null);
         }}
         title={copy.editTitle}
         description={copy.editDescription}
+        formId="edit-category-form"
         size="md"
-        footer={
-          <ModalFormFooter
-            formId="edit-category-form"
-            onCancel={() => setEditing(null)}
-            cancelLabel={t('common.cancel')}
-            busy={busy}
-            submitLabel={busy ? admin.messages.saving : copy.saveEdit}
-          />
-        }
+        busy={busy}
+        error={formError}
+        cancelLabel={t('common.cancel')}
+        submitLabel={busy ? admin.messages.saving : copy.saveEdit}
+        onSubmit={() => void updateCategory()}
       >
-        <form id="edit-category-form" onSubmit={updateCategory} className="space-y-4">
-          <DashboardField label={admin.events.name} id="edit-category-name">
-            <Input
-              id="edit-category-name"
-              required
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder={admin.events.categoryPlaceholder}
-              className={formControlClassName}
-            />
-          </DashboardField>
-          <DashboardField label={admin.events.descriptionLabel} id="edit-category-description" hint={t('common.optional')}>
-            <Textarea
-              id="edit-category-description"
-              value={form.description}
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder={admin.events.categoryDescriptionPlaceholder}
-              className={formControlClassName}
-            />
-          </DashboardField>
-        </form>
-      </DashboardModal>
+        {fields('edit-category')}
+      </EditorModal>
 
-      <DashboardModal
+      <ConfirmModal
         open={Boolean(deleting)}
         onOpenChange={(open) => {
           if (!open) setDeleting(null);
         }}
         title={copy.deleteTitle}
-        description={
-          deleting
-            ? copy.deleteDescription.replace('{name}', deleting.name)
-            : copy.deleteDescription
-        }
-        size="md"
-        footer={
-          <ModalFormFooter
-            onCancel={() => setDeleting(null)}
-            cancelLabel={t('common.cancel')}
-            busy={busy}
-            submitType="button"
-            onSubmitClick={() => {
-              void confirmDelete();
-            }}
-            submitLabel={busy ? admin.messages.saving : copy.confirmDelete}
-          />
-        }
-      >
-        <p className="text-sm leading-6 text-[#6d5f5c]">{copy.deleteWarning}</p>
-      </DashboardModal>
+        description={deleting ? copy.deleteDescription.replace('{name}', deleting.name) : copy.deleteDescription}
+        body={copy.deleteWarning}
+        busy={busy}
+        error={formError}
+        cancelLabel={t('common.cancel')}
+        confirmLabel={busy ? admin.messages.saving : copy.confirmDelete}
+        onConfirm={() => void confirmDelete()}
+      />
     </AdminShell>
   );
 }

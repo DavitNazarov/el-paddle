@@ -230,6 +230,12 @@ model User {
    * Bumped on logout / password change to invalidate outstanding JWTs.
    */
   sessionVersion         Int        @default(0)
+  /**
+   * Latest sign-in, written best-effort and never awaited: a sign-in must not
+   * fail because a statistics column did not update. Only the *latest* login,
+   * so it answers "seen recently" and can never answer "seen last month".
+   */
+  lastLoginAt            DateTime?
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
 
@@ -256,6 +262,10 @@ model User {
   applicationMessages   ClubApplicationMessage[] @relation("ClubApplicationMessageActor")
 
   @@index([role, status, name, surname, createdAt, id])
+  // Platform statistics range on createdAt alone; the index above leads with
+  // role/status/name and cannot serve it.
+  @@index([createdAt])
+  @@index([lastLoginAt])
 }
 
 model OAuthAccount {
@@ -268,6 +278,8 @@ model OAuthAccount {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  // Signup-route split: how many accounts arrived through Google in a window.
+  @@index([provider, createdAt])
 }
 
 model EmailVerificationCode {
@@ -413,6 +425,10 @@ model EventRegistration {
   @@index([ownerId, createdAt, id])
   @@index([teammateId, createdAt, id])
   @@index([teammateEmail])
+  // Every index above leads with a scope column, so platform-wide statistics
+  // (entries per day, review latency) cannot use any of them.
+  @@index([createdAt])
+  @@index([reviewedAt])
 }
 
 model Club {
@@ -925,6 +941,8 @@ model EmailDelivery {
   notification Notification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
 
   @@index([status, nextAttemptAt])
+  // Delivery health over a window; the worker index above is keyed for retries.
+  @@index([createdAt])
 }
 
 model OutboxMessage {
@@ -979,4 +997,8 @@ model AuditLog {
   @@index([eventId, action, createdAt])
   @@index([entityType, entityId, createdAt])
   @@index([actorId, createdAt])
+  // Platform-wide "how many times did action X happen in this window". The
+  // eventId-leading index cannot answer it: eventId is null for account and
+  // club-application actions, which is exactly what statistics count.
+  @@index([action, createdAt])
 }

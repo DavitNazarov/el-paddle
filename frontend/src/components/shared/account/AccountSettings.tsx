@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Languages,
   Mail,
   ShieldAlert,
   ShieldCheck,
@@ -31,11 +32,24 @@ import {
   selectControlClassName,
   softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
+import { Field } from '@/components/shared/dashboard/DashboardForm';
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { tournamentCopy } from '@/lib/i18n/tournament';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { apiFetch, readApiJson } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { PublicUser, UserRole } from '@/types/auth';
+import {
+  emptyPasswordForm,
+  hasErrors,
+  initialsOf,
+  passwordRules,
+  sameProfile,
+  validatePassword,
+  validateProfile,
+  type ProfileForm,
+} from './accountModel';
 
 /**
  * Role-specific wording for the irreversible actions. Each workspace keeps its
@@ -63,28 +77,11 @@ type AccountProfile = {
   hasPassword: boolean;
 };
 
-type ProfileForm = Pick<AccountProfile, 'name' | 'surname' | 'phone'>;
-
-const SECTION_KEYS = ['profile', 'security', 'danger'] as const;
+const SECTION_KEYS = ['profile', 'security', 'preferences', 'danger'] as const;
 type SectionKey = (typeof SECTION_KEYS)[number];
-
-const emptyPasswordForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
-const MIN_PASSWORD_LENGTH = 12;
 
 function isSectionKey(value: string): value is SectionKey {
   return (SECTION_KEYS as readonly string[]).includes(value);
-}
-
-function initialsOf(user: PublicUser) {
-  const letters = [user.name, user.surname]
-    .map((part) => part.trim().charAt(0))
-    .filter(Boolean)
-    .join('');
-  return (letters || user.email.charAt(0)).toUpperCase();
-}
-
-function sameProfile(a: ProfileForm, b: ProfileForm) {
-  return a.name === b.name && a.surname === b.surname && a.phone === b.phone;
 }
 
 /** Password field with a reveal toggle sized for touch. */
@@ -95,6 +92,7 @@ function SecretInput({
   autoComplete,
   onChange,
   hint,
+  error,
   showLabel,
   hideLabel,
 }: {
@@ -104,6 +102,7 @@ function SecretInput({
   autoComplete: string;
   onChange: (value: string) => void;
   hint?: string;
+  error?: string;
   showLabel: string;
   hideLabel: string;
 }) {
@@ -111,12 +110,12 @@ function SecretInput({
   const Icon = revealed ? EyeOff : Eye;
 
   return (
-    <DashboardField id={id} label={label} hint={hint}>
+    <Field id={id} label={label} hint={hint} error={error}>
+      {(control) => (
       <div className="relative">
         <Input
-          id={id}
+          {...control}
           type={revealed ? 'text' : 'password'}
-          required
           autoComplete={autoComplete}
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -132,7 +131,8 @@ function SecretInput({
           <Icon className="h-4 w-4" />
         </button>
       </div>
-    </DashboardField>
+      )}
+    </Field>
   );
 }
 
@@ -158,7 +158,7 @@ function PasswordRule({ met, label, metLabel, unmetLabel }: { met: boolean; labe
  */
 export function AccountSettings({ user, danger }: { user: PublicUser; danger: AccountDangerCopy }) {
   const router = useRouter();
-  const { dictionary } = useI18n();
+  const { dictionary, locale } = useI18n();
   const copy = dictionary.dashboard.account;
 
   const [section, setSection] = useState<SectionKey>('profile');
@@ -169,11 +169,13 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileTried, setProfileTried] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState(emptyPasswordForm);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSaved, setPasswordSaved] = useState(false);
+  const [passwordTried, setPasswordTried] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -215,12 +217,26 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
     window.history.replaceState(null, '', `#${key}`);
   }
 
+  const account = tournamentCopy[locale].account;
   const dirty = !sameProfile(profile, saved);
+  const profileErrors = validateProfile(profile, user.role === 'USER');
+  const passwordErrors = validatePassword(passwordForm, hasPassword);
+  const { lengthMet, matchMet } = passwordRules(passwordForm);
+  const profileErrorFor = (field: keyof ProfileForm) => {
+    const code = profileTried ? profileErrors[field] : undefined;
+    return code ? account.errors[code] : undefined;
+  };
+  const passwordErrorFor = (field: keyof typeof passwordForm) => {
+    const code = passwordTried ? passwordErrors[field] : undefined;
+    return code ? account.errors[code] : undefined;
+  };
 
   async function saveProfile(event: React.FormEvent) {
     event.preventDefault();
     setProfileError('');
     setProfileSaved(false);
+    setProfileTried(true);
+    if (hasErrors(profileErrors)) return;
     setProfileBusy(true);
     const response = await apiFetch('/api/account/profile', {
       method: 'PATCH',
@@ -238,17 +254,12 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
     router.refresh();
   }
 
-  const lengthMet = passwordForm.newPassword.length >= MIN_PASSWORD_LENGTH;
-  const matchMet = passwordForm.newPassword.length > 0 && passwordForm.newPassword === passwordForm.confirmPassword;
-
   async function savePassword(event: React.FormEvent) {
     event.preventDefault();
     setPasswordError('');
     setPasswordSaved(false);
-    if (!matchMet) {
-      setPasswordError(copy.passwordMismatch);
-      return;
-    }
+    setPasswordTried(true);
+    if (hasErrors(passwordErrors)) return;
     setPasswordBusy(true);
     const response = await apiFetch('/api/account/password', {
       method: 'POST',
@@ -266,6 +277,7 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
     setPasswordForm(emptyPasswordForm);
     setHasPassword(true);
     setPasswordSaved(true);
+    setPasswordTried(false);
   }
 
   async function deleteAccount() {
@@ -293,6 +305,7 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
   const sections: { key: SectionKey; label: string; icon: LucideIcon }[] = [
     { key: 'profile', label: copy.sectionProfile, icon: UserRound },
     { key: 'security', label: copy.sectionSecurity, icon: ShieldCheck },
+    { key: 'preferences', label: account.sectionPreferences, icon: Languages },
     { key: 'danger', label: copy.sectionDanger, icon: TriangleAlert },
   ];
 
@@ -386,40 +399,43 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                     ) : null}
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <DashboardField id="account-name" label={copy.name}>
-                        <Input
-                          id="account-name"
-                          required
-                          autoComplete="given-name"
-                          value={profile.name}
-                          onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))}
-                          className={formControlClassName}
-                        />
-                      </DashboardField>
-                      <DashboardField id="account-surname" label={copy.surname}>
-                        <Input
-                          id="account-surname"
-                          required
-                          autoComplete="family-name"
-                          value={profile.surname}
-                          onChange={(event) => setProfile((current) => ({ ...current, surname: event.target.value }))}
-                          className={formControlClassName}
-                        />
-                      </DashboardField>
+                      <Field id="account-name" label={copy.name} error={profileErrorFor('name')}>
+                        {(control) => (
+                          <Input
+                            {...control}
+                            autoComplete="given-name"
+                            value={profile.name}
+                            onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))}
+                            className={formControlClassName}
+                          />
+                        )}
+                      </Field>
+                      <Field id="account-surname" label={copy.surname} error={profileErrorFor('surname')}>
+                        {(control) => (
+                          <Input
+                            {...control}
+                            autoComplete="family-name"
+                            value={profile.surname}
+                            onChange={(event) => setProfile((current) => ({ ...current, surname: event.target.value }))}
+                            className={formControlClassName}
+                          />
+                        )}
+                      </Field>
                     </div>
 
-                    <DashboardField id="account-phone" label={copy.phone} hint={copy.phoneHint}>
-                      <Input
-                        id="account-phone"
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="tel"
-                        required={user.role === 'USER'}
-                        value={profile.phone}
-                        onChange={(event) => setProfile((current) => ({ ...current, phone: event.target.value }))}
-                        className={formControlClassName}
-                      />
-                    </DashboardField>
+                    <Field id="account-phone" label={copy.phone} hint={copy.phoneHint} error={profileErrorFor('phone')}>
+                      {(control) => (
+                        <Input
+                          {...control}
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          value={profile.phone}
+                          onChange={(event) => setProfile((current) => ({ ...current, phone: event.target.value }))}
+                          className={formControlClassName}
+                        />
+                      )}
+                    </Field>
 
                     <DashboardField id="account-email" label={copy.email} hint={copy.emailHint}>
                       <Input
@@ -447,7 +463,7 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                       >
                         {copy.discard}
                       </Button>
-                      <Button type="submit" disabled={!dirty || profileBusy} className="min-h-11 rounded-md px-4">
+                      <Button type="submit" disabled={profileBusy} className="min-h-11 rounded-md px-4">
                         {profileBusy ? copy.saving : copy.save}
                       </Button>
                     </div>
@@ -500,6 +516,7 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                         value={passwordForm.currentPassword}
                         autoComplete="current-password"
                         onChange={(value) => setPasswordForm((current) => ({ ...current, currentPassword: value }))}
+                        error={passwordErrorFor('currentPassword')}
                         showLabel={copy.showPassword}
                         hideLabel={copy.hidePassword}
                       />
@@ -512,6 +529,7 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                         value={passwordForm.newPassword}
                         autoComplete="new-password"
                         onChange={(value) => setPasswordForm((current) => ({ ...current, newPassword: value }))}
+                        error={passwordErrorFor('newPassword')}
                         showLabel={copy.showPassword}
                         hideLabel={copy.hidePassword}
                       />
@@ -521,6 +539,7 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                         value={passwordForm.confirmPassword}
                         autoComplete="new-password"
                         onChange={(value) => setPasswordForm((current) => ({ ...current, confirmPassword: value }))}
+                        error={passwordErrorFor('confirmPassword')}
                         showLabel={copy.showPassword}
                         hideLabel={copy.hidePassword}
                       />
@@ -546,13 +565,32 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                     <p className="text-xs leading-5 text-[var(--dash-muted)]">{copy.passwordSessionsNote}</p>
                     <Button
                       type="submit"
-                      disabled={passwordBusy || !lengthMet || !matchMet}
+                      disabled={passwordBusy}
                       className="min-h-11 rounded-md px-4 sm:shrink-0"
                     >
                       {passwordBusy ? copy.saving : hasPassword ? copy.changePassword : copy.setPassword}
                     </Button>
                   </div>
                 </form>
+              </SurfaceCard>
+            </section>
+          ) : null}
+
+          {section === 'preferences' ? (
+            <section aria-labelledby="account-preferences-heading">
+              <SectionHeading
+                id="account-preferences-heading"
+                title={account.preferencesTitle}
+                description={account.preferencesDescription}
+              />
+              <SurfaceCard className="mt-4">
+                <div className="grid gap-3 p-5">
+                  <h3 className="text-sm font-semibold text-[var(--dash-text)]">{account.language}</h3>
+                  <LanguageSwitcher tone="light" />
+                  {/* No save button: the switch applies at once, and pretending
+                      otherwise would be the silent-autosave the form rules forbid. */}
+                  <p className="text-sm leading-5 text-[var(--dash-muted)]">{account.languageNote}</p>
+                </div>
               </SurfaceCard>
             </section>
           ) : null}

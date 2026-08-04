@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { UserRole, UserStatus, type User } from '../../generated/prisma/client.js';
-import { jsonError } from '../../common/http.js';
+import { isForeignKeyConstraintError, jsonError } from '../../common/http.js';
+import { writeAudit } from '../../common/domain-events.js';
 import { sendAccountInviteEmail } from '../../common/notifications.js';
 import {
   addDays,
@@ -273,7 +275,14 @@ export async function changeOwnPassword(userId: string, input: OwnPasswordInput)
   });
 }
 
-export async function deleteUserAccount(userId: string, actorId: string) {
+/**
+ * A deleted account leaves no row behind — cascades take the memberships,
+ * entries and notifications with it — so this audit row is the *only* record
+ * that the account ever existed. Platform statistics count these rows.
+ */
+export const USER_DELETION_AUDIT_ACTION = 'user.deleted';
+
+export async function deleteUserAccount(userId: string, actorId: string, ip?: string | null) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) jsonError('User not found.', 404);
 
@@ -284,7 +293,47 @@ export async function deleteUserAccount(userId: string, actorId: string) {
     }
   }
 
-  await prisma.user.delete({ where: { id: userId } });
+  // No email, name or phone: this row outlives the account, so it carries only
+  // what statistics need. The hash keeps "did this address apply again?"
+  // answerable without storing the address itself.
+  const before = {
+    role: user.role,
+    status: user.status,
+    emailHash: createHash('sha256').update(user.email).digest('hex'),
+    accountAgeDays: Math.floor((Date.now() - user.createdAt.getTime()) / 86_400_000),
+    hadPassword: Boolean(user.passwordHash),
+    matchesPlayed: user.matchesPlayed,
+    selfService: userId === actorId,
+  };
+
+  try {
+    // The audit row is written inside the transaction and before the delete, so
+    // a refused delete rolls the row back with it and no phantom deletion is
+    // ever counted.
+    await prisma.$transaction(async (tx) => {
+      await writeAudit(tx, {
+        action: USER_DELETION_AUDIT_ACTION,
+        actorId,
+        entityType: 'User',
+        entityId: userId,
+        before,
+        ip,
+      });
+      await tx.user.delete({ where: { id: userId } });
+    });
+  } catch (error) {
+    // Registrations cascade from the user, but a match keeps its participants
+    // with onDelete: Restrict, so Postgres refuses the cascade for anyone who
+    // has played. Without this the reader gets a raw 500.
+    if (isForeignKeyConstraintError(error)) {
+      jsonError(
+        'This account appears in a recorded match and cannot be deleted. Correct or reopen those matches first.',
+        409,
+      );
+    }
+    throw error;
+  }
+
   return { deletedSelf: userId === actorId };
 }
 

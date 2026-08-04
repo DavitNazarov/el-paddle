@@ -85,6 +85,17 @@ const activeStatuses = [
 ] as const;
 
 /**
+ * Statuses that already claim both of a request's entries for the first bracket
+ * round. Bracket generation gives every such pairing its own match, so an entry
+ * may appear in at most one of them.
+ */
+const committedStatuses = [
+  OpponentRequestStatus.APPROVED_BY_ADMIN,
+  OpponentRequestStatus.OVERRIDDEN_BY_ADMIN,
+  OpponentRequestStatus.APPLIED_TO_BRACKET,
+] as const;
+
+/**
  * A pending opponent request auto-expires at its category's opponent-request
  * deadline. The outbox worker transitions rows whose `expiresAt <= now` to
  * EXPIRED, so this value MUST be persisted for the expiry workflow to run.
@@ -96,6 +107,34 @@ export function resolveOpponentRequestExpiry(link: { opponentRequestDeadline: Da
 
 function canonicalPair(a: string, b: string) {
   return [a, b].sort().join(':');
+}
+
+function entryLabel(entry: OpponentRequestGraph['requestingEntry']) {
+  const name = (user: typeof entry.owner) => [user.name, user.surname].filter(Boolean).join(' ') || user.email;
+  return `${name(entry.owner)} / ${name(entry.teammate)}`;
+}
+
+/**
+ * Refuses an approval that would commit an entry to a second first-round pairing.
+ * Without this, two approved requests can share a team and bracket generation
+ * fails permanently, with no way back from the approved state.
+ */
+async function assertEntriesUncommitted(tx: Prisma.TransactionClient, request: OpponentRequestGraph) {
+  const entryIds = [request.requestingEntryId, request.targetEntryId];
+  const clash = await tx.opponentRequest.findFirst({
+    where: {
+      id: { not: request.id },
+      eventId: request.eventId,
+      categoryId: request.categoryId,
+      status: { in: [...committedStatuses] },
+      OR: [{ requestingEntryId: { in: entryIds } }, { targetEntryId: { in: entryIds } }],
+    },
+    include: opponentRequestInclude,
+  });
+  if (!clash) return;
+  const committed = entryIds.includes(clash.requestingEntryId) ? clash.requestingEntry : clash.targetEntry;
+  const partner = committed.id === clash.requestingEntryId ? clash.targetEntry : clash.requestingEntry;
+  jsonError(`${entryLabel(committed)} is already paired with ${entryLabel(partner)}. Reject that pairing first.`, 409);
 }
 
 export async function requireEntryContact(userId: string, entryId: string, eventId?: string) {
@@ -296,7 +335,10 @@ export async function decideOpponentRequest(input: { actorId: string; eventId: s
     if (request.version !== input.expectedVersion) jsonError('Request changed. Refresh and try again.', 409);
     if (input.decision === 'approve' && request.status !== OpponentRequestStatus.ACCEPTED_BY_OPPONENT) jsonError('Only an accepted request can be approved.', 409);
     if (input.decision === 'override' && request.status !== OpponentRequestStatus.REFUSED_BY_OPPONENT) jsonError('Only a refused request can be overridden.', 409);
+    // A pairing already placed in the bracket is undone by moving the entry on the bracket, not here.
+    if (input.decision === 'reject' && request.status === OpponentRequestStatus.APPLIED_TO_BRACKET) jsonError('This pairing is already in the bracket. Move the entry on the bracket instead.', 409);
     if ((input.decision === 'reject' || input.decision === 'override') && !input.publicReason?.trim()) jsonError('A public reason is required.');
+    if (input.decision !== 'reject') await assertEntriesUncommitted(tx, request);
     await assertEligibleEntry(tx, request.requestingEntryId, request.eventId, request.categoryId);
     await assertEligibleEntry(tx, request.targetEntryId, request.eventId, request.categoryId);
     const status = input.decision === 'approve' ? OpponentRequestStatus.APPROVED_BY_ADMIN : input.decision === 'override' ? OpponentRequestStatus.OVERRIDDEN_BY_ADMIN : OpponentRequestStatus.REJECTED_BY_ADMIN;

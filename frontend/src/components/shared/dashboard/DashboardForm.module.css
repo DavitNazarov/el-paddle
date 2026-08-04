@@ -1,0 +1,168 @@
+/*
+ * The form archetype. Fields are grouped into named sections, every failure is
+ * shown against the field that caused it, and the save is always explicit —
+ * nothing on these screens writes on blur.
+ */
+
+.form {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sectionHead {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--dash-border);
+}
+
+.legend {
+  padding: 0;
+  color: var(--dash-text);
+  font-size: 0.8125rem;
+  font-weight: 750;
+  letter-spacing: -0.005em;
+}
+
+.sectionDetail {
+  margin: 0;
+  color: var(--dash-muted);
+  font-size: 0.78rem;
+  line-height: 1.15rem;
+}
+
+.fields {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.pair {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* An invalid control has to be findable without colour alone, so it also
+   carries the message underneath and an icon beside it. */
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin: 0;
+  color: var(--dash-coral);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.05rem;
+}
+
+.error svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  margin-top: 0.05rem;
+}
+
+.invalid :is(input, select, textarea) {
+  border-color: var(--dash-coral);
+}
+
+.invalid :is(input, select, textarea):focus-visible {
+  outline-color: var(--dash-coral);
+}
+
+/* ---- Choice grid (categories, preferences) ---- */
+
+.choices {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.choice {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: var(--dash-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.choice:hover {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-tint);
+}
+
+.choice[data-selected='true'] {
+  border-color: var(--dash-primary);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
+}
+
+.choice input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--dash-primary);
+}
+
+.choice:focus-within {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
+}
+
+/* ---- Save row ---- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--dash-border);
+}
+
+/* States the reader needs before they press save, not after. */
+.state {
+  margin: 0;
+  margin-right: auto;
+  color: var(--dash-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.state[data-tone='dirty'] {
+  color: var(--dash-amber);
+}
+
+.state[data-tone='saved'] {
+  color: var(--dash-teal);
+}
+
+@media (min-width: 40rem) {
+  .pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choice {
+    transition: none;
+  }
+}

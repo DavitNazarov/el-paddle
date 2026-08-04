@@ -85,12 +85,12 @@ export function EventCard({
             ) : null}
           </div>
 
-          <h3 id={titleId} className="mt-3 text-xl font-semibold leading-tight tracking-[-0.015em] text-[var(--padel-ivory)]">
+          <h3 id={titleId} className="mt-3 text-xl font-semibold leading-tight tracking-[-0.015em] text-[var(--dash-text)]">
             {event.title}
           </h3>
 
           {event.description ? (
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[rgba(213,201,177,0.5)]">{event.description}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--dash-muted)]">{event.description}</p>
           ) : null}
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">

@@ -1,160 +1,68 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import {
-  CalendarDays,
-  CalendarPlus,
-  ClipboardList,
-  Eye,
-  EyeOff,
-  MapPin,
-  Pencil,
-  Plus,
-  Trash2,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useMemo, useState } from 'react';
+import { Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  DashboardField,
-  DashboardModal,
-  EmptyState,
-  FeedbackBanner,
-  FilterChip,
-  MetaRow,
-  SectionHeading,
-  SurfaceCard,
-  formControlClassName,
-  softButtonClassName,
-} from '@/components/shared/dashboard/DashboardUI';
-import { Reveal } from '@/components/padel/home/motion';
+import { FeedbackBanner, softButtonClassName } from '@/components/shared/dashboard/DashboardUI';
+import { Notice } from '@/components/shared/dashboard/Feedback';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
-import { AdminShell } from './AdminShell';
+import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import { useViewer } from '@/hooks/useViewer';
+import { useEventOperations } from '@/hooks/useEventOperations';
+import { AdminShell } from './AdminShell';
+import { AdminEventBoard } from './AdminEventBoard';
+import { DirectoryToolbar } from './directory/DirectoryToolbar';
+import { rowActionClassName } from './directory/DirectoryTable';
+import { ConfirmModal, EditorModal } from './directory/DirectoryModals';
+import { EventForm } from './events/EventForm';
+import {
+  EVENT_FACET_VALUES,
+  emptyEventForm,
+  eventPayload,
+  eventReader,
+  formFromEvent,
+  isEventFormValid,
+  sortEvents,
+  validateEventForm,
+  type EventFormState,
+} from './events/eventsModel';
+import { ALL_FACET, emptyQuery, facetOptions, filterRows, type DirectoryQuery } from './directory/directoryModel';
 import type { CategoryDto, EventDto } from '@/types/admin';
-import { toDatetimeLocalValue } from '@/lib/utils/dates';
 
-type EventFilter = 'ALL' | 'UPCOMING' | 'COMPLETED' | 'DRAFT';
-
-type EventBucket = Exclude<EventFilter, 'ALL'>;
-
-type EventFormState = {
-  title: string;
-  date: string;
-  location: string;
-  description: string;
-  arrivalTime: string;
-  participationFee: string;
-  bankAccountIban: string;
-  bankAccountReceiver: string;
-  categoryIds: string[];
-};
-
-const emptyEventForm: EventFormState = {
-  title: '',
-  date: '',
-  location: '',
-  description: '',
-  arrivalTime: '',
-  participationFee: '',
-  bankAccountIban: '',
-  bankAccountReceiver: '',
-  categoryIds: [],
-};
-
-function formFromEvent(event: EventDto): EventFormState {
-  return {
-    title: event.title,
-    date: toDatetimeLocalValue(event.date),
-    location: event.location,
-    description: event.description ?? '',
-    arrivalTime: toDatetimeLocalValue(event.arrivalTime),
-    participationFee: String(event.participationFee),
-    bankAccountIban: event.bankAccountIban ?? '',
-    bankAccountReceiver: event.bankAccountReceiver ?? '',
-    categoryIds: event.categories.map((category) => category.id),
-  };
-}
-
-function isEventFormReady(form: EventFormState) {
-  const iban = form.bankAccountIban.replace(/\s+/g, '').toUpperCase();
-  return (
-    form.title.trim().length >= 3 &&
-    Boolean(form.date) &&
-    Boolean(form.location.trim()) &&
-    form.categoryIds.length > 0 &&
-    form.participationFee !== '' &&
-    Number(form.participationFee) >= 0 &&
-    form.bankAccountReceiver.trim().length >= 2 &&
-    /^GE\d{2}[A-Z]{2}\d{16}$/.test(iban)
-  );
-}
-
-function eventBucket(event: EventDto): EventBucket {
-  if (event.status === 'COMPLETED') return 'COMPLETED';
-  if (!event.isPublished) return 'DRAFT';
-  return 'UPCOMING';
-}
-
-function compareEvents(a: EventDto, b: EventDto) {
-  const bucketOrder: Record<EventBucket, number> = {
-    UPCOMING: 0,
-    DRAFT: 1,
-    COMPLETED: 2,
-  };
-  const aBucket = eventBucket(a);
-  const bBucket = eventBucket(b);
-  const bucketDifference = bucketOrder[aBucket] - bucketOrder[bBucket];
-  if (bucketDifference) return bucketDifference;
-
-  const dateDifference = new Date(a.date).getTime() - new Date(b.date).getTime();
-  return aBucket === 'COMPLETED' ? -dateDifference : dateDifference;
-}
-
+/**
+ * The season, as a board: every event carrying where it has reached and what it
+ * is waiting on, over the same `AdminEventBoard` the role home and the event
+ * pickers use. Only the row controls differ, and only admins get them —
+ * organisers run events handed to them and cannot create, edit, publish or
+ * delete one.
+ */
 export function AdminEventsClient() {
-  const { dictionary, t, formatDate } = useI18n();
+  const { dictionary, locale, t } = useI18n();
   const admin = dictionary.dashboard.admin;
   const copy = admin.eventsPage;
-  const [categories, setCategories] = useState<CategoryDto[]>([]);
-  const [events, setEvents] = useState<EventDto[]>([]);
-  const [filter, setFilter] = useState<EventFilter>('ALL');
-  // Organisers only ever run events an admin handed them, so creating,
-  // editing, publishing and deleting stay out of their copy of this screen.
+  const eventsCopy = tournamentCopy[locale].admin.events;
+  const dir = tournamentCopy[locale].admin.directory;
+
   const { viewer } = useViewer();
   const canManageEvents = viewer?.role === 'ADMIN';
+  const { operations } = useEventOperations();
+
+  const [categories, setCategories] = useState<CategoryDto[]>([]);
+  const [events, setEvents] = useState<EventDto[]>([]);
+  const [query, setQuery] = useState<DirectoryQuery>(emptyQuery);
+  const [editing, setEditing] = useState<EventDto | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<EventDto | null>(null);
-  const [deletingEvent, setDeletingEvent] = useState<EventDto | null>(null);
-  const [eventForm, setEventForm] = useState<EventFormState>(emptyEventForm);
+  const [deleting, setDeleting] = useState<EventDto | null>(null);
+  const [form, setForm] = useState<EventFormState>(emptyEventForm);
+  const [showErrors, setShowErrors] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
-
-  const filteredEvents = useMemo(() => {
-    const matchingEvents = filter === 'ALL'
-      ? events
-      : events.filter((event) => eventBucket(event) === filter);
-    return [...matchingEvents].sort(compareEvents);
-  }, [events, filter]);
-
-  const counts = useMemo(
-    () => ({
-      all: events.length,
-      upcoming: events.filter((event) => eventBucket(event) === 'UPCOMING').length,
-      completed: events.filter((event) => eventBucket(event) === 'COMPLETED').length,
-      draft: events.filter((event) => eventBucket(event) === 'DRAFT').length,
-    }),
-    [events],
-  );
-
-  const formOpen = createOpen || Boolean(editingEvent);
-  const formMode = editingEvent ? 'edit' : 'create';
 
   async function load() {
     setLoading(true);
@@ -176,506 +84,262 @@ export function AdminEventsClient() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  function toggleCategory(categoryId: string) {
-    setEventForm((current) => {
-      const selected = new Set(current.categoryIds);
-      if (selected.has(categoryId)) selected.delete(categoryId);
-      else selected.add(categoryId);
-      return { ...current, categoryIds: [...selected] };
+  const visible = useMemo(() => filterRows(events, query, eventReader), [events, query]);
+  const facets = useMemo(
+    () =>
+      facetOptions(events, query, eventReader, EVENT_FACET_VALUES, (value) => {
+        if (value === ALL_FACET) return dir.all;
+        if (value === 'UPCOMING') return eventsCopy.bucketUpcoming;
+        if (value === 'DRAFT') return eventsCopy.bucketDraft;
+        return eventsCopy.bucketCompleted;
+      }),
+    [dir, events, eventsCopy, query],
+  );
+
+  const errors = validateEventForm(form);
+  const formOpen = createOpen || Boolean(editing);
+  const formMode = editing ? 'edit' : 'create';
+
+  async function send(path: string, method: string, body: unknown, success: string, failureCopy: string) {
+    setError('');
+    setFormError('');
+    setMessage('');
+    const response = await apiFetch(path, {
+      method,
+      ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
     });
+    const result = (await response.json().catch(() => ({}))) as { error?: string };
+    if (!response.ok) return result.error ?? failureCopy;
+    setMessage(success);
+    await load();
+    return null;
   }
 
   function closeForm() {
     setCreateOpen(false);
-    setEditingEvent(null);
-    setEventForm(emptyEventForm);
+    setEditing(null);
+    setForm(emptyEventForm);
+    setShowErrors(false);
+    setFormError('');
   }
 
-  function openCreate() {
-    setEditingEvent(null);
-    setEventForm(emptyEventForm);
-    setCreateOpen(true);
-  }
-
-  function openEdit(event: EventDto) {
-    setCreateOpen(false);
-    setEditingEvent(event);
-    setEventForm(formFromEvent(event));
-  }
-
-  async function submitEventForm(formEvent: FormEvent<HTMLFormElement>) {
-    formEvent.preventDefault();
-    setError('');
-    setMessage('');
-    setBusy(formMode);
-
-    const payload = {
-      title: eventForm.title,
-      date: eventForm.date,
-      location: eventForm.location,
-      description: eventForm.description,
-      arrivalTime: eventForm.arrivalTime || null,
-      participationFee: Number(eventForm.participationFee),
-      bankAccountIban: eventForm.bankAccountIban.replace(/\s+/g, '').toUpperCase(),
-      bankAccountReceiver: eventForm.bankAccountReceiver.trim(),
-      categoryIds: eventForm.categoryIds,
-    };
-
-    const response = editingEvent
-      ? await apiFetch(`/api/events/${editingEvent.id}`, {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ ...payload, expectedVersion: editingEvent.version }),
-        })
-      : await apiFetch('/api/events', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-    const result = (await response.json()) as { error?: string };
-    setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? (editingEvent ? admin.messages.updateFailed : admin.messages.actionFailed));
+  async function submitForm() {
+    // Errors stay hidden until the reader tries to save, then all of them show
+    // at once against their own fields. The save is never disabled.
+    if (!isEventFormValid(errors)) {
+      setShowErrors(true);
       return;
     }
-
-    setMessage(editingEvent ? admin.messages.eventUpdated : admin.messages.draftCreated);
+    setBusy(formMode);
+    const payload = eventPayload(form);
+    const failure = editing
+      ? await send(
+          `/api/events/${editing.id}`,
+          'PATCH',
+          { ...payload, expectedVersion: editing.version },
+          admin.messages.eventUpdated,
+          admin.messages.updateFailed,
+        )
+      : await send('/api/events', 'POST', payload, admin.messages.draftCreated, admin.messages.actionFailed);
+    setBusy(null);
+    if (failure) return setFormError(failure);
     closeForm();
-    await load();
   }
 
   async function togglePublish(event: EventDto) {
-    setError('');
-    setMessage('');
     setBusy(`publish-${event.id}`);
-    const response = await apiFetch(`/api/events/${event.id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ isPublished: !event.isPublished, expectedVersion: event.version }),
-    });
-    const result = (await response.json()) as { error?: string };
+    const failure = await send(
+      `/api/events/${event.id}`,
+      'PATCH',
+      { isPublished: !event.isPublished, expectedVersion: event.version },
+      event.isPublished ? admin.messages.unpublished : admin.messages.published,
+      admin.messages.updateFailed,
+    );
     setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.updateFailed);
-      return;
-    }
-    setMessage(event.isPublished ? admin.messages.unpublished : admin.messages.published);
-    await load();
+    if (failure) setError(failure);
   }
 
-  async function confirmDeleteEvent() {
-    if (!deletingEvent) return;
-    setError('');
-    setMessage('');
-    const busyKey = `delete-${deletingEvent.id}`;
-    setBusy(busyKey);
-    const response = await apiFetch(`/api/events/${deletingEvent.id}`, { method: 'DELETE' });
-    const result = (await response.json()) as { error?: string };
+  async function confirmDelete() {
+    if (!deleting) return;
+    setBusy(`delete-${deleting.id}`);
+    const failure = await send(`/api/events/${deleting.id}`, 'DELETE', undefined, admin.messages.eventDeleted, admin.messages.actionFailed);
     setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.actionFailed);
-      setDeletingEvent(null);
-      return;
-    }
-    setMessage(admin.messages.eventDeleted);
-    setDeletingEvent(null);
-    await load();
+    if (failure) return setFormError(failure);
+    setDeleting(null);
   }
+
+  const needsCategories = canManageEvents && !categories.length && !loading;
+
+  const createButton = canManageEvents ? (
+    <Button
+      variant="red"
+      className="min-h-11 rounded-md"
+      disabled={!categories.length}
+      onClick={() => {
+        setEditing(null);
+        setForm(emptyEventForm);
+        setShowErrors(false);
+        setFormError('');
+        setCreateOpen(true);
+      }}
+    >
+      <Plus className="h-4 w-4" />
+      {copy.showCreate}
+    </Button>
+  ) : null;
 
   return (
     <AdminShell title={copy.title} description={copy.description} eyebrow={copy.eyebrow}>
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
-      {canManageEvents && !categories.length && !loading ? (
-        <SurfaceCard featured className="mb-6">
-          <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="font-semibold text-[var(--padel-ivory)]">{copy.needCategoriesTitle}</h3>
-              <p className="mt-1 text-sm text-[rgba(213,201,177,0.55)]">{copy.needCategoriesDescription}</p>
-            </div>
-            <Button asChild variant="red" className="rounded-md">
-              <Link href="/admin/categories">{copy.goToCategories}</Link>
-            </Button>
-          </div>
-        </SurfaceCard>
+      {/* An event cannot be created without a category, so say so before the
+          disabled create button becomes a puzzle. */}
+      {needsCategories ? (
+        <div className="mb-4">
+          <Notice
+            tone="warning"
+            title={copy.needCategoriesTitle}
+            actions={
+              <Button asChild variant="red" className="min-h-11 rounded-md">
+                <Link href="/admin/categories">{copy.goToCategories}</Link>
+              </Button>
+            }
+          >
+            {copy.needCategoriesDescription}
+          </Notice>
+        </div>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <FilterChip active={filter === 'ALL'} count={counts.all} onClick={() => setFilter('ALL')}>
-            {copy.filterAll}
-          </FilterChip>
-          <FilterChip active={filter === 'UPCOMING'} count={counts.upcoming} onClick={() => setFilter('UPCOMING')}>
-            {copy.filterUpcoming}
-          </FilterChip>
-          <FilterChip active={filter === 'COMPLETED'} count={counts.completed} onClick={() => setFilter('COMPLETED')}>
-            {copy.filterCompleted}
-          </FilterChip>
-          <FilterChip active={filter === 'DRAFT'} count={counts.draft} onClick={() => setFilter('DRAFT')}>
-            {copy.filterDrafts}
-          </FilterChip>
-        </div>
-        {canManageEvents ? (
-          <Button variant="red" className="rounded-md" onClick={openCreate} disabled={!categories.length}>
-            <Plus className="h-4 w-4" />
-            {copy.showCreate}
-          </Button>
-        ) : null}
+      <DirectoryToolbar
+        id="events"
+        query={query}
+        onQueryChange={setQuery}
+        facets={facets}
+        searchLabel={eventsCopy.searchLabel}
+        countLabel={
+          visible.length === events.length
+            ? fillTemplate(dir.total, { count: events.length })
+            : fillTemplate(dir.shown, { shown: visible.length, total: events.length })
+        }
+      />
+
+      <div className="mt-4">
+        <AdminEventBoard
+          events={visible}
+          operations={operations}
+          loading={loading}
+          isOrganiser={!canManageEvents}
+          title={admin.events.pipelineTitle}
+          description={admin.events.pipelineDescription}
+          order={sortEvents}
+          headerActions={createButton ?? undefined}
+          emptyAction={
+            categories.length || !canManageEvents ? (
+              createButton ?? undefined
+            ) : (
+              <Button asChild variant="red" className="min-h-11 rounded-md">
+                <Link href="/admin/categories">{copy.goToCategories}</Link>
+              </Button>
+            )
+          }
+          renderActions={
+            canManageEvents
+              ? (event) => (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={cn(softButtonClassName, rowActionClassName)}
+                      aria-label={copy.edit}
+                      title={copy.edit}
+                      onClick={() => {
+                        setCreateOpen(false);
+                        setEditing(event);
+                        setForm(formFromEvent(event));
+                        setShowErrors(false);
+                        setFormError('');
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      <span className="sr-only 2xl:not-sr-only">{copy.edit}</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={event.isPublished ? 'outline' : 'red'}
+                      className={cn(event.isPublished && softButtonClassName, rowActionClassName)}
+                      disabled={busy === `publish-${event.id}`}
+                      aria-label={event.isPublished ? eventsCopy.unpublishAction : eventsCopy.publishAction}
+                      title={event.isPublished ? eventsCopy.unpublishAction : eventsCopy.publishAction}
+                      onClick={() => void togglePublish(event)}
+                    >
+                      {event.isPublished ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      <span className="sr-only 2xl:not-sr-only">
+                        {event.isPublished ? eventsCopy.unpublishAction : eventsCopy.publishAction}
+                      </span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={cn(rowActionClassName, 'border-[rgba(194,65,59,0.28)] bg-white text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]')}
+                      aria-label={copy.delete}
+                      title={copy.delete}
+                      onClick={() => {
+                        setFormError('');
+                        setDeleting(event);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only 2xl:not-sr-only">{copy.delete}</span>
+                    </Button>
+                  </>
+                )
+              : undefined
+          }
+        />
       </div>
 
-      <SectionHeading title={admin.events.pipelineTitle} description={admin.events.pipelineDescription} />
-      <div className="mt-4 grid gap-3">
-        {loading ? <EmptyState title={admin.events.loadingTitle} description={admin.events.loadingDescription} icon={CalendarDays} /> : null}
-        {!loading && !filteredEvents.length ? (
-          <EmptyState
-            title={admin.events.noEventsTitle}
-            description={admin.events.noEventsDescription}
-            icon={CalendarPlus}
-            action={
-              !canManageEvents ? undefined : categories.length ? (
-                <Button variant="red" className="rounded-md" onClick={openCreate}>
-                  {copy.showCreate}
-                </Button>
-              ) : (
-                <Button asChild variant="red" className="rounded-md">
-                  <Link href="/admin/categories">{copy.goToCategories}</Link>
-                </Button>
-              )
-            }
-          />
-        ) : null}
-
-        {filteredEvents.map((event, index) => {
-          const publishBusy = busy === `publish-${event.id}`;
-          return (
-            <Reveal key={event.id} delay={Math.min(index * 0.04, 0.2)}>
-              <SurfaceCard>
-                <div className="p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge
-                          className={cn(
-                            'border-transparent',
-                            event.status === 'COMPLETED'
-                              ? 'bg-stone-600 text-white'
-                              : event.status === 'ONGOING'
-                                ? 'bg-amber-500 text-[var(--padel-ink)]'
-                                : event.status === 'REGISTRATION_CLOSED'
-                                  ? 'bg-orange-700 text-white'
-                                  : 'bg-emerald-700 text-white',
-                          )}
-                        >
-                          {admin.events.statuses[event.status]}
-                        </Badge>
-                        <Badge
-                          className={
-                            event.isPublished
-                              ? 'border-transparent bg-emerald-600/90 text-[var(--padel-ivory)]'
-                              : 'border-[var(--padel-gold)]/40 bg-[var(--padel-gold)]/20 text-[var(--padel-gold-2)]'
-                          }
-                        >
-                          {event.isPublished ? admin.events.published : admin.events.draft}
-                        </Badge>
-                        {event.categories.map((category) => (
-                          <Badge
-                            key={category.id}
-                            className="border-[rgba(213,201,177,0.18)] bg-transparent text-[rgba(213,201,177,0.7)]"
-                          >
-                            {category.name}
-                          </Badge>
-                        ))}
-                      </div>
-                      <h3 className="font-display mt-3 text-xl font-semibold text-[var(--padel-ivory)]">{event.title}</h3>
-                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-                        <MetaRow icon={CalendarDays}>
-                          {formatDate(event.date, { dateStyle: 'medium', timeStyle: 'short' })}
-                        </MetaRow>
-                        <MetaRow icon={MapPin}>{event.location}</MetaRow>
-                      </div>
-                      <p className="mt-3 text-sm font-medium text-[var(--padel-gold)]">
-                        {admin.events.feeLabel}: {event.participationFee} GEL
-                      </p>
-                      <p className="mt-1 text-sm text-[rgba(213,201,177,0.65)]">
-                        {admin.events.receiverLabel}:{' '}
-                        <span className="text-[var(--padel-ivory)]">{event.bankAccountReceiver}</span>
-                      </p>
-                      <p className="mt-1 text-sm text-[rgba(213,201,177,0.65)]">
-                        {admin.events.ibanLabel}:{' '}
-                        <span className="font-mono tracking-wide text-[var(--padel-ivory)]">
-                          {event.bankAccountIban}
-                        </span>
-                      </p>
-                      {event.arrivalTime ? (
-                        <p className="mt-2 text-sm font-medium text-[var(--padel-gold)]">
-                          {admin.events.arrivalTime}:{' '}
-                          {formatDate(event.arrivalTime, { dateStyle: 'medium', timeStyle: 'short' })}
-                        </p>
-                      ) : null}
-                      {event.description ? (
-                        <p className="mt-3 text-sm leading-6 text-[rgba(213,201,177,0.55)]">{event.description}</p>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
-                      <Button asChild variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
-                        <Link href={`/admin/events/${event.id}/registrations`}>
-                          <ClipboardList className="h-4 w-4" />
-                          {copy.registrations}
-                        </Link>
-                      </Button>
-                      <Button asChild variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
-                        <Link href={`/admin/events/${event.id}`}>Manage tournament</Link>
-                      </Button>
-                      {canManageEvents ? (
-                        <Button
-                          variant="outline"
-                          className={cn(softButtonClassName, 'rounded-md')}
-                          onClick={() => openEdit(event)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          {copy.edit}
-                        </Button>
-                      ) : null}
-                      {!canManageEvents ? null : event.isPublished ? (
-                        <Button
-                          variant="outline"
-                          className={cn('shrink-0 rounded-md', softButtonClassName)}
-                          disabled={publishBusy}
-                          onClick={() => togglePublish(event)}
-                        >
-                          <EyeOff className="h-4 w-4" />
-                          {publishBusy ? admin.messages.saving : admin.events.unpublish}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="red"
-                          className="shrink-0 rounded-md"
-                          disabled={publishBusy}
-                          onClick={() => togglePublish(event)}
-                        >
-                          <Eye className="h-4 w-4" />
-                          {publishBusy ? admin.messages.saving : admin.events.publish}
-                        </Button>
-                      )}
-                      {canManageEvents ? (
-                        <Button
-                          variant="outline"
-                          className="shrink-0 rounded-md border-red-900/70 bg-transparent text-red-400 hover:border-red-800 hover:bg-red-950/50 hover:text-red-300 lg:mt-2"
-                          onClick={() => setDeletingEvent(event)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          {copy.delete}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </SurfaceCard>
-            </Reveal>
-          );
-        })}
-      </div>
-
-      <DashboardModal
+      <EditorModal
         open={formOpen}
         onOpenChange={(open) => {
           if (!open) closeForm();
         }}
         title={formMode === 'edit' ? copy.editTitle : admin.events.createEvent}
         description={formMode === 'edit' ? copy.editDescription : copy.createDescription}
+        formId="event-form"
         size="xl"
-        footer={
-          <ModalFormFooter
-            formId="event-form"
-            onCancel={closeForm}
-            cancelLabel={t('common.cancel')}
-            busy={busy === formMode}
-            disabled={!isEventFormReady(eventForm)}
-            submitLabel={
-              busy === formMode
-                ? admin.messages.saving
-                : formMode === 'edit'
-                  ? copy.saveChanges
-                  : admin.events.createDraft
-            }
-          />
+        busy={busy === formMode}
+        cancelLabel={t('common.cancel')}
+        submitLabel={
+          busy === formMode ? admin.messages.saving : formMode === 'edit' ? copy.saveChanges : admin.events.createDraft
         }
+        onSubmit={() => void submitForm()}
       >
-        <form id="event-form" onSubmit={submitEventForm} className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <DashboardField label={admin.events.eventTitle} id="event-title">
-              <Input
-                id="event-title"
-                required
-                value={eventForm.title}
-                onChange={(event) => setEventForm((current) => ({ ...current, title: event.target.value }))}
-                placeholder={admin.events.eventPlaceholder}
-                className={formControlClassName}
-              />
-            </DashboardField>
-            <DashboardField label={admin.events.date} id="event-date">
-              <Input
-                id="event-date"
-                required
-                type="datetime-local"
-                value={eventForm.date}
-                onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
-                className={formControlClassName}
-              />
-            </DashboardField>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <DashboardField label={admin.events.location} id="event-location">
-              <Input
-                id="event-location"
-                required
-                value={eventForm.location}
-                onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
-                placeholder={admin.events.locationPlaceholder}
-                className={formControlClassName}
-              />
-            </DashboardField>
-            <DashboardField
-              label={admin.events.participationFee}
-              id="event-fee"
-              hint={admin.events.participationFeeHint}
-            >
-              <Input
-                id="event-fee"
-                required
-                type="number"
-                min={0}
-                step={1}
-                inputMode="numeric"
-                value={eventForm.participationFee}
-                onChange={(event) =>
-                  setEventForm((current) => ({ ...current, participationFee: event.target.value }))
-                }
-                placeholder={admin.events.participationFeePlaceholder}
-                className={formControlClassName}
-              />
-            </DashboardField>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <DashboardField
-              label={admin.events.bankAccountReceiver}
-              id="event-receiver"
-              hint={admin.events.bankAccountReceiverHint}
-            >
-              <Input
-                id="event-receiver"
-                required
-                value={eventForm.bankAccountReceiver}
-                onChange={(event) =>
-                  setEventForm((current) => ({ ...current, bankAccountReceiver: event.target.value }))
-                }
-                placeholder={admin.events.bankAccountReceiverPlaceholder}
-                className={formControlClassName}
-              />
-            </DashboardField>
-            <DashboardField
-              label={admin.events.bankAccountIban}
-              id="event-iban"
-              hint={admin.events.bankAccountIbanHint}
-            >
-              <Input
-                id="event-iban"
-                required
-                value={eventForm.bankAccountIban}
-                onChange={(event) =>
-                  setEventForm((current) => ({ ...current, bankAccountIban: event.target.value }))
-                }
-                placeholder={admin.events.bankAccountIbanPlaceholder}
-                className={cn(formControlClassName, 'font-mono tracking-wide uppercase')}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </DashboardField>
-          </div>
-          <DashboardField label={admin.events.arrivalTime} id="event-arrival-time" hint={admin.events.arrivalTimeHint}>
-            <Input
-              id="event-arrival-time"
-              type="datetime-local"
-              value={eventForm.arrivalTime}
-              onChange={(event) => setEventForm((current) => ({ ...current, arrivalTime: event.target.value }))}
-              className={formControlClassName}
-            />
-          </DashboardField>
-          <DashboardField label={admin.events.descriptionLabel} id="event-description" hint={t('common.optional')}>
-            <Textarea
-              id="event-description"
-              value={eventForm.description}
-              onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder={admin.events.eventDescriptionPlaceholder}
-              className={formControlClassName}
-            />
-          </DashboardField>
-          <fieldset>
-            <legend className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(88,16,16,0.62)]">
-              {admin.events.categories}
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {categories.map((category) => {
-                const selected = eventForm.categoryIds.includes(category.id);
-                return (
-                  <label
-                    key={category.id}
-                    className={cn(
-                      'flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3 text-sm font-medium transition-colors',
-                      selected
-                        ? 'border-[#a4161a] bg-[#fbeceb] text-[#851317]'
-                        : 'border-[#e7dcd8] bg-white text-[#4a3d3b] hover:border-[#cdbdb8] hover:bg-[#faf3f0]',
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleCategory(category.id)}
-                      className="h-4 w-4 accent-[var(--padel-red)]"
-                    />
-                    {category.name}
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-        </form>
-      </DashboardModal>
+        <EventForm
+          form={form}
+          errors={errors}
+          showErrors={showErrors}
+          categories={categories}
+          formId="event-form"
+          submitError={formError}
+          onChange={setForm}
+        />
+      </EditorModal>
 
-      <DashboardModal
-        open={Boolean(deletingEvent)}
+      <ConfirmModal
+        open={Boolean(deleting)}
         onOpenChange={(open) => {
-          if (!open) setDeletingEvent(null);
+          if (!open) setDeleting(null);
         }}
         title={copy.deleteTitle}
-        description={
-          deletingEvent
-            ? copy.deleteDescription.replace('{name}', deletingEvent.title)
-            : copy.deleteDescription
-        }
-        size="md"
-        footer={
-          <ModalFormFooter
-            onCancel={() => setDeletingEvent(null)}
-            cancelLabel={t('common.cancel')}
-            busy={Boolean(deletingEvent && busy === `delete-${deletingEvent.id}`)}
-            submitType="button"
-            submitVariant="destructive"
-            onSubmitClick={() => {
-              void confirmDeleteEvent();
-            }}
-            submitLabel={
-              deletingEvent && busy === `delete-${deletingEvent.id}`
-                ? admin.messages.saving
-                : copy.confirmDelete
-            }
-          />
-        }
-      >
-        <p className="text-sm leading-6 text-[#6d5f5c]">{copy.deleteWarning}</p>
-      </DashboardModal>
+        description={deleting ? copy.deleteDescription.replace('{name}', deleting.title) : copy.deleteDescription}
+        body={copy.deleteWarning}
+        busy={Boolean(deleting && busy === `delete-${deleting.id}`)}
+        error={formError}
+        cancelLabel={t('common.cancel')}
+        confirmLabel={deleting && busy === `delete-${deleting.id}` ? admin.messages.saving : copy.confirmDelete}
+        onConfirm={() => void confirmDelete()}
+      />
     </AdminShell>
   );
 }

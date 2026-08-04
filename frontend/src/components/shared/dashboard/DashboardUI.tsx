@@ -469,6 +469,11 @@ type DataTableProps<T> = {
   actionsHeader?: string;
   actionsWidth?: string;
   renderActions?: (row: T) => ReactNode;
+  /**
+   * Marks a row as still awaiting the reader's decision, which draws the amber
+   * spine. Used by the queue directories; omit it for a plain listing.
+   */
+  rowAttention?: (row: T) => boolean;
 };
 
 /**
@@ -484,6 +489,7 @@ export function DataTable<T>({
   actionsHeader,
   actionsWidth = 'w-[132px] 2xl:w-[340px]',
   renderActions,
+  rowAttention,
 }: DataTableProps<T>) {
   return (
     <SurfaceCard className="overflow-hidden">
@@ -511,7 +517,13 @@ export function DataTable<T>({
           </thead>
           <tbody className="divide-y divide-[var(--dash-border)]">
             {rows.map((row) => (
-              <tr key={rowKey(row)} className="dash-table__row group bg-white transition-colors hover:bg-[#fdf9f7]">
+              <tr
+                key={rowKey(row)}
+                className={cn(
+                  'dash-table__row group bg-white transition-colors hover:bg-[#fdf9f7]',
+                  rowAttention?.(row) && 'dash-table__row--attention',
+                )}
+              >
                 {columns.map((column) => (
                   <td key={column.key} className="px-5 py-4 align-middle">
                     {column.cell(row)}

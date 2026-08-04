@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ClipboardCheck, Mail, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,40 +8,60 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   DashboardField,
-  DashboardModal,
-  EmptyState,
   FeedbackBanner,
   SectionHeading,
-  SurfaceCard,
   formControlClassName,
   softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
-import { Reveal } from '@/components/padel/home/motion';
+import { QueueMeter } from '@/components/shared/dashboard/DashboardSignals';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
+import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import { AdminShell } from './AdminShell';
+import { DirectoryTable, rowActionClassName } from './directory/DirectoryTable';
+import { DirectoryToolbar } from './directory/DirectoryToolbar';
+import { EditorModal } from './directory/DirectoryModals';
+import {
+  ALL_FACET,
+  APPLICATION_FACET_VALUES,
+  applicantName,
+  applicationQueue,
+  applicationReader,
+  awaitsDecision,
+  emptyQuery,
+  facetOptions,
+  filterRows,
+  mateName,
+  type DirectoryQuery,
+} from './directory/directoryModel';
+import styles from './directory/Directory.module.css';
 import type { ClubApplication, ClubApplicationMessage } from '@/types/auth';
 
 /**
- * Club requests awaiting a decision. Approving materialises the account, club
- * and teammate invite; rejecting deletes the request outright, which is why the
- * confirmation says the applicant may re-apply with the same address.
+ * Club requests awaiting a decision — a directory that is also a queue, so it
+ * leads with how much is actually decidable and spines the rows that are.
+ * Approving materialises the account, club and teammate invite; rejecting
+ * deletes the request outright, which is why the confirmation says the applicant
+ * may re-apply with the same address.
  */
 export function AdminApplicationsClient() {
-  const { dictionary, t } = useI18n();
+  const { dictionary, locale, t } = useI18n();
   const admin = dictionary.dashboard.admin;
   const copy = admin.applicationsPage;
+  const dir = tournamentCopy[locale].admin.directory;
+  const appCopy = dir.applications;
 
   const [applications, setApplications] = useState<ClubApplication[]>([]);
   const [messages, setMessages] = useState<Record<string, ClubApplicationMessage[]>>({});
+  const [query, setQuery] = useState<DirectoryQuery>(emptyQuery);
   const [rejectTarget, setRejectTarget] = useState<ClubApplication | null>(null);
   const [messageTarget, setMessageTarget] = useState<ClubApplication | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [messageForm, setMessageForm] = useState({ subject: '', body: '' });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -67,68 +87,72 @@ export function AdminApplicationsClient() {
     setMessages((current) => ({ ...current, [application.id]: data.messages ?? [] }));
   }
 
-  async function approve(application: ClubApplication) {
+  const visible = useMemo(() => filterRows(applications, query, applicationReader), [applications, query]);
+  const queue = applicationQueue(applications);
+  const facets = useMemo(
+    () =>
+      facetOptions(applications, query, applicationReader, APPLICATION_FACET_VALUES, (value) =>
+        value === ALL_FACET ? dir.all : value === 'SUBMITTED' ? appCopy.ready : appCopy.unverified,
+      ),
+    [appCopy, applications, dir, query],
+  );
+
+  async function send(application: ClubApplication, path: string, body: unknown, success: string) {
     setError('');
+    setFormError('');
     setNotice('');
     setBusy(application.id);
-    const response = await apiFetch(`/api/admin/club-applications/${application.id}/approve`, {
+    const response = await apiFetch(path, {
       method: 'POST',
+      ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
     });
-    const result = (await response.json()) as { error?: string; mateInvited?: boolean };
+    const result = (await response.json().catch(() => ({}))) as { error?: string };
     setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.actionFailed);
-      return;
-    }
-    setNotice(t('dashboard.admin.applicationsPage.approved', { email: application.email }));
+    if (!response.ok) return result.error ?? admin.messages.actionFailed;
+    setNotice(success);
+    return null;
+  }
+
+  async function approve(application: ClubApplication) {
+    const failure = await send(
+      application,
+      `/api/admin/club-applications/${application.id}/approve`,
+      undefined,
+      t('dashboard.admin.applicationsPage.approved', { email: application.email }),
+    );
+    if (failure) return setError(failure);
     await load();
   }
 
-  async function reject(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function reject() {
     if (!rejectTarget) return;
-    setError('');
-    setNotice('');
-    setBusy(rejectTarget.id);
-    const response = await apiFetch(`/api/admin/club-applications/${rejectTarget.id}/reject`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: rejectReason }),
-    });
-    const result = (await response.json()) as { error?: string };
-    setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.actionFailed);
-      return;
-    }
-    setNotice(t('dashboard.admin.applicationsPage.rejected', { email: rejectTarget.email }));
+    const failure = await send(
+      rejectTarget,
+      `/api/admin/club-applications/${rejectTarget.id}/reject`,
+      { reason: rejectReason },
+      t('dashboard.admin.applicationsPage.rejected', { email: rejectTarget.email }),
+    );
+    if (failure) return setFormError(failure);
     setRejectTarget(null);
     setRejectReason('');
     await load();
   }
 
-  async function sendMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function sendMessage() {
     if (!messageTarget) return;
-    setError('');
-    setNotice('');
-    setBusy(messageTarget.id);
-    const response = await apiFetch(`/api/admin/club-applications/${messageTarget.id}/message`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(messageForm),
-    });
-    const result = (await response.json()) as { error?: string };
-    setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.actionFailed);
-      return;
-    }
-    setNotice(t('dashboard.admin.applicationsPage.messageSent', { email: messageTarget.email }));
+    const failure = await send(
+      messageTarget,
+      `/api/admin/club-applications/${messageTarget.id}/message`,
+      messageForm,
+      t('dashboard.admin.applicationsPage.messageSent', { email: messageTarget.email }),
+    );
+    if (failure) return setFormError(failure);
     await loadMessages(messageTarget);
     setMessageTarget(null);
     setMessageForm({ subject: '', body: '' });
   }
+
+  const history = messageTarget ? messages[messageTarget.id] ?? [] : [];
 
   return (
     <AdminShell title={copy.title} description={copy.description} eyebrow={copy.eyebrow}>
@@ -136,175 +160,251 @@ export function AdminApplicationsClient() {
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
       <SectionHeading title={copy.listTitle} description={copy.listDescription} />
-      <div className="mt-4 grid gap-4">
-        {loading ? <EmptyState title={copy.loadingTitle} description={copy.loadingDescription} icon={ClipboardCheck} /> : null}
-        {!loading && !applications.length ? (
-          <EmptyState title={copy.emptyTitle} description={copy.emptyDescription} icon={ClipboardCheck} />
-        ) : null}
 
-        {applications.map((application, index) => (
-          <Reveal key={application.id} delay={Math.min(index * 0.04, 0.2)}>
-            <SurfaceCard>
-              <div className="p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <h3 className="font-display text-xl font-semibold text-[var(--padel-ivory)]">
-                      {application.clubName || copy.untitledClub}
-                    </h3>
-                    <p className="mt-2 text-sm text-[rgba(213,201,177,0.75)]">
-                      {[application.name, application.surname].filter(Boolean).join(' ')} · {application.email}
-                    </p>
-                    {application.phone ? (
-                      <p className="mt-1 text-sm text-[rgba(213,201,177,0.55)]">{application.phone}</p>
-                    ) : null}
-                    {application.clubDescription ? (
-                      <p className="mt-3 max-w-2xl text-sm leading-6 text-[rgba(213,201,177,0.55)]">
-                        {application.clubDescription}
-                      </p>
-                    ) : null}
-                    <p className="mt-3 text-sm text-[rgba(213,201,177,0.55)]">
-                      {application.mateEmail
-                        ? t('dashboard.admin.applicationsPage.withMate', {
-                            name: [application.mateName, application.mateSurname].filter(Boolean).join(' ') || application.mateEmail,
-                            email: application.mateEmail,
-                          })
-                        : copy.noMate}
-                    </p>
-                  </div>
+      {/* How much of the queue can actually be acted on — the question this screen exists for. */}
+      {loading ? null : (
+        <div className={styles.meter}>
+          <QueueMeter
+            label={appCopy.queueLabel}
+            done={queue.ready}
+            total={queue.total}
+            valueLabel={fillTemplate(dir.ofTotal, { done: queue.ready, total: queue.total })}
+          />
+        </div>
+      )}
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {application.submittedAt ? (
-                      <Badge className="border-[rgba(213,201,177,0.18)] bg-[rgba(213,201,177,0.05)] text-[rgba(213,201,177,0.75)]">
-                        {new Date(application.submittedAt).toLocaleDateString()}
-                      </Badge>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={cn(softButtonClassName, 'rounded-md')}
-                      disabled={busy === application.id}
-                      onClick={() => {
-                        setMessageForm({ subject: '', body: '' });
-                        setMessageTarget(application);
-                        void loadMessages(application);
-                      }}
-                    >
-                      <Mail className="h-4 w-4" />
-                      {copy.sendEmail}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={cn(softButtonClassName, 'rounded-md')}
-                      disabled={busy === application.id}
-                      onClick={() => {
-                        setRejectReason('');
-                        setRejectTarget(application);
-                      }}
-                    >
-                      <ThumbsDown className="h-4 w-4" />
-                      {copy.reject}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="red"
-                      className="rounded-md"
-                      disabled={busy === application.id}
-                      onClick={() => void approve(application)}
-                    >
-                      <ThumbsUp className="h-4 w-4" />
+      <DirectoryToolbar
+        id="applications"
+        query={query}
+        onQueryChange={setQuery}
+        facets={facets}
+        searchLabel={appCopy.search}
+        countLabel={
+          visible.length === applications.length
+            ? fillTemplate(dir.total, { count: applications.length })
+            : fillTemplate(dir.shown, { shown: visible.length, total: applications.length })
+        }
+      />
+
+      <div className="mt-4">
+        <DirectoryTable
+          loading={loading}
+          rows={visible}
+          total={applications.length}
+          icon={ClipboardCheck}
+          loadingLabel={copy.loadingTitle}
+          rowKey={(application) => application.id}
+          rowAttention={awaitsDecision}
+          minWidthClassName="min-w-[860px]"
+          actionsHeader={tournamentCopy[locale].common.actions}
+          actionsWidth="w-[150px] 2xl:w-[360px]"
+          empty={{ title: copy.emptyTitle, description: copy.emptyDescription }}
+          noMatches={{
+            title: dir.noMatches,
+            description: dir.noMatchesDetail,
+            action: (
+              <Button variant="outline" className={cn(softButtonClassName, 'min-h-11 rounded-md')} onClick={() => setQuery(emptyQuery)}>
+                {dir.showAll}
+              </Button>
+            ),
+          }}
+          columns={[
+            {
+              key: 'club',
+              header: appCopy.columnClub,
+              width: 'w-[26%]',
+              cell: (application) => (
+                <>
+                  <span className={styles.primary} title={application.clubName}>
+                    {application.clubName || copy.untitledClub}
+                  </span>
+                  {application.submittedAt ? (
+                    <span className={styles.secondary}>{new Date(application.submittedAt).toLocaleDateString()}</span>
+                  ) : null}
+                </>
+              ),
+            },
+            {
+              key: 'applicant',
+              header: appCopy.columnApplicant,
+              width: 'w-[24%]',
+              cell: (application) => (
+                <>
+                  <span className={styles.primary} title={applicantName(application)}>
+                    {applicantName(application)}
+                  </span>
+                  <span className={styles.secondary} title={application.email}>
+                    {application.email}
+                  </span>
+                </>
+              ),
+            },
+            {
+              key: 'teammate',
+              header: appCopy.columnTeammate,
+              width: 'w-[22%]',
+              cell: (application) =>
+                application.mateEmail ? (
+                  <span className={styles.secondary} title={application.mateEmail}>
+                    {mateName(application)}
+                  </span>
+                ) : (
+                  <span className={styles.faint}>{copy.noMate}</span>
+                ),
+            },
+            {
+              key: 'state',
+              header: appCopy.columnState,
+              width: 'w-[20%]',
+              cell: (application) =>
+                awaitsDecision(application) ? (
+                  <Badge className="border-[rgba(168,103,18,0.25)] bg-[var(--dash-amber-soft)] text-[var(--dash-amber)]">
+                    {appCopy.stateReady}
+                  </Badge>
+                ) : (
+                  <>
+                    <Badge className="border-[var(--dash-border)] bg-[#fdf9f7] text-[var(--dash-muted)]">
+                      {appCopy.stateUnverified}
+                    </Badge>
+                    <p className={styles.note}>{appCopy.unverifiedNote}</p>
+                  </>
+                ),
+            },
+          ]}
+          renderActions={(application) => (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className={cn(softButtonClassName, rowActionClassName)}
+                disabled={busy === application.id}
+                aria-label={copy.sendEmail}
+                title={copy.sendEmail}
+                onClick={() => {
+                  setMessageForm({ subject: '', body: '' });
+                  setFormError('');
+                  setMessageTarget(application);
+                  void loadMessages(application);
+                }}
+              >
+                <Mail className="h-4 w-4" />
+                <span className="hidden 2xl:inline">{copy.sendEmail}</span>
+              </Button>
+              {/* The server refuses both decisions until the applicant has confirmed their
+                  email, so neither control is offered before then. */}
+              {awaitsDecision(application) ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={cn(softButtonClassName, rowActionClassName)}
+                    disabled={busy === application.id}
+                    aria-label={copy.reject}
+                    title={copy.reject}
+                    onClick={() => {
+                      setRejectReason('');
+                      setFormError('');
+                      setRejectTarget(application);
+                    }}
+                  >
+                    <ThumbsDown className="h-4 w-4" />
+                    <span className="hidden 2xl:inline">{copy.reject}</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="red"
+                    className={rowActionClassName}
+                    disabled={busy === application.id}
+                    aria-label={copy.approve}
+                    title={copy.approve}
+                    onClick={() => void approve(application)}
+                  >
+                    <ThumbsUp className="h-4 w-4" />
+                    <span className="hidden 2xl:inline">
                       {busy === application.id ? admin.messages.saving : copy.approve}
-                    </Button>
-                  </div>
-                </div>
-
-                {messages[application.id]?.length ? (
-                  <div className="mt-4 grid gap-2 border-t border-[rgba(213,201,177,0.12)] pt-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(213,201,177,0.45)]">
-                      {copy.messageHistory}
-                    </p>
-                    {messages[application.id].map((item) => (
-                      <p key={item.id} className="text-sm text-[rgba(213,201,177,0.65)]">
-                        <span className="font-semibold text-[rgba(213,201,177,0.85)]">{item.subject}</span>
-                        {' · '}
-                        {new Date(item.sentAt).toLocaleString()}
-                      </p>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </SurfaceCard>
-          </Reveal>
-        ))}
+                    </span>
+                  </Button>
+                </>
+              ) : null}
+            </>
+          )}
+        />
       </div>
 
-      <DashboardModal
+      <EditorModal
         open={Boolean(rejectTarget)}
-        onOpenChange={(open) => !open && setRejectTarget(null)}
+        onOpenChange={(open) => {
+          if (!open) setRejectTarget(null);
+        }}
         title={copy.rejectTitle}
         description={copy.rejectDescription}
-        footer={
-          <ModalFormFooter
-            formId="reject-application-form"
-            onCancel={() => setRejectTarget(null)}
-            cancelLabel={t('common.cancel')}
-            busy={busy === rejectTarget?.id}
-            submitLabel={busy === rejectTarget?.id ? admin.messages.saving : copy.reject}
-          />
-        }
+        formId="reject-application-form"
+        size="md"
+        busy={busy === rejectTarget?.id}
+        error={formError}
+        cancelLabel={t('common.cancel')}
+        submitLabel={busy === rejectTarget?.id ? admin.messages.saving : copy.reject}
+        onSubmit={() => void reject()}
       >
-        <form id="reject-application-form" onSubmit={reject} className="grid gap-4">
-          <DashboardField id="reject-reason" label={copy.rejectReason}>
-            <Textarea
-              id="reject-reason"
-              required
-              rows={4}
-              value={rejectReason}
-              onChange={(event) => setRejectReason(event.target.value)}
-              className={formControlClassName}
-            />
-          </DashboardField>
-        </form>
-      </DashboardModal>
+        <DashboardField id="reject-reason" label={copy.rejectReason}>
+          <Textarea
+            id="reject-reason"
+            required
+            rows={4}
+            value={rejectReason}
+            onChange={(fieldEvent) => setRejectReason(fieldEvent.target.value)}
+            className={formControlClassName}
+          />
+        </DashboardField>
+      </EditorModal>
 
-      <DashboardModal
+      <EditorModal
         open={Boolean(messageTarget)}
-        onOpenChange={(open) => !open && setMessageTarget(null)}
+        onOpenChange={(open) => {
+          if (!open) setMessageTarget(null);
+        }}
         title={copy.emailTitle}
         description={messageTarget ? t('dashboard.admin.applicationsPage.emailDescription', { email: messageTarget.email }) : ''}
-        size="lg"
-        footer={
-          <ModalFormFooter
-            formId="message-application-form"
-            onCancel={() => setMessageTarget(null)}
-            cancelLabel={t('common.cancel')}
-            busy={busy === messageTarget?.id}
-            submitLabel={busy === messageTarget?.id ? admin.messages.saving : copy.sendEmail}
-          />
-        }
+        formId="message-application-form"
+        busy={busy === messageTarget?.id}
+        error={formError}
+        cancelLabel={t('common.cancel')}
+        submitLabel={busy === messageTarget?.id ? admin.messages.saving : copy.sendEmail}
+        onSubmit={() => void sendMessage()}
       >
-        <form id="message-application-form" onSubmit={sendMessage} className="grid gap-4">
-          <DashboardField id="message-subject" label={copy.emailSubject}>
-            <Input
-              id="message-subject"
-              required
-              value={messageForm.subject}
-              onChange={(event) => setMessageForm((form) => ({ ...form, subject: event.target.value }))}
-              className={formControlClassName}
-            />
-          </DashboardField>
-          <DashboardField id="message-body" label={copy.emailBody}>
-            <Textarea
-              id="message-body"
-              required
-              rows={8}
-              value={messageForm.body}
-              onChange={(event) => setMessageForm((form) => ({ ...form, body: event.target.value }))}
-              className={formControlClassName}
-            />
-          </DashboardField>
-        </form>
-      </DashboardModal>
+        <DashboardField id="message-subject" label={copy.emailSubject}>
+          <Input
+            id="message-subject"
+            required
+            value={messageForm.subject}
+            onChange={(fieldEvent) => setMessageForm((form) => ({ ...form, subject: fieldEvent.target.value }))}
+            className={formControlClassName}
+          />
+        </DashboardField>
+        <DashboardField id="message-body" label={copy.emailBody}>
+          <Textarea
+            id="message-body"
+            required
+            rows={8}
+            value={messageForm.body}
+            onChange={(fieldEvent) => setMessageForm((form) => ({ ...form, body: fieldEvent.target.value }))}
+            className={formControlClassName}
+          />
+        </DashboardField>
+        {/* What has already been said, so the admin does not repeat themselves. */}
+        {history.length ? (
+          <div>
+            <p className="dash-kicker">{fillTemplate(appCopy.messagesSent, { count: history.length })}</p>
+            {history.map((item) => (
+              <p key={item.id} className={styles.note}>
+                <span className="font-semibold text-[var(--dash-text)]">{item.subject}</span>
+                {' · '}
+                {new Date(item.sentAt).toLocaleString()}
+              </p>
+            ))}
+          </div>
+        ) : null}
+      </EditorModal>
     </AdminShell>
   );
 }

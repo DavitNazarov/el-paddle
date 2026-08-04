@@ -389,6 +389,11 @@ export function DashboardStyles() {
         background: #fdf9f7;
       }
 
+      /* The queue spine: this row is still waiting on the reader's decision. */
+      .dash-table__row--attention td:first-child {
+        box-shadow: inset 3px 0 0 var(--dash-amber);
+      }
+
       .dash-table-row {
         display: grid;
         gap: 0.75rem;

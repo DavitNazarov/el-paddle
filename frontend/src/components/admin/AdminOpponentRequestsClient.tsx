@@ -22,6 +22,7 @@ import { SkeletonRows } from '@/components/shared/dashboard/Feedback';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import {
   AdminRequestPairing,
+  canReleasePairing,
   entryName,
   isAwaitingDecision,
   type RequestAction,
@@ -121,6 +122,7 @@ export function AdminOpponentRequestsClient({ eventId }: { eventId: string }) {
     }
   }
 
+  const releasing = Boolean(decision && decision.action === 'reject' && canReleasePairing(decision.request));
   const awaiting = requests.filter(isAwaitingDecision);
   const settled = requests.filter((request) => !isAwaitingDecision(request));
 
@@ -225,7 +227,9 @@ export function AdminOpponentRequestsClient({ eventId }: { eventId: string }) {
         onOpenChange={(open) => { if (!open && !busy) setDecision(null); }}
         title={decision?.action === 'approve'
           ? requestCopy.approveTitle
-          : decision?.action === 'reject' ? requestCopy.rejectTitle : requestCopy.overrideTitle}
+          : decision?.action === 'reject'
+            ? (releasing ? requestCopy.releaseTitle : requestCopy.rejectTitle)
+            : requestCopy.overrideTitle}
         description={decision
           ? `${entryName(decision.request, 'requestingEntry')} → ${entryName(decision.request, 'targetEntry')}`
           : undefined}
@@ -240,7 +244,9 @@ export function AdminOpponentRequestsClient({ eventId }: { eventId: string }) {
             disabled={Boolean(decision && decision.action !== 'approve' && !decisionReason.trim())}
             submitLabel={decision?.action === 'approve'
               ? requestCopy.approveRequest
-              : decision?.action === 'reject' ? requestCopy.rejectRequest : requestCopy.override}
+              : decision?.action === 'reject'
+                ? (releasing ? requestCopy.release : requestCopy.rejectRequest)
+                : requestCopy.override}
             submitVariant={decision?.action === 'approve' ? 'red' : 'destructive'}
           />
         }

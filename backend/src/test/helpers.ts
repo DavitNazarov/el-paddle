@@ -46,6 +46,9 @@ export async function createUser(overrides: Partial<User> = {}) {
       emailVerifiedAt: overrides.emailVerifiedAt ?? new Date(),
       sessionVersion: overrides.sessionVersion ?? 0,
       phone: overrides.phone ?? '+995500000000',
+      // Statistics tests need accounts placed in a past window.
+      ...(overrides.createdAt ? { createdAt: overrides.createdAt } : {}),
+      ...(overrides.lastLoginAt ? { lastLoginAt: overrides.lastLoginAt } : {}),
     },
   });
 }

@@ -74,7 +74,7 @@ In production, Docker runs the worker as a separate service (`RUN_OUTBOX_IN_API=
 | `scheduling` | courts, queues and their ordering, judge assignments, timing, publication, judge queue reads |
 | `matches` | start, slot scoring, completion, correction, reopening, snapshots, history, and visibility rules |
 | `notifications` | in-app notification inbox and read state |
-| `dashboard` | player dashboard aggregate and admin summary counts |
+| `dashboard` | player dashboard aggregate, admin summary counts, and platform statistics (bucketed aggregates behind a 60 s in-process cache; pure bucket and delta maths in `statsModel.ts`) |
 | `operations` | audit inspection and email-delivery retry |
 | `health` | process health |
 

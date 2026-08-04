@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { ArrowRight, CalendarDays, MapPin, Radio } from 'lucide-react';
 import { EmptyTournamentState, TournamentPanel, TournamentSectionHeader, StatusLabel } from '@/components/tournament/TournamentUI';
 import { StageDots, type RailState } from '@/components/shared/dashboard/DashboardSignals';
@@ -48,6 +49,10 @@ export function AdminEventBoard({
   description,
   hrefSuffix = '',
   actionLabel,
+  headerActions,
+  renderActions,
+  emptyAction,
+  order = sortEventsByUrgency,
 }: {
   events: EventDto[];
   operations: Map<string, EventOperationsDto>;
@@ -58,11 +63,18 @@ export function AdminEventBoard({
   /** Path appended to the event, e.g. "bracket". Empty opens the workspace. */
   hrefSuffix?: string;
   actionLabel?: string;
+  /** Replaces the count chip, for a board that owns a create button. */
+  headerActions?: ReactNode;
+  /** Per-row controls beside the open link. The events list uses it for edit, publish and delete. */
+  renderActions?: (event: EventDto) => ReactNode;
+  emptyAction?: ReactNode;
+  /** Overrides the urgency sort; the events list groups by publication instead. */
+  order?: (events: EventDto[]) => EventDto[];
 }) {
   const { locale, formatDate } = useI18n();
   const copy = tournamentCopy[locale].admin.board;
   const common = tournamentCopy[locale].common;
-  const ordered = sortEventsByUrgency(events);
+  const ordered = order(events);
 
   return (
     <TournamentPanel labelledBy="admin-event-board">
@@ -70,7 +82,7 @@ export function AdminEventBoard({
         id="admin-event-board"
         title={title ?? (isOrganiser ? copy.organiserTitle : copy.title)}
         description={description ?? (isOrganiser ? copy.organiserDescription : copy.description)}
-        actions={ordered.length ? <StatusLabel>{fillTemplate(copy.countEvents, { count: ordered.length })}</StatusLabel> : undefined}
+        actions={headerActions ?? (ordered.length ? <StatusLabel>{fillTemplate(copy.countEvents, { count: ordered.length })}</StatusLabel> : undefined)}
       />
       {ordered.length ? (
         <div className={styles.board}>
@@ -138,13 +150,16 @@ export function AdminEventBoard({
                   ) : (
                     <span className={styles.quiet}>{loading ? common.loading : copy.quiet}</span>
                   )}
-                  <Link
-                    href={`/admin/events/${event.id}${hrefSuffix ? `/${hrefSuffix}` : ''}`}
-                    className={styles.open}
-                  >
-                    {actionLabel ?? copy.open}
-                    <ArrowRight aria-hidden="true" />
-                  </Link>
+                  <div className={styles.rowActions}>
+                    {renderActions?.(event)}
+                    <Link
+                      href={`/admin/events/${event.id}${hrefSuffix ? `/${hrefSuffix}` : ''}`}
+                      className={styles.open}
+                    >
+                      {actionLabel ?? copy.open}
+                      <ArrowRight aria-hidden="true" />
+                    </Link>
+                  </div>
                 </div>
               </div>
             );
@@ -156,6 +171,7 @@ export function AdminEventBoard({
         <EmptyTournamentState
           title={isOrganiser ? copy.organiserEmpty : copy.empty}
           detail={isOrganiser ? copy.organiserEmptyDetail : copy.emptyDetail}
+          action={emptyAction}
         />
       )}
     </TournamentPanel>

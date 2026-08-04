@@ -189,6 +189,8 @@ An organiser's event-scoped capabilities are exactly `BRACKET_MANAGE`, `BRACKET_
 | Method | Path | Capability |
 | --- | --- | --- |
 | GET | `/api/admin/summary` | `DASHBOARD_READ`; an organiser instead receives the same counts scoped to their events |
+| GET | `/api/admin/events/operations` | `DASHBOARD_READ`; per-event operational counts, scoped to an organiser's events exactly like the summary |
+| GET | `/api/admin/stats/platform` | `DASHBOARD_READ`; platform statistics over `?range=7d\|30d\|90d\|12m` (default `30d`, unknown values are rejected with 400). Unlike the two rows above there is **no organiser scoping**: the payload is entirely platform totals an organiser holds no power over, so an organiser is refused. Buckets are Asia/Tbilisi days, weeks or months, and the response is cached in-process for 60 s (`generatedAt` says when it was computed) |
 | GET | `/api/events?scope=admin` | Admins see every event; an organiser sees only the events handed to them |
 | POST | `/api/events` | `EVENT_MANAGE` — admin only; organisers cannot create events |
 | PATCH | `/api/events/:id` | `EVENT_MANAGE` — admin only |

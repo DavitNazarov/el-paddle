@@ -50,6 +50,18 @@ export function isNotFoundError(error: unknown) {
   return errorCode(error) === 'P2025';
 }
 
+/**
+ * A write the database refused because another row still points at this one.
+ * Deliberately not mapped in `handleError`: a generic message would tell the
+ * reader "foreign key constraint", while the call site knows which relationship
+ * actually blocked the write and can say so.
+ */
+export function isForeignKeyConstraintError(error: unknown) {
+  if (errorCode(error) === 'P2003') return true;
+  if (!(error instanceof Error)) return false;
+  return error.message.includes('Foreign key constraint');
+}
+
 export function isDatabaseConnectionError(error: unknown) {
   const code = errorCode(error);
   if (code === 'P1000' || code === 'P1001' || code === 'P1002' || code === 'ECONNREFUSED') {

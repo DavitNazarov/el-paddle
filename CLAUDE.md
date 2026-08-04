@@ -47,8 +47,11 @@ The system has five audiences: public visitors, players, judges, organisers, and
 - Event lifecycle moves forward through explicit allowed transitions; the only backward transition is an explicit reopen of a completed event, which requires the `EVENT_STATE_CORRECT` capability.
 - Registration, bracket, match, schedule, and request writes use optimistic `version` checks where supported.
 - Retried commands must include a stable `commandId`; command receipts prevent duplicate application.
+- Deleting an account writes an `AuditLog` row (`user.deleted`) inside the same transaction, before the delete. Cascades leave nothing else behind, so that row is the only surviving record and the source for deletion statistics. It carries a sha256 `emailHash` and never an email, name, or phone.
+- A user whose registration appears in a recorded match cannot be deleted: registrations cascade from the user, but `Match` restricts its participants. The refusal surfaces as a 409 naming the cause, not a foreign-key 500.
+- `User.lastLoginAt` is written best-effort at the five sign-in points only, never awaited, and never from a cookie re-issue such as a password change. It holds the latest sign-in, so it can answer "seen recently" and can never answer "seen last month".
 - Players belong to exactly one club; each club fields at most one team (owner + teammate from the same club) per event.
-- Opponent requests apply only to the first bracket round and require final admin approval.
+- Opponent requests apply only to the first bracket round and require final admin approval. An approved, overridden, or applied pairing claims both of its entries, so approval is refused while either entry belongs to another such pairing; releasing (rejecting) an approved pairing frees them again, and a pairing already applied to the bracket is undone on the bracket instead.
 - Brackets support 2–16 approved entries; the single-elimination graph sizes to 2, 4, 8, or 16 slots and fills the gap with byes.
 - A locked bracket snapshots participant identity for historical accuracy.
 - Judges can score only assigned matches and must process a court queue in order.

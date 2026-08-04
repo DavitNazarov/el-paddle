@@ -1,0 +1,401 @@
+/*
+ * The judge match console. Read at arm's length, outdoors, in sunlight, by
+ * someone who is about to be interrupted. Two rules follow from that: the pair
+ * names are the largest thing on the page, because they are what gets checked
+ * against the two people walking onto the court, and nothing is ever one tap
+ * from being recorded.
+ */
+
+.console {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* ---- The slot band: which slot is being played, and what wins it ---- */
+
+.band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+
+.band[data-live='true'] {
+  border-color: rgba(164, 22, 26, 0.3);
+  background: var(--dash-primary-soft);
+}
+
+.bandSlot {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--dash-muted);
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+/* The slot number itself is a headline, not a label — it is the one number that
+   says where in the match everyone is. */
+.bandNumber {
+  color: var(--dash-text);
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.band[data-live='true'] .bandNumber {
+  color: var(--dash-primary);
+}
+
+.bandTarget {
+  margin: 0;
+  color: var(--dash-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.bandDots {
+  display: flex;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bandDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 1px solid var(--dash-border-strong);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.bandDot[data-state='played'] {
+  border-color: var(--dash-primary);
+  background: var(--dash-primary);
+}
+
+.bandDot[data-state='current'] {
+  border-color: var(--dash-primary);
+  box-shadow: 0 0 0 2px var(--dash-primary-soft);
+}
+
+/* ---- The two sides ---- */
+
+.sides {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+
+/* The side that is ahead carries a spine, so the standing is legible without
+   comparing two numbers. */
+.side[data-leading='true'] {
+  box-shadow: inset 3px 0 0 var(--dash-primary);
+}
+
+.sideHead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sideTag {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-tile);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.sideLabel {
+  margin: 0;
+  color: var(--dash-faint);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Largest type on the page. Deliberately larger than the score: these names get
+   checked against the two people walking onto the court, and nothing outranks
+   that — a judge scoring the wrong match is the failure this prevents. */
+.pair {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 2.1rem;
+}
+
+.pair[data-pending='true'] {
+  color: var(--dash-faint);
+  font-weight: 600;
+}
+
+.tally {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* Clear, but subordinate to the names above it. */
+.tallyValue {
+  color: var(--dash-text);
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.tallyLabel {
+  color: var(--dash-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+/* ---- Recording ---- */
+
+.record {
+  display: flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0 1rem;
+  border: 1px solid var(--dash-primary);
+  border-radius: var(--radius-control);
+  background: var(--dash-primary);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.record:hover:not(:disabled) {
+  background: #8d1317;
+}
+
+.record:focus-visible {
+  outline: 3px solid var(--dash-primary);
+  outline-offset: 2px;
+}
+
+.record:disabled {
+  border-color: var(--dash-border);
+  background: #f1f0f2;
+  color: var(--dash-faint);
+  cursor: not-allowed;
+}
+
+.points {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.pointButton {
+  display: inline-flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: var(--dash-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pointButton[data-tone='primary'] {
+  border-color: var(--dash-primary);
+  background: var(--dash-primary);
+  color: #fff;
+}
+
+.pointButton:focus-visible {
+  outline: 3px solid var(--dash-primary);
+  outline-offset: 2px;
+}
+
+.pointButton:disabled {
+  background: #f1f0f2;
+  color: var(--dash-faint);
+  cursor: not-allowed;
+}
+
+.pointButton svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ---- Slot history and undo ---- */
+
+.history {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+
+.historyLabel {
+  color: var(--dash-faint);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.historyList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.historyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-pill);
+  color: var(--dash-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Undo is the judge's escape hatch, so it stays visible rather than hiding in a
+   menu — but it is never the loudest control on the screen. */
+.undo {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  padding: 0 0.85rem;
+  border: 1px solid var(--dash-border-strong);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: var(--dash-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.undo:hover:not(:disabled) {
+  border-color: var(--dash-coral);
+  background: var(--dash-coral-soft);
+  color: var(--dash-coral);
+}
+
+.undo:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
+}
+
+.undo svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+/* ---- Start and finish ---- */
+
+.start {
+  padding: var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+
+.done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid rgba(22, 128, 106, 0.25);
+  border-radius: var(--radius-card);
+  background: var(--dash-teal-soft);
+}
+
+.doneText {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--dash-teal);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.doneText svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.confirmBody {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.9375rem;
+  line-height: 1.45rem;
+}
+
+.confirmScore {
+  margin: var(--space-3) 0 0;
+  color: var(--dash-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 48rem) {
+  .sides {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pair {
+    font-size: 2.25rem;
+    line-height: 2.6rem;
+  }
+
+  .tallyValue {
+    font-size: 1.75rem;
+  }
+}

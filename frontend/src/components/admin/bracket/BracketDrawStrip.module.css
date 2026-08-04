@@ -1,0 +1,236 @@
+/*
+ * Per-category draw state. The stage dots and the queue meter come from the
+ * shared signal module, so only the strip shell and the state chip live here.
+ */
+
+.strip {
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(135deg, rgba(164, 22, 26, 0.07), rgba(255, 255, 255, 0.96) 46%, rgba(168, 103, 18, 0.04));
+  box-shadow: 0 1px 3px rgba(43, 26, 24, 0.04), 0 14px 34px rgba(43, 26, 24, 0.03);
+}
+
+.intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--dash-border);
+}
+
+.introIcon {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(164, 22, 26, 0.18);
+  border-radius: var(--radius-tile);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
+}
+
+.introIcon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.introCopy {
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.introCopy p {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.introCopy span {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--dash-muted);
+  font-size: 0.78rem;
+  line-height: 1.2rem;
+}
+
+.summary {
+  margin: 0;
+  color: var(--dash-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.cards {
+  display: grid;
+  gap: 1px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--dash-border);
+}
+
+.card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: var(--space-4);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cardTitle {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.stateChip {
+  display: inline-flex;
+  min-height: 1.65rem;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--dash-muted);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stateChip svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.stateChip[data-tone='amber'] {
+  border-color: rgba(168, 103, 18, 0.24);
+  background: var(--dash-amber-soft);
+  color: var(--dash-amber);
+}
+
+.stateChip[data-tone='teal'] {
+  border-color: rgba(22, 128, 106, 0.22);
+  background: var(--dash-teal-soft);
+  color: var(--dash-teal);
+}
+
+.quiet {
+  margin: 0;
+  color: var(--dash-faint);
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+}
+
+.champion {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--dash-border);
+  color: var(--dash-amber);
+}
+
+.champion > svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.champion span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.05rem;
+}
+
+.champion small {
+  display: block;
+  color: var(--dash-amber);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.open {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding: 0 0.85rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: var(--dash-text);
+  font-size: 0.78rem;
+  font-weight: 650;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.open svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--dash-faint);
+}
+
+.open:hover {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-primary-soft);
+}
+
+.open:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
+}
+
+@media (min-width: 48rem) {
+  .intro {
+    flex-wrap: nowrap;
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .summary {
+    flex: 0 0 auto;
+    text-align: right;
+  }
+
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .open {
+    transition: none;
+  }
+}

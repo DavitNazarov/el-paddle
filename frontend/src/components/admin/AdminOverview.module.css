@@ -121,6 +121,20 @@
   color: var(--dash-faint);
 }
 
+/* Row controls cluster to the right; the open link stays last so it is always
+   in the same place regardless of how many actions a role is allowed. */
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.rowActions .open {
+  margin-left: 0;
+}
+
 .open {
   display: inline-flex;
   min-height: 2.75rem;

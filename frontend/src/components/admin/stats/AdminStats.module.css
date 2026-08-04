@@ -1,0 +1,152 @@
+/* Statistics section on the administrator home screen. */
+
+.card {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-4);
+}
+
+.ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.loading {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.unavailable {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--dash-muted);
+}
+
+.kpis {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 30rem) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.tabs {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* The vendored TabsList paints `bg-muted`, which is a dark maroon from the
+   marketing theme. On the light dashboard canvas it has to be re-toned. */
+.tabsList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  height: auto;
+  gap: 0.25rem;
+  background: var(--dash-tint-strong);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  padding: 0.25rem;
+  color: var(--dash-muted);
+}
+
+.tabsTrigger {
+  /* 44px minimum target, and small type so three Georgian words fit at 375px. */
+  min-height: 2.75rem;
+  border-radius: var(--radius-control);
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--dash-muted);
+  white-space: normal;
+  line-height: 1.1;
+}
+
+.tabsTrigger[data-state='active'] {
+  background: #fff;
+  color: var(--dash-text);
+  box-shadow: 0 1px 2px rgba(43, 26, 24, 0.08);
+}
+
+.tabsTrigger:focus-visible {
+  outline: 2px solid var(--padel-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (min-width: 40rem) {
+  .tabsTrigger {
+    font-size: 0.85rem;
+  }
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.block {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* Two columns from tablet up; never side by side on a phone. */
+.pair {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 48rem) {
+  .pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.lines {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 30rem) {
+  .lines {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .lines {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  color: var(--dash-faint);
+}
+
+.asOf {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.72rem;
+  color: var(--dash-faint);
+}
+
+.asOfIcon {
+  height: 0.85rem;
+  width: 0.85rem;
+}

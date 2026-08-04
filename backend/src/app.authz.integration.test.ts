@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from './app.js';
+import { UserRole } from './generated/prisma/client.js';
 import { authedGet, authedSend, createAdmin, createJudge, createUser, resetDb } from './test/helpers.js';
 
 const app = createApp();
@@ -8,7 +9,12 @@ const app = createApp();
 beforeEach(resetDb);
 
 describe('admin authorization matrix (integration, real sessions)', () => {
-  const adminRoutes = ['/api/admin/users', '/api/admin/clubs', '/api/admin/judges'];
+  const adminRoutes = [
+    '/api/admin/users',
+    '/api/admin/clubs',
+    '/api/admin/judges',
+    '/api/admin/stats/platform',
+  ];
 
   it('returns 401 for anonymous callers', async () => {
     for (const route of adminRoutes) {
@@ -40,6 +46,19 @@ describe('admin authorization matrix (integration, real sessions)', () => {
     expect(Array.isArray(res.body.users)).toBe(true);
     // The pagination change surfaces an additive nextCursor field (M-2).
     expect(res.body).toHaveProperty('nextCursor');
+  });
+
+  it('refuses platform statistics to an organiser while the summary still answers', async () => {
+    // Unlike its neighbours in dashboard.routes.ts, the statistics route has no
+    // organiser short-circuit: the whole payload is platform totals an organiser
+    // holds no power over. This pins that deliberate difference.
+    const organiser = await createUser({ role: UserRole.ORGANISER });
+
+    const stats = await authedGet(app, '/api/admin/stats/platform', organiser);
+    expect(stats.status).toBe(403);
+
+    const summary = await authedGet(app, '/api/admin/summary', organiser);
+    expect(summary.status).toBe(200);
   });
 });
 

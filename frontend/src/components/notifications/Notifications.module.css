@@ -1,0 +1,144 @@
+/*
+ * The notification queue. Unread first because that is the question, grouped by
+ * day so a long history stays scannable, and every row is a link to the thing
+ * it is about — a notice you cannot act on is just noise.
+ */
+
+.queue {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.meter {
+  padding: var(--space-4) 1.25rem var(--space-2);
+}
+
+.group {
+  display: grid;
+  gap: 0;
+}
+
+.dayHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: var(--space-3) 1.25rem;
+  border-top: 1px solid var(--dash-border);
+  background: var(--dash-tint);
+}
+
+.group:first-child .dayHead {
+  border-top: 0;
+}
+
+.dayName {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+}
+
+.dayCount {
+  color: var(--dash-amber);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.row {
+  display: grid;
+  gap: 0.4rem;
+  min-height: 5.5rem;
+  padding: var(--space-4) 1.25rem;
+  border-top: 1px solid var(--dash-border);
+  color: inherit;
+  text-decoration: none;
+  transition: background 140ms ease;
+}
+
+.row:hover {
+  background: rgba(164, 22, 26, 0.025);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: -2px;
+}
+
+/* The queue spine: this one still wants the reader. */
+.row[data-unread='true'] {
+  box-shadow: inset 3px 0 0 var(--dash-amber);
+}
+
+.rowTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.rowTitle {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.row[data-unread='true'] .rowTitle {
+  font-weight: 750;
+}
+
+.rowMessage {
+  margin: 0;
+  color: var(--dash-muted);
+  font-size: 0.875rem;
+  line-height: 1.3rem;
+}
+
+.rowFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.rowTime {
+  color: var(--dash-faint);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Says where the row goes, so a notice reads as a doorway rather than a note. */
+.rowGo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--dash-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.rowGo svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  transition: transform 140ms ease;
+}
+
+.row:hover .rowGo svg {
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .rowGo svg {
+    transition: none;
+  }
+}

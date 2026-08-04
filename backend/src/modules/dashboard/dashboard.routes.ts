@@ -5,6 +5,7 @@ import { requireCapability } from '../../common/capabilities.js';
 import { asyncHandler } from '../../common/http.js';
 import { serializeEvent, serializeRegistration, serializeTeammateOption } from '../../common/serializers.js';
 import { getAdminSummary, getEventOperations, getPlayerDashboard } from './dashboard.service.js';
+import { getPlatformStats } from './dashboard.stats.service.js';
 
 export const dashboardRouter = Router();
 
@@ -31,6 +32,21 @@ dashboardRouter.get('/api/admin/events/operations', asyncHandler(async (request,
   }
   await requireCapability(request, Capability.DASHBOARD_READ);
   response.json({ operations: await getEventOperations() });
+}));
+
+/**
+ * Platform statistics for the administrator home screen.
+ *
+ * Deliberately unlike its two neighbours above: there is no organiser
+ * short-circuit, because there is nothing to narrow. The whole payload *is*
+ * platform totals, which an organiser holds no power over, and showing then
+ * refusing is worse than hiding. The admin screen never mounts the section for
+ * an organiser, so this 403 is the server-side backstop rather than a normal
+ * path.
+ */
+dashboardRouter.get('/api/admin/stats/platform', asyncHandler(async (request, response) => {
+  await requireCapability(request, Capability.DASHBOARD_READ);
+  response.json({ stats: await getPlatformStats(request.query.range) });
 }));
 
 dashboardRouter.get('/api/dashboard', asyncHandler(async (request, response) => {

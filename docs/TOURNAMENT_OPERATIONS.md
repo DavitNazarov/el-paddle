@@ -65,7 +65,9 @@ During the window:
 - the requester may edit, retarget, or withdraw while the request is still pending or accepted;
 - acceptance does not finalize the pairing — administrator approval is always required;
 - the administrator approves an accepted request, rejects it, or explicitly overrides a refusal (public reason required for reject/override);
-- accepting one request automatically marks conflicting requests for the same entry as conflicted.
+- accepting one request automatically marks conflicting requests for the same entry as conflicted;
+- an approval is refused when either entry is already committed to another approved pairing — the message names the pairing that holds it;
+- an approved pairing can be released (**Release pairing**, public reason required) until it is applied to the bracket, which frees both entries for a different pairing.
 
 Requests affect only the first round. Close every request window before generating the final draft.
 

@@ -1,0 +1,551 @@
+/*
+ * The draw drawn as a tree. Below 64rem the rounds stack as plain lists; from
+ * 64rem each round becomes a column and the grid rows do the branching, so the
+ * connectors are geometry rather than absolutely positioned decoration.
+ */
+
+.boardRegion {
+  padding: var(--space-4);
+  background: linear-gradient(180deg, rgba(246, 248, 252, 0.76), rgba(255, 255, 255, 0.2));
+}
+
+.boardHint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.hintTitle {
+  color: var(--dash-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hintDetail {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--dash-faint);
+  font-size: 0.68rem;
+}
+
+.hintDetail svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+}
+
+/* Champion legend: a swatch of the spine, the trophy, and the words. */
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  color: var(--dash-amber);
+  font-size: 0.65rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.legend svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.legendSpine {
+  width: 3px;
+  height: 0.9rem;
+  border-radius: 2px;
+  background: var(--dash-amber);
+}
+
+.board {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.round {
+  min-width: 0;
+}
+
+.roundHeader {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  margin-bottom: 0.65rem;
+}
+
+.roundHeader > span {
+  color: var(--dash-primary);
+  font-size: 0.625rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.roundHeader h3 {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.roundHeader small {
+  color: var(--dash-faint);
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+.roundMatches {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.matchSlot {
+  position: relative;
+  min-width: 0;
+}
+
+.matchCard {
+  overflow: hidden;
+  width: 100%;
+  border: 1px solid rgba(43, 26, 24, 0.13);
+  border-radius: 0.7rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(43, 26, 24, 0.045);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.matchCard:hover {
+  border-color: rgba(164, 22, 26, 0.28);
+  box-shadow: 0 5px 15px rgba(43, 26, 24, 0.07);
+}
+
+.matchCard[data-status='in_progress'] {
+  border-color: rgba(164, 22, 26, 0.35);
+  box-shadow: 0 0 0 3px rgba(164, 22, 26, 0.06);
+}
+
+.matchCard[data-status='cancelled'] {
+  background: #fbf8f8;
+}
+
+/* The champion's route: a spine, so the path survives greyscale and printing. */
+.matchCard[data-champion='true'] {
+  border-color: rgba(168, 103, 18, 0.32);
+  box-shadow: inset 3px 0 0 var(--dash-amber), 0 1px 2px rgba(43, 26, 24, 0.045);
+}
+
+.matchCard[data-champion='true']:hover {
+  border-color: rgba(168, 103, 18, 0.45);
+  box-shadow: inset 3px 0 0 var(--dash-amber), 0 5px 15px rgba(43, 26, 24, 0.07);
+}
+
+.matchHeader {
+  display: flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--dash-border);
+  background: #f9fafc;
+}
+
+.matchHeader > span {
+  color: var(--dash-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.matchStatus {
+  display: inline-flex;
+  min-height: 1.45rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.42rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-pill);
+  background: #faf6f3;
+  color: var(--dash-muted);
+  font-size: 0.55rem;
+  font-weight: 750;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.matchStatus svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.matchStatus[data-status='completed'] {
+  border-color: rgba(22, 128, 106, 0.22);
+  background: var(--dash-teal-soft);
+  color: var(--dash-teal);
+}
+
+.matchStatus[data-status='in_progress'],
+.matchStatus[data-status='ready'] {
+  border-color: rgba(164, 22, 26, 0.22);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
+}
+
+.matchStatus[data-status='cancelled'] {
+  border-color: rgba(194, 65, 59, 0.22);
+  background: var(--dash-coral-soft);
+  color: var(--dash-coral);
+}
+
+.participants {
+  padding: 0.35rem;
+}
+
+/* Flex rather than fixed columns: the winner check and the move button are both optional. */
+.participant {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.45rem;
+}
+
+.participant > .pairName,
+.participant > .pairHandle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.participant > .sideLabel,
+.participant > .winnerCheck,
+.participant > .championMark,
+.participant > .moveButton,
+.participant > .score {
+  flex: 0 0 auto;
+}
+
+.participant + .participant {
+  border-top: 1px solid rgba(43, 26, 24, 0.08);
+}
+
+.participant.winner {
+  background: var(--dash-teal-soft);
+}
+
+.participant.championRow {
+  background: var(--dash-amber-soft);
+}
+
+.sideLabel {
+  display: inline-flex;
+  width: 1.35rem;
+  height: 1.35rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.35rem;
+  background: #edf1f6;
+  color: var(--dash-faint);
+  font-size: 0.55rem;
+  font-weight: 800;
+}
+
+.winner .sideLabel {
+  background: rgba(22, 128, 106, 0.16);
+  color: var(--dash-teal);
+}
+
+.championRow .sideLabel {
+  background: rgba(168, 103, 18, 0.18);
+  color: var(--dash-amber);
+}
+
+.pairName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.05rem;
+  text-align: start;
+}
+
+.pendingParticipant .pairName {
+  color: var(--dash-faint);
+  font-style: italic;
+  font-weight: 550;
+}
+
+.winnerCheck {
+  width: 0.8rem;
+  height: 0.8rem;
+  color: var(--dash-teal);
+}
+
+.championMark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--dash-amber);
+}
+
+.championMark svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.score {
+  min-width: 1.2rem;
+  color: var(--dash-text);
+  font-size: 0.9rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pendingParticipant .score {
+  color: var(--dash-faint);
+}
+
+.advanceIcon {
+  display: none;
+}
+
+/* Slot format controls: round defaults in the round header, overrides on each match card. */
+.slotControl {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.slotControl select {
+  min-height: 2.75rem;
+  max-width: 100%;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.45rem;
+  background: #fff;
+  color: var(--dash-text);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.slotControl select:disabled {
+  background: #f4f5f8;
+  color: var(--dash-faint);
+}
+
+.slotControl select:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.roundSlotControl {
+  grid-column: 1 / -1;
+  margin-top: 0.15rem;
+}
+
+.roundSlotControl label {
+  color: var(--dash-faint);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.matchFormat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-top: 1px solid var(--dash-border);
+  background: #fbfbfd;
+}
+
+.formatBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--dash-muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.slotChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slotChips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--dash-border);
+  border-radius: 0.3rem;
+  background: #fff;
+  color: var(--dash-muted);
+  font-size: 0.55rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Draft-only participant placement: drag a pair onto another first-round slot to
+ * move or swap. The grip is what makes that discoverable — without it the only
+ * hint was a cursor change no touch device ever shows.
+ */
+.pairHandle {
+  display: flex;
+  min-width: 0;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.3rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: none;
+  text-align: start;
+  cursor: grab;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.pairHandle:hover {
+  border-color: var(--dash-border);
+  background: #fff;
+}
+
+.pairHandle:active {
+  cursor: grabbing;
+}
+
+.grip {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  color: var(--dash-faint);
+}
+
+.pairHandle:hover .grip {
+  color: var(--dash-primary);
+}
+
+.pendingParticipant .pairHandle {
+  color: var(--dash-faint);
+}
+
+.pairHandle:focus-visible,
+.moveButton:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
+  border-radius: 0.4rem;
+}
+
+.moveButton {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--dash-faint);
+  cursor: pointer;
+}
+
+.moveButton:hover:not(:disabled) {
+  background: #f7ede9;
+  color: var(--dash-primary);
+}
+
+.moveButton svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.participant.dropTarget {
+  outline: 2px dashed var(--dash-primary);
+  outline-offset: -2px;
+  background: var(--dash-primary-soft);
+}
+
+.participant.dragging {
+  opacity: 0.45;
+}
+
+@media (min-width: 40rem) {
+  .boardRegion {
+    padding: var(--space-5);
+  }
+}
+
+@media (min-width: 64rem) {
+  .board {
+    grid-template-columns: repeat(var(--round-count), minmax(0, 1fr));
+    gap: 2.4rem;
+  }
+
+  .roundMatches {
+    grid-template-rows: repeat(var(--row-count), minmax(2.65rem, auto));
+    gap: 0;
+    height: 100%;
+  }
+
+  .matchSlot {
+    display: flex;
+    align-items: center;
+  }
+
+  .advanceIcon {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    right: -1.55rem;
+    width: 0.85rem;
+    height: 0.85rem;
+    color: rgba(164, 22, 26, 0.5);
+  }
+
+  .matchAdvances::after {
+    position: absolute;
+    right: -1.2rem;
+    width: 1.2rem;
+    height: 1px;
+    content: '';
+    background: rgba(164, 22, 26, 0.2);
+  }
+
+  /* The connector inherits the spine's colour so the route reads as continuous. */
+  .matchSlot[data-champion='true'] .advanceIcon {
+    color: var(--dash-amber);
+  }
+
+  .matchSlot[data-champion='true'].matchAdvances::after {
+    height: 2px;
+    background: rgba(168, 103, 18, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matchCard,
+  .pairHandle {
+    transition: none;
+  }
+}

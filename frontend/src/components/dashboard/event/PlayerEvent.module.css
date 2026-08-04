@@ -1,0 +1,222 @@
+/*
+ * A player's own page for one event. Read in about twenty seconds, on a phone,
+ * to answer three questions in this order: am I in, who am I playing, when do I
+ * play. Everything the tournament knows that does not answer one of those is
+ * not on this page.
+ */
+
+.page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* ---- Opponent requests ---- */
+
+.requests {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.requestList {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.requestRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) 1.25rem;
+  border-top: 1px solid var(--dash-border);
+}
+
+.requestRow:first-child {
+  border-top: 0;
+}
+
+/* Amber where the reader is the one being asked. */
+.requestRow[data-awaiting='true'] {
+  box-shadow: inset 3px 0 0 var(--dash-amber);
+}
+
+.requestPair {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.requestMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.requestReason {
+  margin: 0.4rem 0 0;
+  color: var(--dash-muted);
+  font-size: 0.8125rem;
+  line-height: 1.15rem;
+}
+
+.requestActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.requestActions button {
+  min-height: 2.75rem;
+}
+
+/* ---- Their matches ---- */
+
+.matchList {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.matchRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) 1.25rem;
+  border-top: 1px solid var(--dash-border);
+}
+
+.matchRow:first-child {
+  border-top: 0;
+}
+
+/* The one being played right now is the whole reason a player opens this page. */
+.matchRow[data-live='true'] {
+  box-shadow: inset 3px 0 0 var(--dash-primary);
+  background: rgba(164, 22, 26, 0.02);
+}
+
+.matchMain {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.matchRound {
+  margin: 0;
+  color: var(--dash-faint);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.matchPair {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35rem;
+}
+
+/* The reader's own pair, so they can find themselves without reading both. */
+.you {
+  color: var(--dash-primary);
+  font-weight: 750;
+}
+
+.matchWhen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.9rem;
+  margin: 0.4rem 0 0;
+  color: var(--dash-muted);
+  font-size: 0.8125rem;
+}
+
+.matchWhen span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.matchWhen svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  color: var(--dash-faint);
+}
+
+.matchAside {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.score {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  color: var(--dash-text);
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.outcome {
+  display: inline-flex;
+  min-height: 1.65rem;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-pill);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.outcome[data-won='true'] {
+  border-color: rgba(22, 128, 106, 0.24);
+  background: var(--dash-teal-soft);
+  color: var(--dash-teal);
+}
+
+.outcome[data-won='false'] {
+  border-color: rgba(194, 65, 59, 0.24);
+  background: var(--dash-coral-soft);
+  color: var(--dash-coral);
+}
+
+.outcome svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.note {
+  margin: 0;
+  padding: var(--space-4) 1.25rem;
+  color: var(--dash-muted);
+  font-size: 0.8125rem;
+  line-height: 1.2rem;
+}
+
+@media (min-width: 64rem) {
+  .requests {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}

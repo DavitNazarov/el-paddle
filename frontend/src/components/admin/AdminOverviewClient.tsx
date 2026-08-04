@@ -2,15 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ArrowRight, CalendarDays, CalendarPlus, CheckCircle2, ClipboardList, Handshake } from 'lucide-react';
+import { ArrowRight, CalendarPlus, Handshake, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  AttentionRow,
-  EmptyState,
-  Metric,
   RegistrationStatusBadge,
   SectionHeading,
-  softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
 import { apiFetch } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -18,15 +14,16 @@ import { useAdminCounts } from '@/hooks/useAdminCounts';
 import { useEventOperations } from '@/hooks/useEventOperations';
 import { useViewer } from '@/hooks/useViewer';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
-import { cn } from '@/lib/utils';
 import { AdminShell } from './AdminShell';
+import { AdminAttentionQueue, type AttentionItem } from './AdminAttentionQueue';
 import { AdminEventBoard } from './AdminEventBoard';
+import { AdminStatsSection } from './stats/AdminStatsSection';
 import type { EventDto, RegistrationDto } from '@/types/admin';
 
 export function AdminOverviewClient() {
   const { dictionary, locale, formatDate } = useI18n();
   const copy = dictionary.dashboard.admin.overview;
-  const countCopy = dictionary.dashboard.admin.counts;
+  const navCopy = dictionary.dashboard.admin.nav;
   const board = tournamentCopy[locale].admin.board;
   // Counts come from the single summary source the sidebar also uses, so the
   // Overview and the sidebar snapshot can never drift apart.
@@ -69,7 +66,62 @@ export function AdminOverviewClient() {
   // The setup path only helps before there is anything to run.
   const showSetup = !loading && !isOrganiser && events.length === 0;
   const eventsNeedingPairings = [...operations.values()].filter((row) => row.requests.awaiting > 0);
-  const hasDecisions = pendingQueue.length > 0 || eventsNeedingPairings.length > 0;
+
+  // One queue, ordered by who is blocked. Pairings stop a draw from being built,
+  // entries and club requests hold a person up, and an unpublished event blocks
+  // nobody — it is simply not started yet, so it never carries the amber spine.
+  const attentionItems: AttentionItem[] = [
+    ...eventsNeedingPairings.flatMap((row) => {
+      const event = events.find((item) => item.id === row.eventId);
+      if (!event) return [];
+      return [
+        {
+          id: `pairings-${row.eventId}`,
+          title: event.title,
+          detail: fillTemplate(board.pairings, { count: row.requests.awaiting }),
+          urgent: true,
+          actionLabel: board.review,
+          href: `/admin/events/${row.eventId}/opponent-requests`,
+          icon: Handshake,
+        },
+      ];
+    }),
+    ...pendingQueue.map((registration) => ({
+      id: `entry-${registration.id}`,
+      title: registration.event.title,
+      detail: `${registration.owner.fullName} / ${registration.teammate.fullName} · ${formatDate(registration.event.date, { dateStyle: 'medium' })}`,
+      urgent: true,
+      actionLabel: copy.review,
+      href: `/admin/events/${registration.event.id}/registrations`,
+      badge: <RegistrationStatusBadge status={registration.status} />,
+    })),
+    // Club requests were previously only a number on this page, with nothing to
+    // click — yet nobody exists in the product until an admin approves them.
+    ...(!isOrganiser && counts.applications > 0
+      ? [
+          {
+            id: 'applications',
+            title: navCopy.applications,
+            detail: fillTemplate(board.applicationsWaiting, { count: counts.applications }),
+            urgent: true,
+            actionLabel: board.review,
+            href: '/admin/applications',
+            icon: Inbox,
+          },
+        ]
+      : []),
+    ...(isOrganiser
+      ? []
+      : draftEvents.map((event) => ({
+          id: `draft-${event.id}`,
+          title: event.title,
+          detail: `${board.draftNotPublished} · ${event.location} · ${formatDate(event.date, { dateStyle: 'medium' })}`,
+          urgent: false,
+          actionLabel: copy.publishNow,
+          href: '/admin/events',
+          icon: CalendarPlus,
+        }))),
+  ];
 
   return (
     // No eyebrow is passed: the shell names the workspace by role.
@@ -108,129 +160,27 @@ export function AdminOverviewClient() {
           </section>
         ) : null}
 
-        <section>
-          <SectionHeading
-            title={board.decisions}
-            description={board.decisionsDescription}
-            actions={
-              pendingQueue.length > 0 ? (
-                <Button asChild size="sm" variant="red" className="rounded-md">
-                  <Link href="/admin/registrations">{copy.reviewAll}</Link>
-                </Button>
-              ) : null
-            }
-          />
-          <div className="mt-3 grid gap-2">
-            {loading ? <EmptyState title={copy.loading} icon={ClipboardList} /> : null}
-            {!loading && !hasDecisions ? (
-              <EmptyState title={board.allClear} description={copy.noPendingDescription} icon={CheckCircle2} />
-            ) : null}
+        <AdminAttentionQueue
+          items={attentionItems}
+          loading={loading || operationsLoading}
+          title={board.decisions}
+          description={board.decisionsDescription}
+          emptyTitle={board.allClear}
+          emptyDescription={copy.noPendingDescription}
+          loadingLabel={copy.loading}
+          actions={
+            pendingQueue.length > 0 ? (
+              <Button asChild size="sm" variant="red" className="rounded-md">
+                <Link href="/admin/registrations">{copy.reviewAll}</Link>
+              </Button>
+            ) : null
+          }
+        />
 
-            {/* Pairings are counted per event rather than listed one by one: the
-                decision itself is taken inside that event's request screen. */}
-            {eventsNeedingPairings.map((row) => {
-              const event = events.find((item) => item.id === row.eventId);
-              if (!event) return null;
-              return (
-                <AttentionRow
-                  key={row.eventId}
-                  urgent
-                  title={event.title}
-                  detail={fillTemplate(board.pairings, { count: row.requests.awaiting })}
-                  action={
-                    <Button asChild size="sm" variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
-                      <Link href={`/admin/events/${row.eventId}/opponent-requests`}>
-                        <Handshake className="h-4 w-4" />
-                        {board.review}
-                      </Link>
-                    </Button>
-                  }
-                />
-              );
-            })}
-
-            {pendingQueue.map((registration) => (
-              <AttentionRow
-                key={registration.id}
-                urgent
-                title={registration.event.title}
-                detail={`${registration.owner.fullName} / ${registration.teammate.fullName} · ${formatDate(registration.event.date, { dateStyle: 'medium' })}`}
-                action={
-                  <div className="flex items-center gap-2">
-                    <RegistrationStatusBadge status={registration.status} />
-                    <Button asChild size="sm" variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
-                      <Link href={`/admin/events/${registration.event.id}/registrations`}>{copy.review}</Link>
-                    </Button>
-                  </div>
-                }
-              />
-            ))}
-          </div>
-        </section>
-
-        {isOrganiser ? null : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section>
-              <SectionHeading title={countCopy.events} description={copy.pendingDescription} />
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Metric
-                  label={countCopy.events}
-                  value={counts.events}
-                  hint={`${counts.published} ${countCopy.published.toLowerCase()} · ${counts.drafts} ${countCopy.drafts.toLowerCase()}`}
-                />
-                <Metric label={countCopy.pending} value={counts.pending} tone={counts.pending > 0 ? 'warning' : 'neutral'} />
-                <Metric label={countCopy.approved} value={counts.approved} tone={counts.approved > 0 ? 'success' : 'neutral'} />
-                <Metric
-                  label={countCopy.applications}
-                  value={counts.applications}
-                  tone={counts.applications > 0 ? 'info' : 'neutral'}
-                  hint={`${countCopy.clubs}: ${counts.clubs}`}
-                />
-              </div>
-            </section>
-
-            <section>
-              <SectionHeading
-                title={copy.draftsTitle}
-                description={copy.draftsDescription}
-                actions={
-                  counts.drafts > 0 ? (
-                    <Button asChild size="sm" variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
-                      <Link href="/admin/events">{copy.manageEvents}</Link>
-                    </Button>
-                  ) : null
-                }
-              />
-              <div className="mt-3 grid gap-2">
-                {loading ? <EmptyState title={copy.loading} icon={CalendarDays} /> : null}
-                {!loading && !draftEvents.length ? (
-                  <EmptyState
-                    title={copy.noDraftsTitle}
-                    description={copy.noDraftsDescription}
-                    icon={CalendarPlus}
-                    action={
-                      <Button asChild size="sm" variant="red" className="rounded-md">
-                        <Link href="/admin/events">{copy.createEvent}</Link>
-                      </Button>
-                    }
-                  />
-                ) : null}
-                {draftEvents.map((event) => (
-                  <AttentionRow
-                    key={event.id}
-                    title={event.title}
-                    detail={`${event.location} · ${formatDate(event.date, { dateStyle: 'medium', timeStyle: 'short' })}`}
-                    action={
-                      <Button asChild size="sm" variant="outline" className={cn(softButtonClassName, 'rounded-md')}>
-                        <Link href="/admin/events">{copy.publishNow}</Link>
-                      </Button>
-                    }
-                  />
-                ))}
-              </div>
-            </section>
-          </div>
-        )}
+        {/* Statistics come last: the queue above says what to do now, statistics
+            say how the platform is moving, which is one step further from an
+            action. Organisers hold no power over anything counted here. */}
+        {isOrganiser ? null : <AdminStatsSection />}
       </div>
     </AdminShell>
   );

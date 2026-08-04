@@ -143,7 +143,7 @@ export async function generateBracket(input: { eventId: string; bracketId: strin
     if (requests.length !== input.requestIds.length) jsonError('One or more pairing requests are not approved.', 409);
     const pairedIds = new Set<string>();
     for (const request of requests) {
-      if (pairedIds.has(request.requestingEntryId) || pairedIds.has(request.targetEntryId)) jsonError('Pairing requests conflict.', 409);
+      if (pairedIds.has(request.requestingEntryId) || pairedIds.has(request.targetEntryId)) jsonError('Two approved pairings share the same team. Reject one of them on the opponent requests page, then generate again.', 409);
       pairedIds.add(request.requestingEntryId);
       pairedIds.add(request.targetEntryId);
     }

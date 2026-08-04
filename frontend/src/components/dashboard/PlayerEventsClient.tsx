@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { EmptyState, FeedbackBanner, SectionHeading } from '@/components/shared/dashboard/DashboardUI';
+import { SkeletonCards } from '@/components/shared/dashboard/Feedback';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { usePlayerDashboard } from '@/hooks/usePlayerDashboard';
 import { CalendarDays, History } from 'lucide-react';
@@ -76,7 +77,7 @@ export function PlayerEventsClient({
 
       {loading ? (
         <div className="mt-5">
-          <EmptyState title={player.sections.loadingTitle} description={player.sections.loadingDescription} icon={CalendarDays} />
+          <SkeletonCards count={3} columns={2} label={player.sections.loadingTitle} />
         </div>
       ) : null}
 

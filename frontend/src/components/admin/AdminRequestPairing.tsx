@@ -16,6 +16,15 @@ export function isAwaitingDecision(request: OpponentRequestDto) {
   return AWAITING_DECISION.includes(request.status);
 }
 
+/**
+ * An approved pairing claims both of its entries until the bracket is generated.
+ * Releasing it is the only way to pair either entry differently, so the action
+ * stays available while the pairing is still outside the bracket.
+ */
+export function canReleasePairing(request: OpponentRequestDto) {
+  return request.status === 'APPROVED_BY_ADMIN' || request.status === 'OVERRIDDEN_BY_ADMIN';
+}
+
 export function entryName(request: OpponentRequestDto, side: 'requestingEntry' | 'targetEntry') {
   const entry = request[side];
   return `${entry.owner.fullName} / ${entry.teammate.fullName}`;
@@ -84,14 +93,14 @@ export function AdminRequestPairing({
                 {copy.override}
               </CommandButton>
             ) : null}
-            {isAwaitingDecision(request) ? (
+            {isAwaitingDecision(request) || canReleasePairing(request) ? (
               <CommandButton
                 tone="danger"
                 size="sm"
                 busy={busyAction === `reject-${request.id}`}
                 onClick={() => onDecide('reject')}
               >
-                {copy.reject}
+                {canReleasePairing(request) ? copy.release : copy.reject}
               </CommandButton>
             ) : null}
           </div>
