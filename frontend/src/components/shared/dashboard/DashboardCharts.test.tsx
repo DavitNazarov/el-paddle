@@ -4,8 +4,15 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   describeDelta,
+  DonutChart,
+  FunnelBars,
+  Meter,
+  RangeBar,
+  RankedBars,
   ShareBar,
+  Sparkline,
   StatDelta,
+  StatRow,
   tickIndexes,
   toneForDelta,
   TrendBars,
@@ -161,6 +168,199 @@ describe('ShareBar', () => {
     );
     expect(screen.getByText(labels.noData)).toBeInTheDocument();
     expect(screen.queryByText('Sent')).not.toBeInTheDocument();
+  });
+});
+
+describe('DonutChart', () => {
+  const segments = [
+    { key: 'google', name: 'Google', value: 3, tone: 'info' as const },
+    { key: 'password', name: 'Email and password', value: 1, tone: 'teal' as const },
+  ];
+
+  it('lays segments end to end around the ring, starting at twelve o’clock', () => {
+    const { container } = render(
+      <DonutChart caption="How they signed up" segments={segments} emptyLabel="Not recorded" />,
+    );
+    // The first ring is the unfilled track; the two after it are the segments.
+    const arcs = [...container.querySelectorAll('circle')].slice(1);
+    expect(arcs[0]).toHaveAttribute('stroke-dasharray', '75 25');
+    expect(arcs[0]).toHaveAttribute('stroke-dashoffset', '25');
+    // The second starts exactly where the first ended: 25 - 75 = -50.
+    expect(arcs[1]).toHaveAttribute('stroke-dasharray', '25 75');
+    expect(arcs[1]).toHaveAttribute('stroke-dashoffset', '-50');
+  });
+
+  it('names every segment in text with its share', () => {
+    render(<DonutChart caption="How they signed up" segments={segments} emptyLabel="Not recorded" />);
+    expect(screen.getByText('Google')).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.textContent === '3 · 75%'),
+    ).toBeInTheDocument();
+  });
+
+  it('says so when everything is zero instead of drawing a full ring', () => {
+    render(
+      <DonutChart
+        caption="Club requests"
+        emptyLabel="Not recorded"
+        segments={[{ key: 'a', name: 'Approved', value: 0, tone: 'teal' }]}
+      />,
+    );
+    expect(screen.getByText('Not recorded')).toBeInTheDocument();
+  });
+
+  it('keeps its accessible name when the caption is hidden', () => {
+    render(
+      <DonutChart caption="How they signed up" hideCaption segments={segments} emptyLabel="Not recorded" />,
+    );
+    expect(screen.getByRole('figure', { name: 'How they signed up' })).toBeInTheDocument();
+  });
+});
+
+describe('FunnelBars', () => {
+  it('measures every step against the first, not against the total', () => {
+    const { container } = render(
+      <FunnelBars
+        caption="Invitations"
+        emptyLabel="Not recorded"
+        steps={[
+          { key: 'sent', name: 'Sent', value: 80 },
+          { key: 'accepted', name: 'Accepted', value: 60 },
+        ]}
+      />,
+    );
+    const fills = container.querySelectorAll('li span[style]');
+    expect(fills[0]).toHaveStyle({ width: '100%' });
+    expect(fills[1]).toHaveStyle({ width: '75%' });
+    // The entry step carries no share: "100%" against itself says nothing.
+    expect(screen.getByText((_, el) => el?.textContent === '60 · 75%')).toBeInTheDocument();
+    expect(screen.queryByText((_, el) => el?.textContent === '80 · 100%')).not.toBeInTheDocument();
+  });
+
+  it('never draws a step wider than the funnel it came from', () => {
+    const { container } = render(
+      <FunnelBars
+        caption="Invitations"
+        emptyLabel="Not recorded"
+        steps={[
+          { key: 'sent', name: 'Sent', value: 10 },
+          // Accepted can exceed sent when invites predate the period window.
+          { key: 'accepted', name: 'Accepted', value: 14 },
+        ]}
+      />,
+    );
+    expect(container.querySelectorAll('li span[style]')[1]).toHaveStyle({ width: '100%' });
+  });
+
+  it('says so when the funnel never started', () => {
+    render(
+      <FunnelBars
+        caption="Invitations"
+        emptyLabel="Not recorded"
+        steps={[{ key: 'sent', name: 'Sent', value: 0 }]}
+      />,
+    );
+    expect(screen.getByText('Not recorded')).toBeInTheDocument();
+  });
+});
+
+describe('RangeBar', () => {
+  function renderRange(lowerValue: number, upperValue: number) {
+    return render(
+      <RangeBar
+        caption="How long entries wait"
+        lowerLabel="Half within"
+        lowerText="6 h"
+        lowerValue={lowerValue}
+        upperLabel="9 in 10 within"
+        upperText="42 h"
+        upperValue={upperValue}
+      />,
+    );
+  }
+
+  it('places the median against the tail, so the skew is the picture', () => {
+    const { container } = renderRange(6, 24);
+    expect(container.querySelectorAll('div > span')[0]).toHaveStyle({ width: '25%' });
+  });
+
+  it('fills the track rather than dividing by an absent tail', () => {
+    const { container } = renderRange(6, 0);
+    expect(container.querySelectorAll('div > span')[0]).toHaveStyle({ width: '100%' });
+  });
+
+  it('states both durations as text, never only as a position', () => {
+    renderRange(6, 42);
+    expect(screen.getByText('6 h')).toBeInTheDocument();
+    expect(screen.getByText('42 h')).toBeInTheDocument();
+  });
+});
+
+describe('Sparkline', () => {
+  it('draws one mark per bucket and never collapses a real zero into nothing', () => {
+    const { container } = render(<Sparkline points={[3, 0, 5]} />);
+    const rects = container.querySelectorAll('rect');
+    expect(rects).toHaveLength(3);
+    // A measured zero keeps a hairline; a bar of no height would be invisible
+    // and would read as an untracked bucket.
+    expect(Number(rects[1].getAttribute('height'))).toBeGreaterThan(0);
+  });
+
+  it('is decoration only: the number beside it carries the data', () => {
+    const { container } = render(<Sparkline points={[1, 2]} />);
+    expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('renders nothing at all rather than an empty frame', () => {
+    const { container } = render(<Sparkline points={[]} />);
+    expect(container.querySelector('svg')).toBeNull();
+  });
+});
+
+describe('Meter', () => {
+  it('never overflows its track, even if the value exceeds the whole', () => {
+    const { container } = render(<Meter value={9} total={4} />);
+    const fill = container.querySelector('div > span');
+    expect(fill).toHaveStyle({ width: '100%' });
+  });
+
+  it('draws nothing rather than dividing by an empty total', () => {
+    const { container } = render(<Meter value={0} total={0} />);
+    expect(container.querySelector('div > span')).toHaveStyle({ width: '0%' });
+  });
+});
+
+describe('RankedBars', () => {
+  it('scales bars against the leader, not the total, and states every number', () => {
+    const { container } = render(
+      <RankedBars
+        caption="Most active clubs"
+        emptyLabel="No club entered"
+        rows={[
+          { key: 'a', name: 'Tbilisi Padel', value: 40 },
+          { key: 'b', name: 'Vake Racket', value: 10 },
+        ]}
+        formatValue={(value) => `${value} entries`}
+      />,
+    );
+    const fills = container.querySelectorAll('li span[style]');
+    expect(fills[0]).toHaveStyle({ width: '100%' });
+    expect(fills[1]).toHaveStyle({ width: '25%' });
+    expect(screen.getByText('40 entries')).toBeInTheDocument();
+  });
+
+  it('says so when nothing ranked instead of drawing an empty list', () => {
+    render(<RankedBars caption="Most active clubs" emptyLabel="No club entered" rows={[]} />);
+    expect(screen.getByText('No club entered')).toBeInTheDocument();
+  });
+});
+
+describe('StatRow', () => {
+  it('keeps the label, the value and the explanation together', () => {
+    render(<StatRow label="Players with no club" value={12} detail="They cannot enter an event." />);
+    expect(screen.getByText('Players with no club')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByText('They cannot enter an event.')).toBeInTheDocument();
   });
 });
 

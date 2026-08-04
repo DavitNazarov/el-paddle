@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { fillTemplate } from '@/lib/i18n/tournament';
+import type { PlatformStats } from '@/types/adminStats';
 import {
+  collectWatchSignals,
   formatAgeSeconds,
   formatDuration,
   labelFor,
@@ -99,5 +101,95 @@ describe('formatAgeSeconds', () => {
     expect(formatAgeSeconds(null, durations, fillTemplate)).toBeNull();
     expect(formatAgeSeconds(9_000, durations, fillTemplate)).toBe('2.5 h');
     expect(formatAgeSeconds(120, durations, fillTemplate)).toBe('2 min');
+  });
+});
+
+describe('collectWatchSignals', () => {
+  const watchLabels = {
+    applications: 'Club requests waiting',
+    playersWithoutClub: 'Players with no club',
+    invitesExpired: 'Invitations expired',
+    overdue: 'Events past their date',
+    noBracket: 'Published with no draw',
+    emailFailed: 'Emails failed',
+    outboxPending: 'Jobs waiting',
+    outboxFailed: 'Jobs given up',
+  };
+
+  /** Only the counts the watch list reads; the rest of the payload is irrelevant
+   *  to it and stubbing it would only make the fixture harder to read. */
+  function statsWith(counts: {
+    applicationsWaiting?: number;
+    playersWithoutClub?: number;
+    invitesExpired?: number;
+    overdue?: number;
+    noBracket?: number;
+    emailFailed?: number;
+    outboxPending?: number;
+    outboxFailed?: number;
+  }) {
+    return {
+      people: {
+        applications: { approved: 0, rejected: 0, waiting: counts.applicationsWaiting ?? 0 },
+        clubs: { total: 0, created: 0, playersWithoutClub: counts.playersWithoutClub ?? 0 },
+        invites: { sent: 0, accepted: 0, expiredUnused: counts.invitesExpired ?? 0 },
+      },
+      tournaments: {
+        events: {
+          byStatus: [],
+          drafts: 0,
+          overdue: counts.overdue ?? 0,
+          publishedWithoutDraw: counts.noBracket ?? 0,
+        },
+      },
+      operations: {
+        email: { byStatus: [], failedAfterRetries: counts.emailFailed ?? 0 },
+        outbox: {
+          pending: counts.outboxPending ?? 0,
+          failed: counts.outboxFailed ?? 0,
+          oldestPendingAgeSeconds: null,
+        },
+      },
+    } as unknown as PlatformStats;
+  }
+
+  it('is empty when nothing is stuck, which is the all-clear', () => {
+    expect(collectWatchSignals(statsWith({}), watchLabels)).toEqual([]);
+  });
+
+  it('drops every zero rather than listing a signal that says nothing', () => {
+    const signals = collectWatchSignals(statsWith({ overdue: 2 }), watchLabels);
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toMatchObject({ key: 'overdue', count: 2, label: 'Events past their date' });
+  });
+
+  it('orders by who is blocked: a person, then an event, then a machine', () => {
+    const signals = collectWatchSignals(
+      statsWith({
+        outboxPending: 5,
+        overdue: 1,
+        applicationsWaiting: 2,
+        playersWithoutClub: 3,
+      }),
+      watchLabels,
+    );
+    expect(signals.map((signal) => signal.key)).toEqual([
+      'applications',
+      'playersWithoutClub',
+      'overdue',
+      'outboxPending',
+    ]);
+  });
+
+  it('links only where the product has a screen to land on', () => {
+    const signals = collectWatchSignals(
+      statsWith({ applicationsWaiting: 1, emailFailed: 1, outboxFailed: 1 }),
+      watchLabels,
+    );
+    const byKey = Object.fromEntries(signals.map((signal) => [signal.key, signal.href]));
+    expect(byKey.applications).toBe('/admin/applications');
+    // No delivery log and no outbox screen exist; a link here would 404.
+    expect(byKey.emailFailed).toBeUndefined();
+    expect(byKey.outboxFailed).toBeUndefined();
   });
 });

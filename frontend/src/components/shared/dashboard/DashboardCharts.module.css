@@ -310,7 +310,366 @@
   color: var(--dash-faint);
 }
 
-/* StatDelta / StatLine ---------------------------------------------------- */
+/* DonutChart -------------------------------------------------------------- */
+
+.donutFigure {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* Ring beside its legend once there is room; stacked below 22rem, where a
+   7rem ring and a wrapping label would fight over the same inch. */
+.donutBody {
+  display: grid;
+  gap: var(--space-3);
+  align-items: center;
+  justify-items: center;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 22rem) {
+  .donutBody {
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    justify-items: stretch;
+  }
+}
+
+.donut {
+  display: block;
+  height: 6.5rem;
+  width: 6.5rem;
+}
+
+.donutTrack {
+  fill: none;
+  stroke: var(--dash-tint-strong);
+  stroke-width: 5;
+}
+
+.donutSegment {
+  fill: none;
+  stroke: var(--dash-primary);
+  stroke-width: 5;
+}
+
+.donutSegment[data-tone='teal'] {
+  stroke: var(--dash-teal);
+}
+
+.donutSegment[data-tone='amber'] {
+  stroke: var(--dash-amber);
+}
+
+.donutSegment[data-tone='coral'] {
+  stroke: var(--dash-coral);
+}
+
+.donutSegment[data-tone='info'] {
+  stroke: var(--dash-info);
+}
+
+/* The hole is the only place on this screen where text lives inside an SVG.
+   It is safe here: the donut scales uniformly, so the glyphs cannot distort. */
+.donutValue {
+  fill: var(--dash-text);
+  font-size: 0.42rem;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.donutLabel {
+  fill: var(--dash-faint);
+  font-size: 0.2rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-anchor: middle;
+}
+
+/* FunnelBars -------------------------------------------------------------- */
+
+.funnel {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.funnelStep {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+.funnelName {
+  min-width: 0;
+  color: var(--dash-muted);
+}
+
+.funnelValue {
+  font-weight: 700;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Centring each bar is what makes this read as a funnel rather than a ranking:
+   the taper is symmetrical, so the eye follows the narrowing, not the ends. */
+.funnelTrack {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--dash-tint-strong);
+}
+
+.funnelFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--dash-primary);
+}
+
+.funnelFill[data-tone='teal'] {
+  background: var(--dash-teal);
+}
+
+.funnelFill[data-tone='amber'] {
+  background: var(--dash-amber);
+}
+
+.funnelFill[data-tone='coral'] {
+  background: var(--dash-coral);
+}
+
+.funnelFill[data-tone='info'] {
+  background: var(--dash-info);
+}
+
+/* RangeBar ---------------------------------------------------------------- */
+
+.rangeFigure {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.rangeTrack {
+  position: relative;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  /* The unfilled remainder is the tail, and it is deliberately amber-tinted:
+     the gap after the median is the part a reader should feel. */
+  background: var(--dash-amber-soft);
+}
+
+.rangeFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--dash-teal);
+}
+
+.rangeMark {
+  position: absolute;
+  top: -0.2rem;
+  height: 0.9rem;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--dash-text);
+  transform: translateX(-1px);
+}
+
+.rangeLegend {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rangeItem {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.rangeItem[data-align='end'] {
+  text-align: right;
+}
+
+.rangeLabel {
+  font-size: 0.7rem;
+  color: var(--dash-muted);
+}
+
+.rangeValue {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sparkline / Meter / RankedBars ------------------------------------------ */
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 1.75rem;
+}
+
+.sparkBar {
+  fill: var(--dash-primary);
+  opacity: 0.55;
+}
+
+.sparkBar[data-tone='teal'] {
+  fill: var(--dash-teal);
+}
+
+.sparkBar[data-tone='amber'] {
+  fill: var(--dash-amber);
+}
+
+.sparkBar[data-tone='coral'] {
+  fill: var(--dash-coral);
+}
+
+.sparkBar[data-tone='info'] {
+  fill: var(--dash-info);
+}
+
+/* A real zero keeps a hairline on the baseline, so "nothing happened" still
+   reads as a measured period rather than a missing one. */
+.sparkBar[data-empty='true'] {
+  opacity: 0.3;
+}
+
+.sparkGap {
+  fill: var(--dash-border);
+  opacity: 0.45;
+}
+
+.meter {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.meterTrack {
+  height: 0.4rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--dash-tint-strong);
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--dash-primary);
+}
+
+.meterFill[data-tone='teal'] {
+  background: var(--dash-teal);
+}
+
+.meterFill[data-tone='amber'] {
+  background: var(--dash-amber);
+}
+
+.meterFill[data-tone='coral'] {
+  background: var(--dash-coral);
+}
+
+.meterFill[data-tone='info'] {
+  background: var(--dash-info);
+}
+
+.meterCaption {
+  font-size: 0.7rem;
+  color: var(--dash-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.rankList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* The rank, the name, the bar and the number, in that order. The bar is the
+   only flexible column, so a long club name never squeezes the digits. */
+.rankItem {
+  display: grid;
+  /* The name is capped rather than flexible so the bars keep a comparable
+     length; on a phone the cap tightens, or the bars shrink to a stub and the
+     ranking stops being visible at all. */
+  grid-template-columns: 1.1rem minmax(0, 7rem) minmax(2.5rem, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
+@media (min-width: 30rem) {
+  .rankItem {
+    grid-template-columns: 1.1rem minmax(0, 14rem) minmax(2.5rem, 1fr) auto;
+  }
+}
+
+.rankPlace {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--dash-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.rankName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dash-text);
+}
+
+.rankTrack {
+  height: 0.45rem;
+  border-radius: var(--radius-pill);
+  background: var(--dash-tint-strong);
+  overflow: hidden;
+}
+
+.rankFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--dash-primary);
+  opacity: 0.75;
+}
+
+.rankFill[data-tone='teal'] {
+  background: var(--dash-teal);
+}
+
+.rankFill[data-tone='info'] {
+  background: var(--dash-info);
+}
+
+.rankValue {
+  font-weight: 700;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* StatDelta / StatLine / StatRow ------------------------------------------ */
 
 /* One bordered tile holding the label, value, hint, delta and note. `Metric`
    still supplies the label and value typography, so the numbers match every
@@ -331,6 +690,15 @@
   background: none;
   padding: 0;
   border-radius: 0;
+}
+
+/* Deliberately no tone on the tile itself. The delta line under the number is
+   already toned, and a spine would restate it — loudly enough that a three
+   percent dip would look like the outbox had stopped. Alarm belongs to the
+   watch strip; a tile only reports. */
+
+.tileChart {
+  margin-top: 0.15rem;
 }
 
 .delta {
@@ -398,5 +766,49 @@
 
 .lineDetail {
   font-size: 0.7rem;
+  color: var(--dash-faint);
+}
+
+/* One line per number, digits in a single right-hand column. The detail, when
+   there is one, wraps under both and spans the full width. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--dash-border);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row[data-tone='warning'] {
+  padding-left: 0.55rem;
+  border-top-color: transparent;
+  border-radius: var(--radius-tile);
+  background: var(--dash-amber-soft);
+  box-shadow: inset 3px 0 0 var(--dash-amber);
+}
+
+.rowLabel {
+  font-size: 0.76rem;
+  line-height: 1.15rem;
+  color: var(--dash-muted);
+}
+
+.rowValue {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rowDetail {
+  grid-column: 1 / -1;
+  font-size: 0.7rem;
+  line-height: 1.05rem;
   color: var(--dash-faint);
 }

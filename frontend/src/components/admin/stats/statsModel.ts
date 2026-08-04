@@ -1,6 +1,6 @@
 import type { ChartTone, ShareSegment } from '@/components/shared/dashboard/DashboardCharts';
 import type { tournamentCopy } from '@/lib/i18n/tournament';
-import type { Distribution, SeriesPoint } from '@/types/adminStats';
+import type { Distribution, PlatformStats, SeriesPoint } from '@/types/adminStats';
 
 /** Relax `as const` string literals back to `string`. The `en` block is `as
  *  const` and `ka` is not, so without this the two locales are unrelated types
@@ -75,4 +75,56 @@ export function formatAgeSeconds(
 ) {
   if (seconds === null) return null;
   return formatDuration(seconds / 3600, copy, fill);
+}
+
+/** One thing that has stopped moving on its own, with somewhere to go about it. */
+export type WatchSignal = {
+  key: string;
+  label: string;
+  count: number;
+  /** Where the reader fixes it. Absent when the product has no screen for it. */
+  href?: string;
+};
+
+/**
+ * Every count on this screen that means "someone has to do something", pulled
+ * out of the three domains it is scattered across and put in one place.
+ *
+ * This is the question the statistics exist to answer — "is anything quietly
+ * rotting?" — and it cannot be answered by a reader who has to hold seven
+ * numbers from three different panels in their head. A zero is not a signal, so
+ * only non-zero counts are returned; an empty result is the all-clear.
+ *
+ * Ordered by who is blocked: a person waiting outranks an event waiting, which
+ * outranks a machine waiting.
+ */
+export function collectWatchSignals(
+  stats: PlatformStats,
+  labels: Readonly<{
+    applications: string;
+    playersWithoutClub: string;
+    invitesExpired: string;
+    overdue: string;
+    noBracket: string;
+    emailFailed: string;
+    outboxPending: string;
+    outboxFailed: string;
+  }>,
+): WatchSignal[] {
+  const candidates: WatchSignal[] = [
+    // Nobody exists in the product until an admin approves them.
+    { key: 'applications', label: labels.applications, count: stats.people.applications.waiting, href: '/admin/applications' },
+    // A player with no club cannot enter anything, so this is a support queue.
+    { key: 'playersWithoutClub', label: labels.playersWithoutClub, count: stats.people.clubs.playersWithoutClub, href: '/admin/users/players' },
+    { key: 'overdue', label: labels.overdue, count: stats.tournaments.events.overdue, href: '/admin/events' },
+    { key: 'noBracket', label: labels.noBracket, count: stats.tournaments.events.publishedWithoutDraw, href: '/admin/brackets' },
+    { key: 'invitesExpired', label: labels.invitesExpired, count: stats.people.invites.expiredUnused },
+    // No link on the last three: the app has no delivery-log or outbox screen,
+    // and a shortcut that 404s reads as broken rather than as help.
+    { key: 'emailFailed', label: labels.emailFailed, count: stats.operations.email.failedAfterRetries },
+    { key: 'outboxFailed', label: labels.outboxFailed, count: stats.operations.outbox.failed },
+    { key: 'outboxPending', label: labels.outboxPending, count: stats.operations.outbox.pending },
+  ];
+
+  return candidates.filter((signal) => signal.count > 0);
 }
