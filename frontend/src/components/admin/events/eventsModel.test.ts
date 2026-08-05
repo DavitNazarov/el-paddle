@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { EventDto } from '@/types/admin';
 import {
+  EVENT_STEPS,
+  clampEventStep,
   compareEvents,
   emptyEventForm,
   eventBucket,
   eventPayload,
+  firstInvalidEventStep,
   isEventFormValid,
+  isEventStepValid,
   normalizeIban,
   sortEvents,
   toggleCategoryId,
@@ -92,6 +96,38 @@ describe('event form validation', () => {
 
   it('requires at least one category', () => {
     expect(validateEventForm({ ...validForm, categoryIds: [] }).categoryIds).toBe('categoriesRequired');
+  });
+});
+
+describe('event form steps', () => {
+  it('covers every form field exactly once, so no field is unreachable', () => {
+    const stepped = EVENT_STEPS.flatMap((step) => step.fields);
+    expect([...stepped].sort()).toEqual(Object.keys(emptyEventForm).sort());
+  });
+
+  it('reads a step as valid only when its own fields are', () => {
+    const errors = validateEventForm({ ...validForm, title: '' });
+    expect(isEventStepValid(errors, 0)).toBe(false);
+    expect(isEventStepValid(errors, 1)).toBe(true);
+    expect(isEventStepValid(errors, 2)).toBe(true);
+    expect(isEventStepValid(errors, 3)).toBe(true);
+  });
+
+  it('treats a step outside the form as nothing to fix', () => {
+    expect(isEventStepValid(validateEventForm(emptyEventForm), EVENT_STEPS.length)).toBe(true);
+  });
+
+  it('sends a failed save to the first step that needs work, and nowhere when the form is whole', () => {
+    expect(firstInvalidEventStep(validateEventForm(emptyEventForm))).toBe(0);
+    expect(firstInvalidEventStep(validateEventForm({ ...validForm, bankAccountIban: 'nope' }))).toBe(2);
+    expect(firstInvalidEventStep(validateEventForm({ ...validForm, categoryIds: [] }))).toBe(3);
+    expect(firstInvalidEventStep(validateEventForm(validForm))).toBe(-1);
+  });
+
+  it('keeps a step index inside the form', () => {
+    expect(clampEventStep(-3)).toBe(0);
+    expect(clampEventStep(99)).toBe(EVENT_STEPS.length - 1);
+    expect(clampEventStep(2)).toBe(2);
   });
 });
 

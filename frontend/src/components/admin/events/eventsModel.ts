@@ -93,6 +93,38 @@ export function isEventFormValid(errors: EventFieldErrors) {
   return Object.keys(errors).length === 0;
 }
 
+/* ---- Steps ---- */
+
+/**
+ * The form is asked one question at a time. Each step owns the fields that
+ * answer its question, so a step can report its own state without knowing what
+ * the rest of the form contains.
+ */
+export type EventStepId = 'identity' | 'when' | 'money' | 'categories';
+
+export const EVENT_STEPS: readonly { id: EventStepId; fields: readonly (keyof EventFormState)[] }[] = [
+  { id: 'identity', fields: ['title', 'description'] },
+  { id: 'when', fields: ['date', 'arrivalTime', 'location'] },
+  { id: 'money', fields: ['participationFee', 'bankAccountReceiver', 'bankAccountIban'] },
+  { id: 'categories', fields: ['categoryIds'] },
+];
+
+export function isEventStepValid(errors: EventFieldErrors, index: number) {
+  const step = EVENT_STEPS[index];
+  if (!step) return true;
+  return step.fields.every((field) => !errors[field]);
+}
+
+/** The step a failed save should land on. `-1` when nothing is wrong. */
+export function firstInvalidEventStep(errors: EventFieldErrors) {
+  return EVENT_STEPS.findIndex((_, index) => !isEventStepValid(errors, index));
+}
+
+/** Keeps a step index inside the form no matter where it came from. */
+export function clampEventStep(index: number) {
+  return Math.min(Math.max(index, 0), EVENT_STEPS.length - 1);
+}
+
 /** What goes on the wire. The form holds strings; the API wants numbers and nulls. */
 export function eventPayload(form: EventFormState) {
   return {

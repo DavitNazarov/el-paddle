@@ -1,0 +1,132 @@
+/*
+ * The step rail for a long form split into steps. It answers three questions at
+ * once: how far the reader is, what each step is called, and which step still
+ * needs them. State is never colour alone — a done step carries a tick, a step
+ * with a problem carries a warning triangle, and the caption spells the
+ * position out in words.
+ *
+ * Dialogs render in a portal outside `.dash-app`, so every dashboard token here
+ * is written with the parchment-dialog fallback it needs when the variable is
+ * out of scope.
+ */
+
+.rail {
+  display: grid;
+  gap: var(--space-3, 0.75rem);
+  padding-bottom: var(--space-3, 0.75rem);
+  border-bottom: 1px solid var(--dash-border, #e7dcd8);
+}
+
+.progress {
+  margin: 0;
+  color: var(--dash-muted, #6d5f5c);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.steps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.trigger {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--dash-border, #e0d4d0);
+  border-radius: var(--radius-control, 0.55rem);
+  background: #fff;
+  color: var(--dash-muted, #6d5f5c);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.1rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.trigger:hover {
+  border-color: var(--dash-border-strong, #cdbdb8);
+  color: var(--dash-text, #2a1f1e);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--dash-primary, #a4161a);
+  outline-offset: 2px;
+}
+
+/* The number, tick, or warning. Fixed size so the row never jumps as state
+   changes underneath the reader. */
+.marker {
+  display: inline-flex;
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 0.7rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.marker svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.label {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step[data-status='current'] .trigger {
+  border-color: var(--dash-primary, #a4161a);
+  background: var(--dash-primary-soft, rgba(164, 22, 26, 0.1));
+  color: var(--dash-primary, #a4161a);
+}
+
+.step[data-status='done'] .trigger {
+  color: var(--dash-text, #2a1f1e);
+}
+
+.step[data-status='done'] .marker {
+  border-color: var(--dash-teal, #16806a);
+  color: var(--dash-teal, #16806a);
+}
+
+.step[data-status='invalid'] .trigger {
+  border-color: var(--dash-coral, #c2413b);
+  color: var(--dash-coral, #c2413b);
+}
+
+@media (min-width: 32rem) {
+  .label {
+    display: block;
+  }
+
+  .trigger {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trigger {
+    transition: none;
+  }
+}

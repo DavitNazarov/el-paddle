@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -15,7 +16,13 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { tournamentCopy } from '@/lib/i18n/tournament';
 import type { CategoryDto } from '@/types/admin';
-import { toggleCategoryId, type EventFieldErrors, type EventFormState } from './eventsModel';
+import {
+  EVENT_STEPS,
+  toggleCategoryId,
+  type EventFieldErrors,
+  type EventFormState,
+  type EventStepId,
+} from './eventsModel';
 
 /**
  * The event form, and the first screen of the *form* archetype: fields grouped
@@ -23,11 +30,16 @@ import { toggleCategoryId, type EventFieldErrors, type EventFormState } from './
  * caused it, and a save that is always available. The old version disabled save
  * until the whole form validated, which left a reader with a dead button and no
  * idea which of eight fields was wrong.
+ *
+ * Only the step being asked is rendered. Eight fields at once made the modal a
+ * scrolling wall in which the required parts — the date, the account, the
+ * categories — were indistinguishable from the optional ones.
  */
 export function EventForm({
   form,
   errors,
   showErrors,
+  step,
   categories,
   formId,
   submitError,
@@ -35,8 +47,10 @@ export function EventForm({
 }: {
   form: EventFormState;
   errors: EventFieldErrors;
-  /** Errors stay hidden until the first save attempt, so a fresh form is not a wall of red. */
+  /** Errors stay hidden until the reader leaves the step or saves, so a fresh form is not a wall of red. */
   showErrors: boolean;
+  /** Index into `EVENT_STEPS`; the caller keeps it in range. */
+  step: number;
   categories: CategoryDto[];
   formId: string;
   submitError?: string;
@@ -56,11 +70,11 @@ export function EventForm({
   const set = <K extends keyof EventFormState>(field: K, value: EventFormState[K]) =>
     onChange({ ...form, [field]: value });
 
-  return (
-    <div className={dashboardFormClassName}>
-      {submitError ? <Notice tone="error">{submitError}</Notice> : null}
-      {showErrors && Object.keys(errors).length ? <Notice tone="warning">{formCopy.fixErrors}</Notice> : null}
+  const stepId = EVENT_STEPS[step]?.id ?? EVENT_STEPS[0]!.id;
+  const stepHasErrors = (EVENT_STEPS[step]?.fields ?? []).some((field) => errors[field]);
 
+  const sections: Record<EventStepId, ReactNode> = {
+    identity: (
       <FormSection title={copy.sectionIdentity} detail={copy.sectionIdentityDetail}>
         <Field id={`${formId}-title`} label={events.eventTitle} error={errorFor('title')}>
           {(control) => (
@@ -85,7 +99,8 @@ export function EventForm({
           )}
         </Field>
       </FormSection>
-
+    ),
+    when: (
       <FormSection title={copy.sectionWhen} detail={copy.sectionWhenDetail}>
         <FieldPair>
           <Field id={`${formId}-date`} label={events.date} error={errorFor('date')}>
@@ -123,7 +138,8 @@ export function EventForm({
           )}
         </Field>
       </FormSection>
-
+    ),
+    money: (
       <FormSection title={copy.sectionMoney} detail={copy.sectionMoneyDetail}>
         <FieldPair>
           <Field
@@ -182,7 +198,8 @@ export function EventForm({
           )}
         </Field>
       </FormSection>
-
+    ),
+    categories: (
       <FormSection title={copy.sectionCategories} detail={copy.sectionCategoriesDetail}>
         <Field id={`${formId}-categories`} label={events.categories} error={errorFor('categoryIds')}>
           {() => (
@@ -197,6 +214,14 @@ export function EventForm({
           )}
         </Field>
       </FormSection>
+    ),
+  };
+
+  return (
+    <div className={dashboardFormClassName}>
+      {submitError ? <Notice tone="error">{submitError}</Notice> : null}
+      {showErrors && stepHasErrors ? <Notice tone="warning">{formCopy.fixErrors}</Notice> : null}
+      {sections[stepId]}
     </div>
   );
 }

@@ -121,7 +121,7 @@ seventh without a reason.
 | **Queue** | "what is waiting on my decision?" | Progress meter + spined rows + only-available actions | Registration review, opponent requests |
 | **Workspace** | "how do I drive this one thing forward?" | Lifecycle hero + stage cards + state board | Event workspace |
 | **Directory** | "find and manage many similar things" | Filters + table/cards + row actions | Users, clubs, categories, club requests |
-| **Form** | "change these values" | Grouped fields + explicit save + inline errors | Event create/edit, account settings |
+| **Form** | "change these values" | Grouped fields + explicit save + inline errors; stepped when it asks more than one question | Event create/edit (stepped), account settings |
 
 ### Console
 The hero object fills the first screenful. Everything else is subordinate and
@@ -398,6 +398,26 @@ once, each against its own field, and errors stay hidden until then so a fresh
 form is not a wall of red. `validateEventForm` and `validatePassword` return
 error *codes*, not sentences, so they are testable without a locale and the
 client owns every word.
+
+**Stepped forms.** When a form asks more than one question — the event form asks
+four: what it is, when and where, entry fee, categories — it is walked one step
+at a time rather than shown as one scrolling wall in which the required fields
+are indistinguishable from the optional ones. `shared/dashboard/FormStepper.tsx`
+is the rail; `StepperEditorModal` in `admin/directory/DirectoryModals.tsx` wires
+it to the modal, and `EVENT_STEPS` in `events/eventsModel.ts` says which fields
+answer which step, so a step reports its own state without knowing the rest.
+
+Three rules keep it from becoming a maze. **The rail is navigation, not a gate**:
+every step stays clickable, including ones behind an unfinished answer, so an
+admin editing a single field never walks the whole form again. **Leaving a step
+is what reveals its state** — a step is ticked or flagged only after the reader
+has been through it, which keeps a fresh form clear of red while never letting
+something already passed stay quietly broken. **Save is still never disabled**:
+pressing it with errors reveals all of them and lands the reader on the first
+step that needs work. State is never colour alone — a finished step carries a
+tick, an unfinished one a warning triangle, and the caption spells out "Step 3
+of 4" in words. Enter and the primary button mean *continue* until the last
+step, where they mean save.
 
 Account settings gained a **Preferences** group holding the language switch.
 It has no save button, and says so: the switch applies at once and is stored on

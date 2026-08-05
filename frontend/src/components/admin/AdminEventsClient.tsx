@@ -16,18 +16,23 @@ import { AdminShell } from './AdminShell';
 import { AdminEventBoard } from './AdminEventBoard';
 import { DirectoryToolbar } from './directory/DirectoryToolbar';
 import { rowActionClassName } from './directory/DirectoryTable';
-import { ConfirmModal, EditorModal } from './directory/DirectoryModals';
+import { ConfirmModal, StepperEditorModal } from './directory/DirectoryModals';
 import { EventForm } from './events/EventForm';
 import {
   EVENT_FACET_VALUES,
+  EVENT_STEPS,
+  clampEventStep,
   emptyEventForm,
   eventPayload,
   eventReader,
+  firstInvalidEventStep,
   formFromEvent,
   isEventFormValid,
+  isEventStepValid,
   sortEvents,
   validateEventForm,
   type EventFormState,
+  type EventStepId,
 } from './events/eventsModel';
 import { ALL_FACET, emptyQuery, facetOptions, filterRows, type DirectoryQuery } from './directory/directoryModel';
 import type { CategoryDto, EventDto } from '@/types/admin';
@@ -44,7 +49,16 @@ export function AdminEventsClient() {
   const admin = dictionary.dashboard.admin;
   const copy = admin.eventsPage;
   const eventsCopy = tournamentCopy[locale].admin.events;
+  const formCopy = tournamentCopy[locale].admin.form;
   const dir = tournamentCopy[locale].admin.directory;
+
+  /** Each step is named by the question it asks, so the rail reads as the form does. */
+  const stepLabels: Record<EventStepId, string> = {
+    identity: eventsCopy.sectionIdentity,
+    when: eventsCopy.sectionWhen,
+    money: eventsCopy.sectionMoney,
+    categories: eventsCopy.sectionCategories,
+  };
 
   const { viewer } = useViewer();
   const canManageEvents = viewer?.role === 'ADMIN';
@@ -57,7 +71,14 @@ export function AdminEventsClient() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleting, setDeleting] = useState<EventDto | null>(null);
   const [form, setForm] = useState<EventFormState>(emptyEventForm);
-  const [showErrors, setShowErrors] = useState(false);
+  const [step, setStep] = useState(0);
+  /**
+   * The steps the reader has been through. A step states whether it is finished
+   * or unfinished only once they have left it, and saving marks them all — so a
+   * fresh form is never a wall of red, and nothing already walked past stays
+   * quietly broken.
+   */
+  const [visitedSteps, setVisitedSteps] = useState<number[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
@@ -100,6 +121,20 @@ export function AdminEventsClient() {
   const formOpen = createOpen || Boolean(editing);
   const formMode = editing ? 'edit' : 'create';
 
+  /** The rail: where the reader is, and what each step behind them is worth. */
+  const steps = EVENT_STEPS.map((eventStep, index) => ({
+    id: eventStep.id,
+    label: stepLabels[eventStep.id],
+    status:
+      index === step
+        ? ('current' as const)
+        : !visitedSteps.includes(index)
+          ? ('todo' as const)
+          : isEventStepValid(errors, index)
+            ? ('done' as const)
+            : ('invalid' as const),
+  }));
+
   async function send(path: string, method: string, body: unknown, success: string, failureCopy: string) {
     setError('');
     setFormError('');
@@ -119,15 +154,31 @@ export function AdminEventsClient() {
     setCreateOpen(false);
     setEditing(null);
     setForm(emptyEventForm);
-    setShowErrors(false);
+    setStep(0);
+    setVisitedSteps([]);
     setFormError('');
   }
 
+  /**
+   * The rail is navigation, not a gate: every step stays reachable, including
+   * the ones behind an unfinished answer. Leaving a step is what makes its state
+   * visible, so the rail can mark what was left undone instead of the reader
+   * discovering it only at save.
+   */
+  function goToStep(next: number) {
+    const target = clampEventStep(next);
+    if (target === step) return;
+    setVisitedSteps((current) => (current.includes(step) ? current : [...current, step]));
+    setStep(target);
+  }
+
   async function submitForm() {
-    // Errors stay hidden until the reader tries to save, then all of them show
-    // at once against their own fields. The save is never disabled.
+    // Errors stay hidden until the reader leaves a step or tries to save, then
+    // all of them show at once against their own fields, and the form lands on
+    // the first step that needs work. The save is never disabled.
     if (!isEventFormValid(errors)) {
-      setShowErrors(true);
+      setVisitedSteps(EVENT_STEPS.map((_, index) => index));
+      setStep(clampEventStep(firstInvalidEventStep(errors)));
       return;
     }
     setBusy(formMode);
@@ -178,7 +229,8 @@ export function AdminEventsClient() {
       onClick={() => {
         setEditing(null);
         setForm(emptyEventForm);
-        setShowErrors(false);
+        setStep(0);
+        setVisitedSteps([]);
         setFormError('');
         setCreateOpen(true);
       }}
@@ -257,7 +309,8 @@ export function AdminEventsClient() {
                         setCreateOpen(false);
                         setEditing(event);
                         setForm(formFromEvent(event));
-                        setShowErrors(false);
+                        setStep(0);
+                        setVisitedSteps([]);
                         setFormError('');
                       }}
                     >
@@ -299,7 +352,7 @@ export function AdminEventsClient() {
         />
       </div>
 
-      <EditorModal
+      <StepperEditorModal
         open={formOpen}
         onOpenChange={(open) => {
           if (!open) closeForm();
@@ -309,7 +362,15 @@ export function AdminEventsClient() {
         formId="event-form"
         size="xl"
         busy={busy === formMode}
+        steps={steps}
+        current={step}
+        onStepChange={goToStep}
+        stepperLabel={formCopy.steps}
+        progressLabel={fillTemplate(formCopy.stepOf, { current: step + 1, total: EVENT_STEPS.length })}
+        stepStatusLabels={{ done: formCopy.stepDone, invalid: formCopy.stepInvalid }}
         cancelLabel={t('common.cancel')}
+        backLabel={formCopy.back}
+        nextLabel={formCopy.next}
         submitLabel={
           busy === formMode ? admin.messages.saving : formMode === 'edit' ? copy.saveChanges : admin.events.createDraft
         }
@@ -318,13 +379,14 @@ export function AdminEventsClient() {
         <EventForm
           form={form}
           errors={errors}
-          showErrors={showErrors}
+          showErrors={visitedSteps.includes(step)}
+          step={step}
           categories={categories}
           formId="event-form"
           submitError={formError}
           onChange={setForm}
         />
-      </EditorModal>
+      </StepperEditorModal>
 
       <ConfirmModal
         open={Boolean(deleting)}
