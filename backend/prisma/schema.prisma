@@ -122,13 +122,13 @@ enum ScoreAction {
   DECREMENT
 }
 
-/// How a match is decided. POINTS is the historical 0-6 point count; SLOTS is the slot race.
+/// How a match is decided. POINTS is the historical 0-6 point count; SETS is the set race.
 enum ScoringMode {
   POINTS
-  SLOTS
+  SETS
 }
 
-enum SlotEventAction {
+enum SetEventAction {
   DECIDED
   UNDONE
 }
@@ -227,7 +227,10 @@ model User {
   disqualifiedUntil      DateTime?
   disqualificationReason String?
   /**
-   * Bumped on logout / password change to invalidate outstanding JWTs.
+   * Bumped to invalidate every outstanding JWT for this account at once —
+   * "log out of all devices", a password change, disqualification, judge
+   * deactivation. An ordinary logout no longer touches it: that revokes only
+   * the `Session` row for the device signing out.
    */
   sessionVersion         Int        @default(0)
   /**
@@ -242,6 +245,8 @@ model User {
   accounts              OAuthAccount[]
   verificationCodes     EmailVerificationCode[]
   inviteTokens          InviteToken[]
+  sessions              Session[]
+  passwordResets        PasswordResetToken[]
   ownedRegistrations    EventRegistration[]      @relation("RegistrationOwner")
   teammateRegistrations EventRegistration[]      @relation("RegistrationTeammate")
   reviewedRegistrations EventRegistration[]      @relation("RegistrationReviewer")
@@ -252,8 +257,8 @@ model User {
   capabilityGrants      UserCapabilityGrant[]
   judgeAssignments      CourtJudgeAssignment[]
   scoreEvents           ScoreEvent[]
-  decidedMatchSlots     MatchSlot[]
-  slotEvents            SlotEvent[]
+  decidedMatchSets      MatchSet[]
+  setEvents             SetEvent[]
   notifications         Notification[]
   organiserEvents       EventOrganiser[]         @relation("EventOrganiserUser")
   assignedOrganisers    EventOrganiser[]         @relation("EventOrganiserAssigner")
@@ -302,6 +307,44 @@ model InviteToken {
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// One signed-in device.
+///
+/// The session id rides in the JWT, so signing out revokes this row and leaves
+/// every other device alone. The account-wide revoke is still
+/// `User.sessionVersion`, which invalidates all outstanding tokens at once and
+/// is what a password change, a disqualification and "log out of all devices"
+/// use. The row is read on the authenticated path as part of the existing user
+/// lookup, so it costs no extra query.
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+/// A single-use password reset, shaped like `InviteToken`: the token itself is
+/// never stored, only its sha256, so a database read cannot yield a working
+/// link. Short-lived, single-use, and consuming one bumps `sessionVersion` so
+/// whoever held the old password is signed out everywhere.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
 }
 
 model Category {
@@ -521,6 +564,10 @@ model ClubApplicationCode {
   expiresAt     DateTime
   usedAt        DateTime?
   createdAt     DateTime  @default(now())
+  /// Wrong guesses against this code. A six-digit code is only as strong as the
+  /// number of tries it allows, so the code is burned after a handful — rate
+  /// limiting alone bounds attempts per window, not per code.
+  attemptCount  Int       @default(0)
 
   application ClubApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
@@ -690,12 +737,12 @@ model Bracket {
   @@index([eventId, status])
 }
 
-/// Per-round default slot count. Resolved with Match.slotCountOverride when a match starts.
+/// Per-round default set count. Resolved with Match.setCountOverride when a match starts.
 model BracketRoundConfig {
   id        String     @id @default(cuid())
   bracketId String
   round     MatchRound
-  slotCount Int
+  setCount  Int
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -712,14 +759,14 @@ model Match {
   matchNumber         Int
   participantAEntryId String?
   participantBEntryId String?
-  /// For SLOTS matches these hold the slot-win tally and must equal the MatchSlot rows.
+  /// For SETS matches these hold the set-win tally and must equal the MatchSet rows.
   scoreA              Int              @default(0)
   scoreB              Int              @default(0)
-  scoringMode         ScoringMode      @default(SLOTS)
-  /// Slot wins needed, snapshotted when the match starts. Null until then and for POINTS matches.
-  slotCount           Int?
+  scoringMode         ScoringMode      @default(SETS)
+  /// Set wins needed, snapshotted when the match starts. Null until then and for POINTS matches.
+  setCount            Int?
   /// Admin override of the bracket round default. Locked once the match starts.
-  slotCountOverride   Int?
+  setCountOverride    Int?
   winnerEntryId       String?
   loserEntryId        String?
   nextMatchId         String?
@@ -743,8 +790,8 @@ model Match {
   appliedOpponentRequest OpponentRequest?           @relation("AppliedOpponentRequest")
   scheduleItem           ScheduleItem?
   scoreEvents            ScoreEvent[]
-  slots                  MatchSlot[]
-  slotEvents             SlotEvent[]
+  sets                   MatchSet[]
+  setEvents              SetEvent[]
   snapshots              MatchParticipantSnapshot[]
 
   @@unique([bracketId, round, roundPosition])
@@ -853,11 +900,11 @@ model ScoreEvent {
   @@index([matchId, createdAt])
 }
 
-/// Current truth for a decided slot. Undo hard-deletes the row; SlotEvent keeps the history.
-model MatchSlot {
+/// Current truth for a decided set. Undo hard-deletes the row; SetEvent keeps the history.
+model MatchSet {
   id            String    @id @default(cuid())
   matchId       String
-  slotNumber    Int
+  setNumber     Int
   winnerSide    MatchSide
   winnerEntryId String
   decidedById   String
@@ -866,27 +913,27 @@ model MatchSlot {
   match     Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   decidedBy User  @relation(fields: [decidedById], references: [id], onDelete: Restrict)
 
-  @@unique([matchId, slotNumber])
+  @@unique([matchId, setNumber])
   @@index([matchId])
 }
 
-/// Append-only slot history and command idempotency anchor for judges and admins.
-model SlotEvent {
-  id            String          @id @default(cuid())
+/// Append-only set history and command idempotency anchor for judges and admins.
+model SetEvent {
+  id            String         @id @default(cuid())
   matchId       String
   actorId       String
-  action        SlotEventAction
-  slotNumber    Int
+  action        SetEventAction
+  setNumber     Int
   winnerSide    MatchSide
   winnerEntryId String
-  slotsABefore  Int
-  slotsBBefore  Int
-  slotsAAfter   Int
-  slotsBAfter   Int
+  setsABefore   Int
+  setsBBefore   Int
+  setsAAfter    Int
+  setsBAfter    Int
   matchVersion  Int
   commandId     String
   reason        String?
-  createdAt     DateTime        @default(now())
+  createdAt     DateTime       @default(now())
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   actor User  @relation(fields: [actorId], references: [id], onDelete: Restrict)

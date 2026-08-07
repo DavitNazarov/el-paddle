@@ -17,9 +17,11 @@ import { friendlyError } from '@/lib/utils/errors';
 type LoginFormProps = {
   nextPath?: string;
   oauthError?: string;
+  /** Arrived here straight from redeeming a reset link. */
+  passwordWasReset?: boolean;
 };
 
-export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProps) {
+export function LoginForm({ nextPath = '/dashboard', oauthError, passwordWasReset = false }: LoginFormProps) {
   const router = useRouter();
   const { t } = useI18n();
   const [email, setEmail] = useState('');
@@ -60,7 +62,7 @@ export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProp
         data.user?.role === 'ADMIN' || data.user?.role === 'ORGANISER'
           ? '/admin'
           : data.user?.role === 'JUDGE'
-            ? '/judge'
+            ? '/'
           : data.user?.club
             ? nextPath
             : '/complete-club';
@@ -84,6 +86,12 @@ export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProp
           {t('forms.login.copy')}
         </p>
       </div>
+
+      {passwordWasReset && !error && !oauthMessage ? (
+        <Alert>
+          <AlertDescription>{t('forms.resetPassword.done')}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {error || oauthMessage ? (
         <Alert variant="destructive">
@@ -113,6 +121,12 @@ export function LoginForm({ nextPath = '/dashboard', oauthError }: LoginFormProp
           {t('forms.login.gmail')}
         </a>
       </Button>
+
+      <p className="text-center text-sm text-[var(--padel-ink)]/65">
+        <Link href="/forgot-password" className="font-semibold text-[var(--padel-red)] underline-offset-4 hover:underline">
+          {t('forms.login.forgotPassword')}
+        </Link>
+      </p>
 
       <p className="text-center text-sm text-[var(--padel-ink)]/65">
         {t('forms.login.needAccount')}{' '}

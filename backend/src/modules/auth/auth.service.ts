@@ -26,7 +26,7 @@ export type PublicUser = {
   disqualifiedUntil: string | null;
   disqualificationReason: string;
   isDisqualified: boolean;
-  club: { id: string; name: string; slug: string } | null;
+  club: { id: string; name: string; slug: string; logoUrl?: string } | null;
   stats: {
     matchesPlayed: number;
     wins: number;
@@ -40,6 +40,7 @@ export type UserClubSummary = {
   id: string;
   name: string;
   slug: string;
+  logoUrl?: string | null;
 };
 
 /**
@@ -73,7 +74,24 @@ export type PublicUserSource = Pick<
 type SessionPayload = JwtPayload & {
   sub: string;
   sv?: number;
+  /** The `Session` row this device signed in with. */
+  sid?: string;
 };
+
+/** The session id carried by the request's cookie, without re-reading the user. */
+export function readSessionId(request: Request) {
+  const token = request.cookies?.[SESSION_COOKIE] as string | undefined;
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, getSessionSecret(), {
+      algorithms: ['HS256'],
+      audience: SESSION_AUDIENCE,
+    }) as SessionPayload;
+    return typeof payload.sid === 'string' && payload.sid ? payload.sid : null;
+  } catch {
+    return null;
+  }
+}
 
 const baseCookieOptions = {
   httpOnly: true,
@@ -165,7 +183,16 @@ export function toPublicUser(user: PublicUserSource): PublicUser {
     disqualifiedUntil,
     disqualificationReason: disqualifiedUntil ? (user.disqualificationReason ?? '') : '',
     isDisqualified: Boolean(disqualifiedUntil),
-    club: isStaffRole(role) ? null : club,
+    club: isStaffRole(role)
+      ? null
+      : club
+        ? {
+            id: club.id,
+            name: club.name,
+            slug: club.slug,
+            logoUrl: club.logoUrl ?? '',
+          }
+        : null,
     stats,
     organiserEventIds: user.organiserEvents?.map((link) => link.eventId) ?? [],
   };
@@ -180,21 +207,47 @@ async function removeAdminAthleteLinks(userId: string) {
   ]);
 }
 
-export function createSessionToken(user: Pick<User, 'id' | 'sessionVersion'>) {
+/**
+ * Two different tokens are signed with the same `JWT_SECRET`: a session, which
+ * grants account access, and a pending club application, which grants none.
+ * Without an audience claim the only thing keeping one from being presented as
+ * the other is that `User.id` and `ClubApplication.id` live in different
+ * tables — a coincidence, not a check. Every verify below pins its audience.
+ */
+export const SESSION_AUDIENCE = 'elpadel:session';
+export const APPLICATION_AUDIENCE = 'elpadel:application';
+
+export function createSessionToken(user: Pick<User, 'id' | 'sessionVersion'>, sessionId: string) {
   return jwt.sign(
-    { sv: user.sessionVersion ?? 0 },
+    { sv: user.sessionVersion ?? 0, sid: sessionId },
     getSessionSecret(),
     {
       algorithm: 'HS256',
       subject: user.id,
+      audience: SESSION_AUDIENCE,
       expiresIn: SESSION_MAX_AGE_SECONDS,
     },
   );
 }
 
-export function setSessionCookie(response: Response, user: Pick<User, 'id' | 'sessionVersion'>) {
+/**
+ * Record a signed-in device and hand it a cookie naming that record.
+ *
+ * The row is what makes a single device revocable: logging out on one browser
+ * revokes its own `Session` and leaves the others signed in. Before this, every
+ * logout bumped `sessionVersion` and signed the account out everywhere.
+ */
+export async function startSession(response: Response, user: Pick<User, 'id' | 'sessionVersion'>) {
+  const session = await prisma.session.create({
+    data: {
+      userId: user.id,
+      expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000),
+    },
+    select: { id: true },
+  });
   clearLegacyHostOnlyCookie(response, SESSION_COOKIE);
-  response.cookie(SESSION_COOKIE, createSessionToken(user), cookieOptions);
+  response.cookie(SESSION_COOKIE, createSessionToken(user, session.id), cookieOptions);
+  return session.id;
 }
 
 export function setOAuthStateCookie(response: Response, state: string) {
@@ -217,6 +270,7 @@ export function setApplicationCookie(response: Response, applicationId: string) 
   const token = jwt.sign({ app: applicationId }, getSessionSecret(), {
     algorithm: 'HS256',
     subject: applicationId,
+    audience: APPLICATION_AUDIENCE,
     expiresIn: APPLICATION_MAX_AGE_SECONDS,
   });
   clearLegacyHostOnlyCookie(response, APPLICATION_COOKIE);
@@ -233,6 +287,7 @@ export function readApplicationId(request: Request) {
   try {
     const payload = jwt.verify(token, getSessionSecret(), {
       algorithms: ['HS256'],
+      audience: APPLICATION_AUDIENCE,
     }) as JwtPayload & { app?: string };
     return payload.app ?? null;
   } catch {
@@ -260,12 +315,39 @@ export function clearOAuthLegalCookie(response: Response) {
   clearLegacyHostOnlyCookie(response, OAUTH_LEGAL_COOKIE);
 }
 
-/** Bump sessionVersion so any outstanding JWTs for this user stop working. */
-export async function revokeUserSessions(userId: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { sessionVersion: { increment: 1 } },
+/**
+ * Sign one device out. Everything else the account has open stays signed in.
+ * Safe to call with an unknown id — a token naming a session that no longer
+ * exists is already dead.
+ */
+export async function revokeSession(sessionId: string) {
+  await prisma.session.updateMany({
+    where: { id: sessionId, revokedAt: null },
+    data: { revokedAt: new Date() },
   });
+}
+
+/**
+ * Sign the account out everywhere: bump `sessionVersion`, which invalidates
+ * every outstanding JWT immediately, and mark the device rows revoked so a
+ * later "your devices" read tells the truth.
+ *
+ * This is the account-wide hammer — a password change, a disqualification, a
+ * judge deactivation, and the user's own "log out of all devices". An ordinary
+ * logout uses `revokeSession` instead.
+ */
+export async function revokeUserSessions(userId: string) {
+  const [user] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { sessionVersion: { increment: 1 } },
+    }),
+    prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ]);
+  return user;
 }
 
 export async function getCurrentUser(request: Request) {
@@ -276,12 +358,16 @@ export async function getCurrentUser(request: Request) {
   try {
     payload = jwt.verify(token, getSessionSecret(), {
       algorithms: ['HS256'],
+      audience: SESSION_AUDIENCE,
     }) as SessionPayload;
   } catch {
     return null;
   }
 
   if (!payload.sub) return null;
+  // A token that names no device predates per-device sessions and cannot be
+  // revoked individually, so it is not honoured.
+  if (typeof payload.sid !== 'string' || !payload.sid) return null;
 
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
@@ -297,6 +383,9 @@ export async function getCurrentUser(request: Request) {
       // The frontend gates organiser screens per event; loading the links here
       // saves every admin page a second round trip.
       organiserEvents: { where: { revokedAt: null }, select: { eventId: true } },
+      // Folded into the same query on purpose: per-device revocation must not
+      // cost a second round trip on every authenticated request.
+      sessions: { where: { id: payload.sid }, select: { revokedAt: true, expiresAt: true } },
     },
   });
   if (!user) return null;
@@ -304,6 +393,14 @@ export async function getCurrentUser(request: Request) {
 
   const tokenVersion = typeof payload.sv === 'number' ? payload.sv : 0;
   if (tokenVersion !== (user.sessionVersion ?? 0)) {
+    return null;
+  }
+
+  // The device this token names must still be live. Missing covers a session
+  // deleted outright; revoked covers a logout on this device; expired covers a
+  // row that outlived its token.
+  const session = user.sessions[0];
+  if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) {
     return null;
   }
 

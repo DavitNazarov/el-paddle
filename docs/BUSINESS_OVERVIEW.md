@@ -1,6 +1,6 @@
 # Business Overview
 
-El Padel is a padel club and tournament management platform built for the Georgian padel community. It takes a tournament from event setup through registration, opponent negotiation, bracket play, court scheduling, judged live scoring, and published results — with clubs, not individuals, as the unit of competition.
+El Padel is a padel club and tournament management platform built for the Georgian padel community. It takes a tournament from event setup through registration, opponent negotiation, bracket play, court scheduling, live scoring, and published results — with clubs, not individuals, as the unit of competition.
 
 ```text
 event setup → registration → opponent requests → bracket → schedule → judging → results
@@ -13,8 +13,7 @@ event setup → registration → opponent requests → bracket → schedule → 
 | Public visitors | Browse clubs, players, events, published rosters, brackets, schedules, live scores, and final results |
 | Players | Create or join a club, enter events as a two-person club team, negotiate first-round opponents, follow their matches |
 | Club leaders | Manage the club roster, approve join requests, edit the club's registered team |
-| Judges | Work assigned courts in assigned time windows and score matches |
-| Organisers | Run one event at a time, on the events an admin hands them: bracket, schedule, judges, opponent requests, lifecycle, and live scoring |
+| Organisers | Run one event at a time, on the events an admin hands them: bracket, schedule, match control, opponent requests, lifecycle, and live scoring |
 | Administrators | Approve who joins the platform, configure events, review entries, hand events to organisers, resolve exceptions, publish each surface |
 
 ## The club-centric model
@@ -24,9 +23,9 @@ Clubs are the organizing principle of participation:
 - Every player belongs to exactly one club. A new player must create a club (becoming its **leader**) or request to join one before entering events.
 - A club fields **one team per event**: an owner/teammate pair from the same club. A second pair from the same club cannot enter.
 - The leader has real responsibilities: approving join requests, replacing a registered player with another eligible member (which sends the entry back to admin review), and resolving affected registrations before removing a member. Removal is blocked mid-tournament (ongoing event or locked bracket).
-- Admins, organisers, and judges are staff, not athletes — they never belong to clubs, cannot be teammates, and hold no player statistics.
+- Admins and organisers are staff, not athletes — they never belong to clubs, cannot be teammates, and hold no player statistics. (A legacy `JUDGE` role still exists in the database and API but has no screens.)
 
-Teammates without an account are invited by email and complete their profile through a tokenized invite link; a team entry can proceed while the invitation is pending.
+Players are invited to a club by email and complete their profile through a tokenized invite link. A team entry cannot proceed while that invitation is pending: both players must have accepted before their club can enter them, so an entry always names two real players. Registration refuses an unknown, still-invited, or unverified teammate and says which player is holding it up.
 
 ## Money
 
@@ -49,8 +48,8 @@ An administrator can also write directly to an applicant while the request is op
 2. **Registration** — club teams enter per category; admins review each entry (`PENDING → APPROVED / DECLINED / NEEDS_CHANGES / WAITLISTED …`) with public reasons players can act on. The approved roster can be published separately.
 3. **Opponent requests** — after registration closes, admins open a per-category window in which an approved team may request one preferred first-round opponent. The target accepts or refuses; the admin has the final word (approve, reject, or explicitly override a refusal). Pairings only ever affect the first round.
 4. **Bracket** — one single-elimination bracket per category, sized 2, 4, 8, or 16 to fit the 2–16 approved entries, with byes filling the gap. Approved pairings are placed first. Locking the bracket freezes the draw and snapshots every participant's name and club for permanent history; only a locked bracket can be published.
-5. **Schedule** — admins create physical courts, assign judges to courts for time intervals (no overlaps), and queue matches per court. The schedule publishes independently of the bracket.
-6. **Live play** — judges process each court queue strictly in order, one active match per court and per judge. A match is decided in slots: the administrator sets how many slot wins it takes (1, 2, or 3) per round or per match, and the judge confirms the winner of each slot rather than counting points. Reaching the required slot wins completes the match and advances the winner automatically; a judge can undo the last slot while the match runs, and an administrator can reopen a completed match with a reason. Walkovers, withdrawals, and disqualifications require a winner and a reason. Public live scoring is a separate opt-in switch. Events played before the slot format keep their historical 0–6 scores.
+5. **Schedule** — admins create physical courts and queue matches per court. The schedule publishes independently of the bracket.
+6. **Live play** — admins and organisers run the event from **Match control**, one screen showing every match with its court, its time, both pairs and their clubs, in draw order. Each court queue is played strictly in order, one active match per court, but several courts can run at once. A match is decided in sets: the administrator sets how many set wins it takes (1, 2, or 3) per round or per match, and the operator confirms the winner of each set rather than counting points. Reaching the required set wins completes the match and advances the winner automatically; an administrator can reopen a completed match with a reason. Walkovers and retirements require a winner and a reason. Public live scoring is a separate opt-in switch. Events played before the set format keep their historical 0–6 scores.
 7. **Results** — completed finals complete the bracket; once every match is finished the event completes and final results can be published. Completed events are read-only unless an authorized admin explicitly reopens them to make corrections.
 
 Each public surface — event page, roster, bracket, schedule, live scoring, results — has its own independent publication switch, so admins can prepare later stages privately.
@@ -69,8 +68,7 @@ Each public surface — event page, roster, bracket, schedule, live scoring, res
 
 - **Public site** (`/`, `/clubs`, `/players`, `/events`, `/matches`): marketing landing page plus SEO-optimized public tournament data (sitemap, robots, structured data).
 - **Player dashboard** (`/dashboard/*`): club, entries, events with opponent-request flows, match history, notifications, settings.
-- **Judge console** (`/judge/*`): assignments, court queues, match scoring.
-- **Admin console** (`/admin/*`): overview counts, events with per-event tools (registrations, opponent requests, bracket, schedule), users, judges, clubs, categories, settings, operations (audit, email deliveries).
+- **Admin console** (`/admin/*`): overview counts, events with per-event tools (registrations, opponent requests, bracket, schedule, match control), users, clubs, categories, settings, operations (audit, email deliveries).
 
 ## Where to go deeper
 

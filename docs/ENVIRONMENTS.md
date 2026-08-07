@@ -18,6 +18,13 @@ both fronted by **Cloudflare**. Production was migrated off Vercel on
 - Each stack has its own Postgres volume, secrets, and `.env`. `www` 301s to the apex.
 - Nginx sites live in `/etc/nginx/sites-available/` (`elpadell.com`, `api.elpadell.com`, `el-paddle-staging`). The Cloudflare Origin cert is at `/etc/nginx/ssl/elpadell-origin.*` and covers `elpadell.com`, `*.elpadell.com`, `*.staging.elpadell.com`.
 - Staging is private via **Cloudflare Access** (Zero Trust free plan) — an allow-list of emails on `staging.elpadell.com`.
+- **Real client IP.** Every host above is proxied, so nginx sees a Cloudflare edge address unless the real IP is restored. Each site must carry the `set_real_ip_from` / `real_ip_header CF-Connecting-IP` block from `deploy/nginx.conf`; without it the `limit_req` zones bucket a whole PoP together, the API's in-process limiters become global, and `AuditLog` records edge addresses instead of actors. **The live configs in `/etc/nginx/sites-available/` are not in this repo — check each one before assuming the template is deployed:**
+
+  ```bash
+  sudo grep -L real_ip_header /etc/nginx/sites-available/elpadell.com /etc/nginx/sites-available/api.elpadell.com /etc/nginx/sites-available/el-paddle-staging
+  ```
+
+  Any file listed by that command is missing the block. Refresh the range list on a schedule — the generator command is in the comment at the top of `deploy/nginx.conf`.
 
 ## Deployment workflow
 
@@ -76,10 +83,10 @@ The seed is idempotent (wipes/recreates only its own `seed_event_*` events) and
 never touches the bootstrapped admin. Logins after seeding: `admin@example.com`,
 `judge1..5@example.com`, `athlete001..036@example.com` — all password `Password123!`.
 
-Completed and in-progress fixtures are scored in slots, matching the live product:
-quarterfinals race to one slot win, semifinals to two, finals to three (so a final
-can run to five slots and finish 3–2). Each decided slot gets a `MatchSlot` row plus
-its `SlotEvent` history, and every bracket gets `BracketRoundConfig` rows for those
+Completed and in-progress fixtures are scored in sets, matching the live product:
+quarterfinals race to one set win, semifinals to two, finals to three (so a final
+can run to five sets and finish 3–2). Each decided set gets a `MatchSet` row plus
+its `SetEvent` history, and every bracket gets `BracketRoundConfig` rows for those
 per-round defaults.
 
 ### Seeding a local development database
@@ -90,8 +97,9 @@ cd backend && ALLOW_DEVELOPMENT_SEED=true npx tsx prisma/seed.ts
 
 The seed resets every user's win/loss tallies and rebuilds its own `seed_event_*`
 rows, so hand-made local fixtures under other ids survive but player statistics do
-not. Apply migrations first — the seed writes slot columns that only exist after
-`20260727120000_slot_scoring`.
+not. Apply migrations first — the seed writes set columns that only exist after
+`20260727120000_slot_scoring` (which introduced them, under their original slot
+names) and `20260805120000_rename_slot_to_set` (which renamed them in place).
 
 ## Gotchas & rollback
 

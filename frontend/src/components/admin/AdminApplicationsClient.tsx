@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ClipboardCheck, Mail, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ClipboardCheck, Mail, ShieldAlert, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -236,6 +236,14 @@ export function AdminApplicationsClient() {
                   <span className={styles.secondary} title={application.email}>
                     {application.email}
                   </span>
+                  {/* Approving mints an ADMIN, not a player. The reviewer sees
+                      an ordinary club request otherwise — say so before they act. */}
+                  {application.grantsAdmin ? (
+                    <span className="mt-1 inline-flex w-fit items-center gap-1 rounded border border-amber-500/45 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                      <ShieldAlert className="h-3 w-3 shrink-0" aria-hidden />
+                      {appCopy.grantsAdmin}
+                    </span>
+                  ) : null}
                 </>
               ),
             },

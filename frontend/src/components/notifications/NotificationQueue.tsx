@@ -14,7 +14,15 @@ import styles from './Notifications.module.css';
  * reader scrolling a long history can see which days still hold something for
  * them without reading every row.
  */
-function DayGroup({ day, onOpen }: { day: NotificationDay; onOpen: (notification: NotificationDto) => void }) {
+function DayGroup({
+  day,
+  onOpen,
+  onMarkRead,
+}: {
+  day: NotificationDay;
+  onOpen: (notification: NotificationDto) => void;
+  onMarkRead?: (notification: NotificationDto) => void;
+}) {
   const { locale, formatDate } = useI18n();
   const copy = tournamentCopy[locale].notifications;
 
@@ -29,28 +37,40 @@ function DayGroup({ day, onOpen }: { day: NotificationDay; onOpen: (notification
       {day.items.map((notification) => {
         const unread = isUnread(notification);
         return (
-          <Link
-            key={notification.id}
-            href={notification.actionPath}
-            className={styles.row}
-            data-unread={unread}
-            onClick={() => onOpen(notification)}
-          >
-            <div className={styles.rowTop}>
-              <h4 className={styles.rowTitle}>{notification.title}</h4>
-              <StatusLabel icon={unread ? 'dot' : 'check'}>{unread ? copy.unread : copy.read}</StatusLabel>
-            </div>
-            <p className={styles.rowMessage}>{notification.message}</p>
-            <div className={styles.rowFoot}>
-              <time className={styles.rowTime} dateTime={notification.createdAt}>
-                {formatDate(notification.createdAt, { timeStyle: 'short' })}
-              </time>
-              <span className={styles.rowGo}>
-                {copy.openTarget}
-                <ArrowRight aria-hidden="true" />
-              </span>
-            </div>
-          </Link>
+          <div key={notification.id} className={styles.row} data-unread={unread}>
+            <Link
+              href={notification.actionPath}
+              className={styles.rowLink}
+              onClick={() => onOpen(notification)}
+            >
+              <div className={styles.rowTop}>
+                <h4 className={styles.rowTitle}>{notification.title}</h4>
+                <StatusLabel icon={unread ? 'dot' : 'check'}>{unread ? copy.unread : copy.read}</StatusLabel>
+              </div>
+              <p className={styles.rowMessage}>{notification.message}</p>
+              <div className={styles.rowFoot}>
+                <time className={styles.rowTime} dateTime={notification.createdAt}>
+                  {formatDate(notification.createdAt, { timeStyle: 'short' })}
+                </time>
+                <span className={styles.rowGo}>
+                  {copy.openTarget}
+                  <ArrowRight aria-hidden="true" />
+                </span>
+              </div>
+            </Link>
+            {unread && onMarkRead ? (
+              <button
+                type="button"
+                className={styles.markRead}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onMarkRead(notification);
+                }}
+              >
+                {copy.markRead}
+              </button>
+            ) : null}
+          </div>
         );
       })}
     </section>
@@ -61,16 +81,23 @@ function DayGroup({ day, onOpen }: { day: NotificationDay; onOpen: (notification
 export function NotificationQueue({
   notifications,
   onOpen,
+  onMarkRead,
+  sectionTitle,
 }: {
   notifications: NotificationDto[];
   onOpen: (notification: NotificationDto) => void;
+  onMarkRead?: (notification: NotificationDto) => void;
+  /** Named split — "Waiting for you" / "Already read" — so order alone is not the signal. */
+  sectionTitle?: string;
 }) {
+  if (!notifications.length) return null;
   return (
-    <>
+    <div>
+      {sectionTitle ? <h3 className={styles.sectionTitle}>{sectionTitle}</h3> : null}
       {groupByDay(notifications).map((day) => (
-        <DayGroup key={day.key} day={day} onOpen={onOpen} />
+        <DayGroup key={day.key} day={day} onOpen={onOpen} onMarkRead={onMarkRead} />
       ))}
-    </>
+    </div>
   );
 }
 

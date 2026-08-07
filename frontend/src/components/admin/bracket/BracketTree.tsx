@@ -24,7 +24,7 @@ import {
   activeRounds,
   championEntryId,
   championPathMatchIds,
-  effectiveSlotCount,
+  effectiveSetCount,
   pairLabel,
   slotKey,
   winnerSide,
@@ -33,10 +33,10 @@ import {
 import styles from './BracketTree.module.css';
 
 type TreeHandlers = {
-  onMatchOverride: (match: MatchDto, slotCountOverride: number | null) => void;
+  onMatchOverride: (match: MatchDto, setCountOverride: number | null) => void;
   onMoveRequest: (slot: PlacementSlot) => void;
   onReopen: (match: MatchDto) => void;
-  onRoundDefault: (bracket: BracketDto, round: MatchDto['round'], slotCount: number) => void;
+  onRoundDefault: (bracket: BracketDto, round: MatchDto['round'], setCount: number) => void;
 };
 
 /**
@@ -97,17 +97,17 @@ export function BracketTree({
                 <h3 id={`${bracket.id}-${round}`}>{tournamentRound(locale, round)}</h3>
                 <small>{roundMatches.length} {roundMatches.length === 1 ? copy.common.match.toLowerCase() : copy.common.matches}</small>
                 {isCompleted ? null : (
-                  <div className={cn(styles.slotControl, styles.roundSlotControl)}>
-                    <label htmlFor={`${bracket.id}-${round}-slots`}>{copy.admin.bracket.slotsPerMatch}</label>
+                  <div className={cn(styles.setControl, styles.roundSetControl)}>
+                    <label htmlFor={`${bracket.id}-${round}-sets`}>{copy.admin.bracket.setsPerMatch}</label>
                     <select
-                      id={`${bracket.id}-${round}-slots`}
-                      value={bracket.slotDefaults[round] ?? 1}
-                      disabled={busy === `slots-${bracket.id}-${round}`}
+                      id={`${bracket.id}-${round}-sets`}
+                      value={bracket.setDefaults[round] ?? 1}
+                      disabled={busy === `sets-${bracket.id}-${round}`}
                       onChange={(fieldEvent) => handlers.onRoundDefault(bracket, round, Number(fieldEvent.target.value))}
                     >
-                      <option value={1}>{copy.admin.bracket.slotOption1}</option>
-                      <option value={2}>{copy.admin.bracket.slotOption2}</option>
-                      <option value={3}>{copy.admin.bracket.slotOption3}</option>
+                      <option value={1}>{copy.admin.bracket.setOption1}</option>
+                      <option value={2}>{copy.admin.bracket.setOption2}</option>
+                      <option value={3}>{copy.admin.bracket.setOption3}</option>
                     </select>
                   </div>
                 )}
@@ -170,7 +170,7 @@ function MatchCard({
   isFinal: boolean;
   match: MatchDto;
   onChampionPath: boolean;
-  onMatchOverride: (match: MatchDto, slotCountOverride: number | null) => void;
+  onMatchOverride: (match: MatchDto, setCountOverride: number | null) => void;
   onMoveRequest: (slot: PlacementSlot) => void;
   onReopen: (match: MatchDto) => void;
   placementEnabled: boolean;
@@ -178,12 +178,12 @@ function MatchCard({
   const { locale } = useI18n();
   const copy = tournamentCopy[locale];
   const winner = winnerSide(match);
-  const slotsUsed = match.scoringMode === 'SLOTS';
+  const setsUsed = match.scoringMode === 'SETS';
   // Once a match starts its format is frozen server-side, so the select gives way to a badge.
-  const formatEditable = slotsUsed && !isCompleted && !match.startedAt && (match.status === 'PENDING' || match.status === 'READY');
-  const roundDefault = bracket.slotDefaults[match.round] ?? 1;
-  // Only a normally scored slot match can be walked back; walkovers go through corrections.
-  const canReopen = slotsUsed && !isCompleted && match.status === 'COMPLETED' && match.resultType === 'NORMAL' && match.slots.length > 0;
+  const formatEditable = setsUsed && !isCompleted && !match.startedAt && (match.status === 'PENDING' || match.status === 'READY');
+  const roundDefault = bracket.setDefaults[match.round] ?? 1;
+  // Only a normally scored set match can be walked back; walkovers go through corrections.
+  const canReopen = setsUsed && !isCompleted && match.status === 'COMPLETED' && match.resultType === 'NORMAL' && match.sets.length > 0;
 
   return (
     <article
@@ -216,33 +216,33 @@ function MatchCard({
           );
         })}
       </div>
-      {slotsUsed ? (
+      {setsUsed ? (
         <div className={styles.matchFormat}>
           {formatEditable ? (
-            <div className={styles.slotControl}>
-              <label className="sr-only" htmlFor={`${match.id}-slots`}>{copy.admin.bracket.matchSlots}</label>
+            <div className={styles.setControl}>
+              <label className="sr-only" htmlFor={`${match.id}-sets`}>{copy.admin.bracket.matchSets}</label>
               <select
-                id={`${match.id}-slots`}
-                value={match.slotCountOverride ?? ''}
-                disabled={busy === `slots-match-${match.id}`}
+                id={`${match.id}-sets`}
+                value={match.setCountOverride ?? ''}
+                disabled={busy === `sets-match-${match.id}`}
                 onChange={(fieldEvent) => onMatchOverride(match, fieldEvent.target.value === '' ? null : Number(fieldEvent.target.value))}
               >
-                <option value="">{fillTemplate(copy.admin.bracket.slotDefaultOption, { count: roundDefault })}</option>
+                <option value="">{fillTemplate(copy.admin.bracket.setDefaultOption, { count: roundDefault })}</option>
                 <option value={1}>1</option>
                 <option value={2}>2</option>
                 <option value={3}>3</option>
               </select>
             </div>
           ) : (
-            <span className={styles.formatBadge}>{fillTemplate(copy.admin.bracket.slotBadge, { count: effectiveSlotCount(bracket, match) })}</span>
+            <span className={styles.formatBadge}>{fillTemplate(copy.admin.bracket.setBadge, { count: effectiveSetCount(bracket, match) })}</span>
           )}
-          {match.slots.length && match.resultType !== 'ADMIN_DECISION' ? (
-            <ul className={styles.slotChips} aria-label={copy.admin.bracket.matchSlots}>
-              {match.slots.map((slot) => (
-                <li key={slot.slotNumber}>
-                  {fillTemplate(copy.publicEvent.slotShort, { number: slot.slotNumber })}
+          {match.sets.length && match.resultType !== 'ADMIN_DECISION' ? (
+            <ul className={styles.setChips} aria-label={copy.admin.bracket.matchSets}>
+              {match.sets.map((set) => (
+                <li key={set.setNumber}>
+                  {fillTemplate(copy.publicEvent.setShort, { number: set.setNumber })}
                   <span aria-hidden="true">·</span>
-                  {slot.winnerSide}
+                  {set.winnerSide}
                 </li>
               ))}
             </ul>

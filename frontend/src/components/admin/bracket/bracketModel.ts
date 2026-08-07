@@ -24,9 +24,9 @@ export function pairLabel(bracket: BracketDto, match: MatchDto, side: 'A' | 'B',
   return source ? fillTemplate(copy.winnerOfMatch, { number: source.matchNumber }) : copy.toBeDetermined;
 }
 
-/** Slot format an unstarted match would use: its override, else the bracket round default, else one. */
-export function effectiveSlotCount(bracket: BracketDto, match: MatchDto) {
-  return match.slotCount ?? match.slotCountOverride ?? bracket.slotDefaults[match.round] ?? 1;
+/** Set format an unstarted match would use: its override, else the bracket round default, else one. */
+export function effectiveSetCount(bracket: BracketDto, match: MatchDto) {
+  return match.setCount ?? match.setCountOverride ?? bracket.setDefaults[match.round] ?? 1;
 }
 
 export function winnerSide(match: MatchDto): 'A' | 'B' | null {

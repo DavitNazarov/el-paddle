@@ -10,7 +10,7 @@ import type { MatchDto } from '@/types/tournament';
 import { InlineNotice, StatusLabel, TournamentPanel, TournamentSectionHeader } from './TournamentUI';
 import { useTournamentRealtime } from '@/hooks/useTournamentRealtime';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { visibleSlots } from '@/lib/matchResult';
+import { visibleSets } from '@/lib/matchResult';
 import { fillTemplate, tournamentCopy, tournamentRound, tournamentStatus } from '@/lib/i18n/tournament';
 
 type MatchDetailDto = Omit<MatchDto, 'scoreA' | 'scoreB'> & {
@@ -63,7 +63,7 @@ function MatchResultSheet({ match }: { match: MatchDetailDto }) {
   const scoreDescription = isCompleted ? (resultVisible ? copy.matchDetail.finalScoreDescription : copy.matchDetail.resultPendingDescription) : isLive ? copy.matchDetail.liveScoreDescription : copy.matchDetail.lineupDescription;
   const badge = isCompleted ? (resultVisible ? copy.matchDetail.badge : copy.matchDetail.completeBadge) : isLive ? copy.matchDetail.liveBadge : copy.matchDetail.scheduledBadge;
   const court = match.scheduleItem?.court;
-  const slots = resultVisible || isLive ? visibleSlots(match) : [];
+  const sets = resultVisible || isLive ? visibleSets(match) : [];
 
   return (
     <>
@@ -89,19 +89,19 @@ function MatchResultSheet({ match }: { match: MatchDetailDto }) {
         </div>
       </TournamentPanel>
 
-      {slots.length ? (
+      {sets.length ? (
         <TournamentPanel className="mt-5 rounded-sm border-[var(--padel-line)] bg-[var(--padel-red-2)]/40">
-          <TournamentSectionHeader title={copy.matchDetail.slotBreakdown} description={copy.matchDetail.slotBreakdownDescription} />
+          <TournamentSectionHeader title={copy.matchDetail.setBreakdown} description={copy.matchDetail.setBreakdownDescription} />
           <ol className="divide-y divide-[var(--padel-line)]">
-            {slots.map((slot) => {
-              const winnerTeam = slot.winnerSide === 'A' ? sideA.team : sideB.team;
+            {sets.map((set) => {
+              const winnerTeam = set.winnerSide === 'A' ? sideA.team : sideB.team;
               return (
-                <li key={slot.slotNumber} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                <li key={set.setNumber} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
                   <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--padel-muted)]">
-                    {fillTemplate(copy.matchDetail.slotRow, { number: slot.slotNumber })}
+                    {fillTemplate(copy.matchDetail.setRow, { number: set.setNumber })}
                   </span>
                   <span className="text-sm font-semibold text-[var(--padel-ivory)]">
-                    {winnerTeam ? `${winnerTeam.ownerName} / ${winnerTeam.teammateName}` : (slot.winnerSide === 'A' ? copy.common.sideA : copy.common.sideB)}
+                    {winnerTeam ? `${winnerTeam.ownerName} / ${winnerTeam.teammateName}` : (set.winnerSide === 'A' ? copy.common.sideA : copy.common.sideB)}
                   </span>
                 </li>
               );

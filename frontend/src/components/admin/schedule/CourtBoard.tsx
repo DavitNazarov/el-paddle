@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Clock, Inbox, Radio, TriangleAlert, UserRound, type LucideIcon } from 'lucide-react';
+import { Check, Clock, Inbox, Radio, type LucideIcon } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import type { CourtDto } from '@/types/tournament';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -12,7 +12,6 @@ import {
   courtProgress,
   courtState,
   isQueueFinished,
-  judgeName,
   matchTitle,
   type CourtState,
 } from './scheduleModel';
@@ -23,7 +22,7 @@ import styles from './Schedule.module.css';
  * courts with a dozen matches each ran to several screens and the one question
  * an operator arrives with — which court needs me? — could not be answered
  * without scrolling past everything that did not. A tile is fixed height: state,
- * judge, progress, and the two matches worth naming. The queue itself belongs
+ * progress and the two matches worth naming. The queue itself belongs
  * to whichever court is open below.
  */
 export function CourtBoard({
@@ -52,7 +51,6 @@ export function CourtBoard({
 const stateIcons: Record<CourtState, LucideIcon> = {
   done: Check,
   live: Radio,
-  unstaffed: TriangleAlert,
   idle: Inbox,
   ready: Clock,
 };
@@ -72,13 +70,11 @@ function CourtTile({
   const StateIcon = stateIcons[state];
   const progress = courtProgress(court);
   const focus = courtFocus(court);
-  const judge = court.judgeAssignments[0]?.judge;
   const { setNodeRef, isOver } = useDroppable({ id: courtDroppableId(court.id), disabled: isQueueFinished(court) });
   const percent = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
   const stateLabel = {
     done: copy.stateDone,
     live: copy.stateLive,
-    unstaffed: copy.stateUnstaffed,
     idle: copy.stateIdle,
     ready: copy.stateReady,
   }[state];
@@ -100,10 +96,6 @@ function CourtTile({
       </div>
 
       <p className={styles.tileMeta}>
-        <span className={styles.tileJudge} data-missing={!judge}>
-          <UserRound aria-hidden="true" />
-          {judge ? judgeName(judge) : copy.noJudge}
-        </span>
         <span className={styles.tileCounts}>
           {progress.total ? fillTemplate(copy.ofTotal, { done: progress.done, total: progress.total }) : copy.noMatchesYet}
           {focus.waiting ? ` · ${fillTemplate(copy.waitingCount, { count: focus.waiting })}` : ''}

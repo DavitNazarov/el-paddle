@@ -9,7 +9,7 @@ import { legalBusiness, legalDocuments, type LegalDocumentSlug } from '@/lib/leg
 export function LegalDocumentPage({ slug }: { slug: LegalDocumentSlug }) {
   const { locale } = useI18n();
   const document = legalDocuments[slug];
-  const missingId = legalBusiness.identificationNumber.startsWith('SET-');
+  const missingId = !legalBusiness.identificationNumber;
   const label = (value: { en: string; ka: string }) => value[locale];
 
   return (
@@ -31,14 +31,16 @@ export function LegalDocumentPage({ slug }: { slug: LegalDocumentSlug }) {
           <h1 className="font-display mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">{label(document.title)}</h1>
           <p className="mt-5 text-base leading-7 text-[rgba(88,16,16,0.68)] sm:text-lg">{label(document.summary)}</p>
           <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(88,16,16,0.48)]">
-            {locale === 'ka' ? 'ძალაშია' : 'Effective'}: 17 July 2026 · {locale === 'ka' ? 'ვერსია' : 'Version'} {document.version}
+            {locale === 'ka' ? 'ძალაშია' : 'Effective'}: 6 August 2026 · {locale === 'ka' ? 'ვერსია' : 'Version'} {document.version}
           </p>
         </div>
 
         {missingId ? (
           <div role="alert" className="mt-8 flex max-w-3xl gap-3 rounded-lg border border-amber-500/35 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <p>{locale === 'ka' ? 'გამოქვეყნებამდე გარემოს ცვლადში დაამატეთ ორგანიზაციის საიდენტიფიკაციო ნომერი: NEXT_PUBLIC_LEGAL_ENTITY_ID.' : 'Before launch, set the organization identification number in NEXT_PUBLIC_LEGAL_ENTITY_ID.'}</p>
+            {/* Named the environment variable, on a page the public reads. The
+                notice states the gap; the operator knows where the value goes. */}
+            <p>{locale === 'ka' ? 'ორგანიზაციის საიდენტიფიკაციო ნომერი ჯერ არ არის გამოქვეყნებული.' : 'The organization identification number has not been published yet.'}</p>
           </div>
         ) : null}
 
@@ -64,7 +66,7 @@ export function LegalDocumentPage({ slug }: { slug: LegalDocumentSlug }) {
             <dl className="mt-4 space-y-3 text-sm leading-6">
               <div><dt className="text-[rgba(88,16,16,0.5)]">{locale === 'ka' ? 'დასახელება' : 'Name'}</dt><dd className="font-semibold">{legalBusiness.name}</dd></div>
               <div><dt className="text-[rgba(88,16,16,0.5)]">{locale === 'ka' ? 'სამართლებრივი ფორმა' : 'Legal form'}</dt><dd>{legalBusiness.legalForm}</dd></div>
-              <div><dt className="text-[rgba(88,16,16,0.5)]">{locale === 'ka' ? 'საიდენტიფიკაციო ნომერი' : 'Identification number'}</dt><dd className="break-words">{legalBusiness.identificationNumber}</dd></div>
+              {missingId ? null : <div><dt className="text-[rgba(88,16,16,0.5)]">{locale === 'ka' ? 'საიდენტიფიკაციო ნომერი' : 'Identification number'}</dt><dd className="break-words">{legalBusiness.identificationNumber}</dd></div>}
               <div><dt className="text-[rgba(88,16,16,0.5)]">{locale === 'ka' ? 'მისამართი' : 'Address'}</dt><dd>{legalBusiness.address}</dd></div>
               <div><dt className="text-[rgba(88,16,16,0.5)]">{locale === 'ka' ? 'ელფოსტა' : 'Email'}</dt><dd><a className="font-semibold underline underline-offset-4" href={`mailto:${legalBusiness.email}`}>{legalBusiness.email}</a></dd></div>
               {legalBusiness.phone ? <div><dt className="text-[rgba(88,16,16,0.5)]">{locale === 'ka' ? 'ტელეფონი' : 'Phone'}</dt><dd><a href={`tel:${legalBusiness.phone}`}>{legalBusiness.phone}</a></dd></div> : null}

@@ -1,10 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { EmptyState, FeedbackBanner, SectionHeading } from '@/components/shared/dashboard/DashboardUI';
+import { Button } from '@/components/ui/button';
+import { EmptyState, FeedbackBanner, SectionHeading, softButtonClassName } from '@/components/shared/dashboard/DashboardUI';
 import { SkeletonCards } from '@/components/shared/dashboard/Feedback';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { usePlayerDashboard } from '@/hooks/usePlayerDashboard';
+import { tournamentCopy } from '@/lib/i18n/tournament';
+import { cn } from '@/lib/utils';
 import { CalendarDays, History } from 'lucide-react';
 import type { PublicUser } from '@/types/auth';
 import type { DashboardData, RegistrationDto } from '@/types/dashboard';
@@ -19,7 +22,7 @@ export function PlayerEventsClient({
   initialUser: PublicUser;
   initialData?: DashboardData | null;
 }) {
-  const { dictionary, t } = useI18n();
+  const { dictionary, t, locale } = useI18n();
   const player = dictionary.dashboard.player;
   const api = usePlayerDashboard(initialUser, initialData);
   const [managedEntry, setManagedEntry] = useState<RegistrationDto | null>(null);
@@ -29,8 +32,8 @@ export function PlayerEventsClient({
     registrations,
     clubMembers,
     clubMembershipRole,
-    registrationCounts,
     loading,
+    loadFailed,
     message,
     error,
     setMessage,
@@ -67,11 +70,28 @@ export function PlayerEventsClient({
   return (
     <PlayerShell
       user={user}
-      pendingCount={registrationCounts.pending}
       eyebrow={player.pages.eventsEyebrow}
       title={player.pages.eventsTitle}
       description={player.pages.eventsDescription}
     >
+      {loadFailed ? (
+        <FeedbackBanner
+          kind="error"
+          actions={
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={cn(softButtonClassName, 'rounded-md')}
+              onClick={() => void loadDashboard()}
+            >
+              {tournamentCopy[locale].playerHome.retry}
+            </Button>
+          }
+        >
+          {tournamentCopy[locale].playerHome.loadFailed}
+        </FeedbackBanner>
+      ) : null}
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error && !api.registerEvent ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 

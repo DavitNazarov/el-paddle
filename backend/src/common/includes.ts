@@ -13,6 +13,7 @@ export const clubSummarySelect = {
   id: true,
   name: true,
   slug: true,
+  logoUrl: true,
 } satisfies Prisma.ClubSelect;
 
 /**

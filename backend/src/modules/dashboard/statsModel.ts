@@ -1,4 +1,5 @@
 import { ApiError } from '../../common/http.js';
+import { PLATFORM_TIME_ZONE } from '../../common/time.js';
 
 /**
  * Pure reading for the platform statistics endpoint: window resolution, bucket
@@ -12,7 +13,7 @@ import { ApiError } from '../../common/http.js';
  * 04:00 local and would split one evening's signups across two bars, which is
  * visibly wrong to the only people looking at it.
  */
-export const STATS_TIME_ZONE = 'Asia/Tbilisi';
+export const STATS_TIME_ZONE = PLATFORM_TIME_ZONE;
 
 /**
  * Account deletions and sign-ins were not recorded before the

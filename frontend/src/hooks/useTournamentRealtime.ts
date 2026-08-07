@@ -10,8 +10,11 @@ const tournamentEvents = [
   'opponent-request.admin-approve', 'opponent-request.admin-reject', 'opponent-request.admin-override',
   'bracket.generated', 'bracket.locked', 'bracket.published', 'bracket.updated', 'schedule.updated',
   'schedule.published', 'court.queue.updated', 'match.started', 'match.score.updated',
-  'match.slot.decided', 'match.slot.undone', 'match.reopened', 'match.config.updated',
+  'match.set.decided', 'match.result.recorded', 'match.set.undone', 'match.reopened', 'match.config.updated',
   'match.completed', 'match.corrected', 'notification.created',
+  // Pre-rename topics, kept for one release so outbox rows enqueued before the
+  // slot -> set deploy still reach the UI as they drain. Drop these next release.
+  'match.slot.decided', 'match.slot.undone',
 ];
 
 /**

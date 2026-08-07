@@ -31,11 +31,13 @@ import {
 import { cursorArgs, toPage, type ListRange } from '../../common/pagination.js';
 import { roleForEmail } from '../auth/auth.service.js';
 import { inviteClubMate, resolveClubSlug, setPlayerClub } from '../clubs/clubs.service.js';
-import { ClubMembershipRole } from '../../generated/prisma/client.js';
+import { ClubMembershipRole, UserRole } from '../../generated/prisma/client.js';
 
 /** Unsubmitted drafts live this long before the purge sweep removes them. */
 const DRAFT_LIFETIME_DAYS = 7;
 const CODE_LIFETIME_MINUTES = 30;
+/** Wrong guesses a single verification code tolerates before it is burned. */
+const MAX_CODE_ATTEMPTS = 5;
 
 export type ApplicantView = {
   id: string;
@@ -70,6 +72,26 @@ export function toApplicantView(application: ClubApplication): ApplicantView {
     mateSurname: application.mateSurname ?? '',
     matePhone: application.matePhone ?? '',
     submittedAt: application.submittedAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * The reviewer's view of a request: everything the applicant sees, plus whether
+ * approving it will mint an administrator.
+ *
+ * `approveApplication` runs the new account's email through `roleForEmail`, so
+ * an address listed in `ADMIN_EMAILS` becomes an ADMIN the moment a routine club
+ * request is approved. That is intended, but it must not be a surprise — an
+ * admin approving what looks like an ordinary player should see it beforehand.
+ *
+ * Deliberately not folded into `toApplicantView`, which is returned to the
+ * unauthenticated applicant: that would tell anyone whether an address is on the
+ * `ADMIN_EMAILS` list.
+ */
+export function toReviewerView(application: ClubApplication) {
+  return {
+    ...toApplicantView(application),
+    grantsAdmin: roleForEmail(application.email, undefined, { emailVerified: true }) === UserRole.ADMIN,
   };
 }
 
@@ -156,16 +178,46 @@ export async function startApplication(input: StartApplicationInput) {
     create: { email, ...data },
   });
 
+  await issueApplicationVerificationCode(application.id, email);
+  return application;
+}
+
+/** Mint a fresh code, retire any still-open ones, and email it. */
+async function issueApplicationVerificationCode(applicationId: string, email: string) {
   const code = createVerificationCode();
-  await prisma.clubApplicationCode.create({
-    data: {
-      applicationId: application.id,
-      codeHash: await hashSecret(code),
-      expiresAt: addMinutes(CODE_LIFETIME_MINUTES),
-    },
+  const codeHash = await hashSecret(code);
+  const expiresAt = addMinutes(CODE_LIFETIME_MINUTES);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.clubApplicationCode.updateMany({
+      where: { applicationId, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    await tx.clubApplicationCode.create({
+      data: { applicationId, codeHash, expiresAt },
+    });
   });
 
   await sendVerificationCodeEmail(email, code);
+}
+
+/**
+ * Re-send the emailed code for an unfinished request. Refuses once the address
+ * is already confirmed — that applicant should continue the club form instead.
+ */
+export async function resendApplicationVerificationCode(email: string) {
+  if (!isValidEmail(email)) jsonError('Enter a valid email.');
+
+  const application = await prisma.clubApplication.findUnique({ where: { email } });
+  if (!application) jsonError('Request not found. Start again to receive a new code.', 404);
+  if (application.emailVerifiedAt) {
+    jsonError('This email is already verified. Continue with your club details.', 409);
+  }
+  if (application.status !== ClubApplicationStatus.PENDING_VERIFICATION) {
+    jsonError('This request no longer needs a verification code.', 409);
+  }
+
+  await issueApplicationVerificationCode(application.id, email);
   return application;
 }
 
@@ -227,6 +279,18 @@ export async function verifyApplicationEmail(email: string, code: string) {
     jsonError('Verification code expired. Start again to receive a new code.');
   }
   if (!(await compareSecret(code, verification.codeHash))) {
+    // Burn the code once the allowance is spent. Rate limiting caps attempts per
+    // window; without this a code could still be ground down across windows for
+    // its whole lifetime. `updateMany` with the observed count makes concurrent
+    // guesses collide instead of both incrementing from the same read.
+    const spent = verification.attemptCount + 1 >= MAX_CODE_ATTEMPTS;
+    await prisma.clubApplicationCode.updateMany({
+      where: { id: verification.id, attemptCount: verification.attemptCount },
+      data: { attemptCount: { increment: 1 }, ...(spent ? { usedAt: new Date() } : {}) },
+    });
+    if (spent) {
+      jsonError('Too many incorrect attempts. Request a new code.', 401);
+    }
     jsonError('Incorrect verification code.', 401);
   }
 

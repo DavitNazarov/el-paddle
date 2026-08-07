@@ -20,7 +20,9 @@ export function PlayerSettingsClient({ initialUser }: PlayerSettingsClientProps)
       eyebrow={copy.eyebrow}
       user={initialUser}
     >
-      <AccountSettings user={initialUser} danger={copy} />
+      {/* The profile has a page of its own in the sidebar, so settings keeps
+          only what is left: security, preferences, and deletion. */}
+      <AccountSettings user={initialUser} danger={copy} includeProfile={false} />
     </PlayerShell>
   );
 }

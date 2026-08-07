@@ -113,33 +113,33 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
     else { if (action === 'lock') setBracketToLock(null); void load(); }
   }
 
-  async function setRoundDefault(bracket: BracketDto, round: MatchDto['round'], slotCount: number) {
-    setBusy(`slots-${bracket.id}-${round}`);
+  async function setRoundDefault(bracket: BracketDto, round: MatchDto['round'], setCount: number) {
+    setBusy(`sets-${bracket.id}-${round}`);
     setError('');
-    const response = await apiFetch(`/api/admin/events/${eventId}/brackets/${bracket.id}/slot-defaults`, {
+    const response = await apiFetch(`/api/admin/events/${eventId}/brackets/${bracket.id}/set-defaults`, {
       method: 'PUT',
       body: JSON.stringify({
-        defaults: { ...bracket.slotDefaults, [round]: slotCount },
+        defaults: { ...bracket.setDefaults, [round]: setCount },
         expectedVersion: bracket.version,
-        commandId: createCommandId('bracket-slot-defaults'),
+        commandId: createCommandId('bracket-set-defaults'),
       }),
     });
     const data = await response.json() as { error?: string };
     setBusy('');
-    if (!response.ok) setError(data.error ?? copy.admin.bracket.slotConfigError);
+    if (!response.ok) setError(data.error ?? copy.admin.bracket.setConfigError);
     void load();
   }
 
-  async function setMatchOverride(match: MatchDto, slotCountOverride: number | null) {
-    setBusy(`slots-match-${match.id}`);
+  async function setMatchOverride(match: MatchDto, setCountOverride: number | null) {
+    setBusy(`sets-match-${match.id}`);
     setError('');
-    const response = await apiFetch(`/api/admin/matches/${match.id}/slot-config`, {
+    const response = await apiFetch(`/api/admin/matches/${match.id}/set-config`, {
       method: 'PATCH',
-      body: JSON.stringify({ slotCountOverride, expectedVersion: match.version, commandId: createCommandId('match-slot-config') }),
+      body: JSON.stringify({ setCountOverride, expectedVersion: match.version, commandId: createCommandId('match-set-config') }),
     });
     const data = await response.json() as { error?: string };
     setBusy('');
-    if (!response.ok) setError(data.error ?? copy.admin.bracket.slotConfigError);
+    if (!response.ok) setError(data.error ?? copy.admin.bracket.setConfigError);
     void load();
   }
 
@@ -147,9 +147,9 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
     if (!matchToReopen) return;
     setBusy(`reopen-${matchToReopen.id}`);
     setError('');
-    const response = await apiFetch(`/api/admin/matches/${matchToReopen.id}/slots/undo`, {
+    const response = await apiFetch(`/api/admin/matches/${matchToReopen.id}/sets/undo`, {
       method: 'POST',
-      body: JSON.stringify({ reason: reopenReason, expectedVersion: matchToReopen.version, commandId: createCommandId('slot-undo-admin') }),
+      body: JSON.stringify({ reason: reopenReason, expectedVersion: matchToReopen.version, commandId: createCommandId('set-undo-admin') }),
     });
     const data = await response.json() as { error?: string };
     setBusy('');
@@ -311,7 +311,7 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
             )}
           >
             <p className="text-sm leading-6 text-[rgba(88,16,16,0.72)]">
-              {matchToReopen ? fillTemplate(copy.admin.bracket.reopenBody, { number: matchToReopen.slots.at(-1)?.slotNumber ?? matchToReopen.slots.length }) : null}
+              {matchToReopen ? fillTemplate(copy.admin.bracket.reopenBody, { number: matchToReopen.sets.at(-1)?.setNumber ?? matchToReopen.sets.length }) : null}
             </p>
             <label className="mt-4 block text-sm font-semibold text-[var(--dash-text)]" htmlFor="reopen-reason">{copy.admin.bracket.reopenReason}</label>
             <input
@@ -381,10 +381,10 @@ function BracketCategory({
   isCompleted: boolean;
   onCommand: (bracket: BracketDto, action: 'generate' | 'lock' | 'publication') => void;
   onLock: (bracket: BracketDto) => void;
-  onMatchOverride: (match: MatchDto, slotCountOverride: number | null) => void;
+  onMatchOverride: (match: MatchDto, setCountOverride: number | null) => void;
   onMoveRequest: (slot: PlacementSlot) => void;
   onReopen: (match: MatchDto) => void;
-  onRoundDefault: (bracket: BracketDto, round: MatchDto['round'], slotCount: number) => void;
+  onRoundDefault: (bracket: BracketDto, round: MatchDto['round'], setCount: number) => void;
 }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale];

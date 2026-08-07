@@ -25,6 +25,7 @@ import {
 } from './events.service.js';
 import { requireCapability, requireEventCapability, requireEventReadCapability, userHasCapability } from '../../common/capabilities.js';
 import { requestIp } from '../../common/audit.js';
+import { prisma } from '../../database/prisma.js';
 import { assignEventOrganiser, listEventOrganisers, listOrganiserCandidates, revokeEventOrganiser } from './event-organisers.service.js';
 import { requireCommandId } from '../../common/commands.js';
 
@@ -158,6 +159,25 @@ eventsRouter.delete('/api/admin/events/:eventId/organisers/:userId', asyncHandle
   response.json({ organisers: await listEventOrganisers(eventId) });
 }));
 
+/**
+ * Who may read an event's payment account. Staff run the event; an entrant
+ * needs the transfer reference for as long as their entry exists; a prospective
+ * entrant needs it only while entries are open.
+ */
+async function canSeeBankDetails(
+  user: { id: string; role: UserRole } | null | undefined,
+  event: { id: string; status: EventStatus },
+) {
+  if (!user) return false;
+  if (user.role === UserRole.ADMIN || user.role === UserRole.ORGANISER) return true;
+  if (event.status === EventStatus.REGISTRATION_OPEN) return true;
+  const entry = await prisma.eventRegistration.findFirst({
+    where: { eventId: event.id, OR: [{ ownerId: user.id }, { teammateId: user.id }] },
+    select: { id: true },
+  });
+  return Boolean(entry);
+}
+
 eventsRouter.patch('/api/admin/events/:id/tournament-publication', asyncHandler(async (request, response) => {
   const admin = await requireCapability(request, Capability.EVENT_PUBLISH);
   const event = await updateTournamentPublication({ eventId: requireParamId(request.params.id), actorId: admin.id, publicLiveScoringEnabled: typeof request.body.publicLiveScoringEnabled === 'boolean' ? request.body.publicLiveScoringEnabled : undefined, resultsPublished: typeof request.body.resultsPublished === 'boolean' ? request.body.resultsPublished : undefined, expectedVersion: Number(request.body.expectedVersion) });
@@ -167,8 +187,12 @@ eventsRouter.patch('/api/admin/events/:id/tournament-publication', asyncHandler(
 eventsRouter.get('/api/events/:id', asyncHandler(async (request, response) => {
   const user = await getCurrentUser(request);
   const event = await getEventById(requireParamId(request.params.id), user?.role === UserRole.ADMIN);
-  // Authenticated single-event view carries bank details so the register modal can render them (F3).
-  response.json({ event: serializeEvent(event, { includeBankDetails: Boolean(user) }) });
+  // The register modal needs the account to pay into (F3), but "any logged-in
+  // user, on any event, forever" is a wider audience than that needs: the IBAN
+  // and receiver name stayed readable long after an event finished. Show them
+  // to staff, to someone who already has an entry, and to everyone else only
+  // while the event is actually taking entries.
+  response.json({ event: serializeEvent(event, { includeBankDetails: await canSeeBankDetails(user, event) }) });
 }));
 
 eventsRouter.get('/api/public/events/:id', asyncHandler(async (request, response) => {

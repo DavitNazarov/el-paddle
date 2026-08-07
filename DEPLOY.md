@@ -316,6 +316,26 @@ docker compose exec -T postgres psql -U "$POSTGRES_USER" -d elpadel_restore_chec
 
 Run a restore drill before launch and after every material schema change. Record the backup file, restore timestamp, command output, and operator in your ops log.
 
+### Scheduled off-site backups
+
+`scripts/backup-offsite.sh` dumps, encrypts, uploads and prunes in one pass, and is meant to run from the project root under cron. A dump holds every account's email, phone, password hash and match history, so it is encrypted with GPG (AES-256, symmetric) **before** it leaves the host — the script refuses to run without a passphrase rather than falling back to plaintext.
+
+Add to the production `.env`:
+
+```bash
+BACKUP_RCLONE_REMOTE=b2:elpadel-backups/db
+BACKUP_PASSPHRASE=<long random passphrase>
+BACKUP_RETAIN_DAYS=30
+```
+
+**Keep a copy of `BACKUP_PASSPHRASE` somewhere that is not this server.** It is not recoverable, and a backup you cannot decrypt is not a backup. Uploaded objects are `elpadel-<stamp>.dump.gpg`; restore by decrypting first:
+
+```bash
+gpg --batch --passphrase "$BACKUP_PASSPHRASE" --decrypt backups/elpadel-YOUR_STAMP.dump.gpg | docker compose exec -T postgres pg_restore -U "$POSTGRES_USER" -d elpadel_restore_check --clean --if-exists
+```
+
+Include the decrypt step in the restore drill above — an untested passphrase is the most common way this fails.
+
 ## 11. Existing System PostgreSQL Alternative
 
 The default production compose uses a PostgreSQL container with a named volume:

@@ -17,7 +17,7 @@ export function LanguageSwitcher({ tone = 'dark', className }: LanguageSwitcherP
   return (
     <div
       className={cn(
-        'inline-flex min-h-11 items-center gap-1 rounded-full border p-1',
+        'inline-flex min-h-11 items-center gap-1 rounded-full border px-0.5',
         dark
           ? 'border-[var(--padel-line)] bg-[var(--padel-ink)]/34 text-[var(--padel-ivory)]'
           : 'border-[rgba(88,16,16,0.12)] bg-[var(--padel-ivory)]/70 text-[var(--padel-ink)]',
@@ -37,7 +37,8 @@ export function LanguageSwitcher({ tone = 'dark', className }: LanguageSwitcherP
             aria-pressed={isActive}
             onClick={() => setLocale(item)}
             className={cn(
-              'min-h-9 rounded-full px-3 text-xs font-semibold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2',
+              // 44px touch target — the button is the tappable box, not the pill around it.
+              'min-h-11 rounded-full px-3 text-xs font-semibold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2',
               dark
                 ? 'focus-visible:ring-[var(--padel-gold)]'
                 : 'focus-visible:ring-[var(--padel-red)]',

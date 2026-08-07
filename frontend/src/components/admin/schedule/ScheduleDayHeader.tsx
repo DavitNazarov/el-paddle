@@ -58,14 +58,6 @@ export function ScheduleDayHeader({
 
       <div className={styles.dayMeters}>
         <QueueMeter
-          label={copy.courtsStaffed}
-          done={summary.staffedCourts}
-          total={summary.courtCount}
-          valueLabel={summary.courtCount
-            ? fillTemplate(copy.ofTotal, { done: summary.staffedCourts, total: summary.courtCount })
-            : copy.createToBegin}
-        />
-        <QueueMeter
           label={copy.matchesPlaced}
           done={summary.placed}
           total={totalMatches}

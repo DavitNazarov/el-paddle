@@ -197,7 +197,8 @@ export function DashboardStyles() {
         display: flex;
         align-items: center;
         gap: 0.7rem;
-        min-height: 2.5rem;
+        /* 44px touch target */
+        min-height: 2.75rem;
         width: 100%;
         border-radius: 0.55rem;
         padding: 0 0.75rem;
@@ -247,7 +248,8 @@ export function DashboardStyles() {
 
       .dash-chip {
         display: inline-flex;
-        min-height: 2.25rem;
+        /* 44px touch target */
+        min-height: 2.75rem;
         align-items: center;
         gap: 0.45rem;
         border-radius: 0.5rem;
@@ -322,7 +324,8 @@ export function DashboardStyles() {
 
       .dash-mobile-link {
         display: inline-flex;
-        min-height: 2.35rem;
+        /* 44px touch target */
+        min-height: 2.75rem;
         shrink: 0;
         align-items: center;
         gap: 0.4rem;

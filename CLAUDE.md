@@ -10,7 +10,7 @@ El Padel is a club and tournament management platform. The core tournament flow 
 event setup → registration → opponent requests → bracket → schedule → judging → results
 ```
 
-The system has five audiences: public visitors, players, judges, organisers, and administrators.
+The system has four audiences in the UI: public visitors, players, organisers, and administrators. The `JUDGE` role still exists server-side and every `/api/judge/*` endpoint still works, but it has no frontend surface — admins and organisers run matches from the match control console.
 
 ## Workspace map
 
@@ -18,6 +18,7 @@ The system has five audiences: public visitors, players, judges, organisers, and
 - `frontend/src/components/`: domain and shared UI components
 - `frontend/src/components/tournament/TournamentUI.tsx`: shared tournament presentation primitives
 - `frontend/src/components/shared/dashboard/`: shared role dashboard shell and styling
+- `frontend/src/components/admin/control/`: match control console — the match-day screen joining court, time, draw, and scoring
 - `frontend/src/lib/api/`: browser API client; automatically obtains CSRF tokens
 - `frontend/src/types/`: frontend DTO definitions
 - `backend/src/modules/`: API routes and domain services, grouped by feature
@@ -41,6 +42,7 @@ The system has five audiences: public visitors, players, judges, organisers, and
 ## Domain invariants
 
 - New club signups are applications. Nothing exists in `User`, `Club`, or `ClubMember` until an admin approves; rejection deletes the `ClubApplication` outright, so the same email may apply again. Approval materialises the account, club (applicant as LEADER), and group-mate invite in one transaction, then deletes the application.
+- A club edit (`CLUB_MANAGE`) covers name, slug, description, and logo; changing the slug moves the public club page. Deleting a club is refused while one of its teams is entered in an unfinished event. Otherwise memberships and join requests cascade, past entries keep their row with `clubId` nulled, every member is notified that they now have no club, and the `club.deleted` audit row written before the delete is the only surviving record.
 - Organisers hold no global capability. Every power is checked against an `EventOrganiser` link via `requireEventCapability`, and their capability set is pinned by a test. They cannot create or edit events, review registrations, correct results, reopen events, or manage accounts, clubs, and club requests.
 - A judge may only be assigned to an event in that event's `EventJudge` pool. An actor with global `JUDGE_MANAGE` gets the link created implicitly; an organiser is confined to the pool they built.
 - Scoring authorization is per match: judges through their court assignment, admins always, organisers on events handed to them. Only a judge is bound to one match at a time; the court queue order and one-match-per-court rules bind everyone.
@@ -51,16 +53,18 @@ The system has five audiences: public visitors, players, judges, organisers, and
 - A user whose registration appears in a recorded match cannot be deleted: registrations cascade from the user, but `Match` restricts its participants. The refusal surfaces as a 409 naming the cause, not a foreign-key 500.
 - `User.lastLoginAt` is written best-effort at the five sign-in points only, never awaited, and never from a cookie re-issue such as a password change. It holds the latest sign-in, so it can answer "seen recently" and can never answer "seen last month".
 - Players belong to exactly one club; each club fields at most one team (owner + teammate from the same club) per event.
+- Both players must already be active accounts at registration time. Registration never creates a user, never issues an invite token, and never joins anyone to a club — it refuses a teammate who is unknown, still invited, or unverified, naming them in the message. Invitations belong to the club (and to admin account creation); registration only reads their result. The club invitation email states this, and the saved-teammate picker shows a pending mate as disabled rather than hiding them.
 - Opponent requests apply only to the first bracket round and require final admin approval. An approved, overridden, or applied pairing claims both of its entries, so approval is refused while either entry belongs to another such pairing; releasing (rejecting) an approved pairing frees them again, and a pairing already applied to the bracket is undone on the bracket instead.
 - Brackets support 2–16 approved entries; the single-elimination graph sizes to 2, 4, 8, or 16 slots and fills the gap with byes.
 - A locked bracket snapshots participant identity for historical accuracy.
-- Judges can score only assigned matches and must process a court queue in order.
-- Matches are decided in slots: `slotCount` is the number of slot wins to race to (1, 2, or 3), and at most `2 * slotCount - 1` slots are ever played, so a decider always exists.
-- For `SLOTS` matches `Match.scoreA`/`scoreB` hold the slot-win tally and must always equal the `MatchSlot` rows. `MatchSlot` is current state; `SlotEvent` is the append-only history.
-- The slot format resolves as match override, then bracket round default, then one. It is snapshotted onto the match when it starts and is immutable from then on.
-- Undo removes only the last slot. A judge may undo while the match is in progress; reopening a completed match is admin-only, requires a reason, and is refused when the downstream match has started or the court or judge is busy.
+- Judges can score only assigned matches and must process a court queue in order. Admins and organisers are unbound scorers: authorized on every match of their event and able to run several courts at once, still subject to the court queue order and one live match per court.
+- Matches are decided in sets: `setCount` is the number of set wins to race to (1, 2, or 3), and at most `2 * setCount - 1` sets are ever played, so a decider always exists. A set records only which side won it; there is no game score.
+- For `SETS` matches `Match.scoreA`/`scoreB` hold the set-win tally and must always equal the `MatchSet` rows. `MatchSet` is current state; `SetEvent` is the append-only history.
+- The match control console scores by writing the whole result as a tally, not set by set: two numbers, one command, one completed match. The tally must be a finished result for the frozen `setCount` and may never fall below sets already recorded — that is an undo. The `MatchSet` rows it is made of are derived, loser's sets first so the decider belongs to the winner, and one such command writes one `SetEvent`. Recording a single set stays available to a courtside judge through `POST /api/judge/matches/:id/sets`.
+- The set format resolves as match override, then bracket round default, then one. It is snapshotted onto the match when it starts and is immutable from then on.
+- Undo removes only the last set, and only while the match is in progress. Reopening a completed match is admin-only, requires a reason, and is refused when the downstream match has started or the court is busy. Undo has no control on the match control console: correcting a recorded result goes through the bracket page's reopen.
 - Historical matches keep `scoringMode = POINTS` with scores between zero and six, where six completes the match.
-- `Match.nextMatchSlot` means the side of the next match a winner advances into — never a scoring slot.
+- `Match.nextMatchSlot` means the side of the next match a winner advances into — never a scoring set. "Slot" survives in exactly three non-scoring senses: this field, first-round bracket placement, and the owner/teammate roster slot. Everything else that was a "slot" is now a "set".
 - Completed result corrections must not overwrite a downstream match that has already started.
 - Public event page, registration roster, bracket, schedule, live scoring, and final results have independent publication controls.
 

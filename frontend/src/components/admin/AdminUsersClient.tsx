@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Ban, Gavel, Plus, Shield, Trash2, Undo2, UserCog, UserRound, Users } from 'lucide-react';
+import { Ban, Plus, Shield, Trash2, Undo2, UserCog, UserRound, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,10 +38,16 @@ import type { UserRole } from '@/types/auth';
 const emptyForm = { email: '', name: '', surname: '', password: '', clubId: '' };
 const emptyDisqualify = { until: '', reason: '' };
 
-const roleIcons: Record<UserRole, typeof Users> = {
+/**
+ * Roles with an account-management screen. `JUDGE` accounts still exist and are
+ * still counted in platform statistics, but the role has no frontend surface, so
+ * it has no page here either.
+ */
+export type ManagedRole = Exclude<UserRole, 'JUDGE'>;
+
+const roleIcons: Record<ManagedRole, typeof Users> = {
   ADMIN: Shield,
   ORGANISER: UserCog,
-  JUDGE: Gavel,
   USER: UserRound,
 };
 
@@ -50,7 +56,7 @@ const roleIcons: Record<UserRole, typeof Users> = {
  * player must belong to a club, only a player can be disqualified — so a single
  * list with a role filter made every column mean "sometimes".
  */
-export function AdminUsersClient({ role }: { role: UserRole }) {
+export function AdminUsersClient({ role }: { role: ManagedRole }) {
   const { dictionary, locale, t } = useI18n();
   const admin = dictionary.dashboard.admin;
   const copy = admin.usersPage;

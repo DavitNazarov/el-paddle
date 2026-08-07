@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, ExternalLink, Plus, Users } from 'lucide-react';
+import { Building2, ExternalLink, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +21,7 @@ import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import { AdminShell } from './AdminShell';
 import { DirectoryTable, rowActionClassName } from './directory/DirectoryTable';
 import { DirectoryToolbar } from './directory/DirectoryToolbar';
-import { EditorModal } from './directory/DirectoryModals';
+import { ConfirmModal, EditorModal } from './directory/DirectoryModals';
 import {
   ALL_FACET,
   CLUB_FACET_VALUES,
@@ -48,6 +48,8 @@ export function AdminClubsClient() {
   const [clubForm, setClubForm] = useState(emptyClub);
   const [memberForm, setMemberForm] = useState(emptyMember);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<ClubDto | null>(null);
+  const [deleting, setDeleting] = useState<ClubDto | null>(null);
   const [memberClub, setMemberClub] = useState<ClubDto | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -79,15 +81,24 @@ export function AdminClubsClient() {
     [clubs, dir, query],
   );
 
-  async function send(key: string, path: string, body: unknown, success: string, failureCopy: string) {
+  /** One writer for every command: they differ only in route, method and message. */
+  async function send(
+    key: string,
+    path: string,
+    method: string,
+    body: unknown,
+    success: string,
+    failureCopy: string,
+  ) {
     setError('');
     setFormError('');
     setMessage('');
     setBusy(key);
     const response = await apiFetch(path, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+      method,
+      ...(body === undefined
+        ? {}
+        : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
     });
     const result = (await response.json().catch(() => ({}))) as { error?: string };
     setBusy(null);
@@ -98,10 +109,39 @@ export function AdminClubsClient() {
   }
 
   async function createClub() {
-    const failure = await send('club', '/api/admin/clubs', clubForm, admin.messages.clubCreated, admin.messages.actionFailed);
+    const failure = await send('club', '/api/admin/clubs', 'POST', clubForm, admin.messages.clubCreated, admin.messages.actionFailed);
     if (failure) return setFormError(failure);
     setClubForm(emptyClub);
     setCreateOpen(false);
+  }
+
+  async function updateClub() {
+    if (!editing) return;
+    const failure = await send(
+      'club',
+      `/api/admin/clubs/${editing.id}`,
+      'PATCH',
+      clubForm,
+      admin.messages.clubUpdated,
+      admin.messages.actionFailed,
+    );
+    if (failure) return setFormError(failure);
+    setClubForm(emptyClub);
+    setEditing(null);
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    const failure = await send(
+      `delete-${deleting.id}`,
+      `/api/admin/clubs/${deleting.id}`,
+      'DELETE',
+      undefined,
+      admin.messages.clubDeleted,
+      admin.messages.actionFailed,
+    );
+    if (failure) return setFormError(failure);
+    setDeleting(null);
   }
 
   async function addClubMember() {
@@ -109,6 +149,7 @@ export function AdminClubsClient() {
     const failure = await send(
       `member-${memberClub.id}`,
       `/api/admin/clubs/${memberClub.id}/members`,
+      'POST',
       memberForm,
       admin.messages.memberAdded,
       admin.messages.memberAddFailed,
@@ -131,6 +172,63 @@ export function AdminClubsClient() {
       <Plus className="h-4 w-4" />
       {copy.showCreate}
     </Button>
+  );
+
+  function openEdit(club: ClubDto) {
+    setClubForm({
+      name: club.name,
+      slug: club.slug,
+      description: club.description,
+      logoUrl: club.logoUrl,
+    });
+    setFormError('');
+    setEditing(club);
+  }
+
+  /** The same four profile fields for create and edit; only the field ids differ. */
+  const clubFields = (idPrefix: string) => (
+    <>
+      <div className={styles.formRow}>
+        <DashboardField label={admin.clubs.clubName} id={`${idPrefix}-name`}>
+          <Input
+            id={`${idPrefix}-name`}
+            required
+            value={clubForm.name}
+            onChange={(fieldEvent) => setClubForm((current) => ({ ...current, name: fieldEvent.target.value }))}
+            placeholder={admin.clubs.clubPlaceholder}
+            className={formControlClassName}
+          />
+        </DashboardField>
+        <DashboardField label={admin.clubs.slug} id={`${idPrefix}-slug`} hint={t('common.optional')}>
+          <Input
+            id={`${idPrefix}-slug`}
+            value={clubForm.slug}
+            onChange={(fieldEvent) => setClubForm((current) => ({ ...current, slug: fieldEvent.target.value }))}
+            placeholder={admin.clubs.slugPlaceholder}
+            className={formControlClassName}
+          />
+        </DashboardField>
+      </div>
+      <DashboardField label={admin.clubs.logoUrl} id={`${idPrefix}-logo`} hint={t('common.optional')}>
+        <Input
+          id={`${idPrefix}-logo`}
+          type="url"
+          value={clubForm.logoUrl}
+          onChange={(fieldEvent) => setClubForm((current) => ({ ...current, logoUrl: fieldEvent.target.value }))}
+          placeholder={admin.clubs.logoPlaceholder}
+          className={formControlClassName}
+        />
+      </DashboardField>
+      <DashboardField label={admin.clubs.descriptionLabel} id={`${idPrefix}-description`} hint={t('common.optional')}>
+        <Textarea
+          id={`${idPrefix}-description`}
+          value={clubForm.description}
+          onChange={(fieldEvent) => setClubForm((current) => ({ ...current, description: fieldEvent.target.value }))}
+          placeholder={admin.clubs.descriptionPlaceholder}
+          className={formControlClassName}
+        />
+      </DashboardField>
+    </>
   );
 
   return (
@@ -161,9 +259,9 @@ export function AdminClubsClient() {
           icon={Building2}
           loadingLabel={admin.clubs.loadingTitle}
           rowKey={(club) => club.id}
-          minWidthClassName="min-w-[820px]"
+          minWidthClassName="min-w-[900px]"
           actionsHeader={admin.clubs.columnActions}
-          actionsWidth="w-[120px] 2xl:w-[300px]"
+          actionsWidth="w-[212px] 2xl:w-[440px]"
           empty={{
             title: admin.clubs.emptyTitle,
             description: admin.clubs.emptyDescription,
@@ -225,6 +323,17 @@ export function AdminClubsClient() {
                 size="sm"
                 variant="outline"
                 className={cn(softButtonClassName, rowActionClassName)}
+                aria-label={admin.clubs.edit}
+                title={admin.clubs.edit}
+                onClick={() => openEdit(club)}
+              >
+                <Pencil className="h-4 w-4" />
+                <span className="hidden 2xl:inline">{admin.clubs.edit}</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className={cn(softButtonClassName, rowActionClassName)}
                 aria-label={admin.clubs.addMember}
                 title={admin.clubs.addMember}
                 onClick={() => {
@@ -241,6 +350,20 @@ export function AdminClubsClient() {
                   <ExternalLink className="h-4 w-4" />
                   <span className="hidden 2xl:inline">{admin.clubs.openPage}</span>
                 </Link>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="min-h-11 rounded-md border-[rgba(194,65,59,0.28)] bg-white text-[var(--dash-coral)] hover:bg-[var(--dash-coral-soft)]"
+                aria-label={admin.clubs.delete}
+                title={admin.clubs.delete}
+                onClick={() => {
+                  setFormError('');
+                  setDeleting(club);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="hidden 2xl:inline">{admin.clubs.delete}</span>
               </Button>
             </>
           )}
@@ -261,47 +384,44 @@ export function AdminClubsClient() {
         submitLabel={busy === 'club' ? admin.messages.saving : admin.clubs.saveClub}
         onSubmit={() => void createClub()}
       >
-        <div className={styles.formRow}>
-          <DashboardField label={admin.clubs.clubName} id="club-name">
-            <Input
-              id="club-name"
-              required
-              value={clubForm.name}
-              onChange={(fieldEvent) => setClubForm((current) => ({ ...current, name: fieldEvent.target.value }))}
-              placeholder={admin.clubs.clubPlaceholder}
-              className={formControlClassName}
-            />
-          </DashboardField>
-          <DashboardField label={admin.clubs.slug} id="club-slug" hint={t('common.optional')}>
-            <Input
-              id="club-slug"
-              value={clubForm.slug}
-              onChange={(fieldEvent) => setClubForm((current) => ({ ...current, slug: fieldEvent.target.value }))}
-              placeholder={admin.clubs.slugPlaceholder}
-              className={formControlClassName}
-            />
-          </DashboardField>
-        </div>
-        <DashboardField label={admin.clubs.logoUrl} id="club-logo" hint={t('common.optional')}>
-          <Input
-            id="club-logo"
-            type="url"
-            value={clubForm.logoUrl}
-            onChange={(fieldEvent) => setClubForm((current) => ({ ...current, logoUrl: fieldEvent.target.value }))}
-            placeholder={admin.clubs.logoPlaceholder}
-            className={formControlClassName}
-          />
-        </DashboardField>
-        <DashboardField label={admin.clubs.descriptionLabel} id="club-description" hint={t('common.optional')}>
-          <Textarea
-            id="club-description"
-            value={clubForm.description}
-            onChange={(fieldEvent) => setClubForm((current) => ({ ...current, description: fieldEvent.target.value }))}
-            placeholder={admin.clubs.descriptionPlaceholder}
-            className={formControlClassName}
-          />
-        </DashboardField>
+        {clubFields('club')}
       </EditorModal>
+
+      <EditorModal
+        open={Boolean(editing)}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+        title={copy.editTitle}
+        description={editing ? `${copy.editDescription} · ${editing.name}` : copy.editDescription}
+        formId="edit-club-form"
+        busy={busy === 'club'}
+        error={formError}
+        cancelLabel={t('common.cancel')}
+        submitLabel={busy === 'club' ? admin.messages.saving : copy.saveEdit}
+        onSubmit={() => void updateClub()}
+      >
+        {clubFields('edit-club')}
+      </EditorModal>
+
+      <ConfirmModal
+        open={Boolean(deleting)}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        title={copy.deleteTitle}
+        description={deleting ? copy.deleteDescription.replace('{name}', deleting.name) : copy.deleteDescription}
+        body={
+          deleting?.members.length
+            ? `${fillTemplate(copy.deleteMembers, { count: deleting.members.length })} ${copy.deleteWarning}`
+            : copy.deleteWarning
+        }
+        busy={Boolean(busy?.startsWith('delete-'))}
+        error={formError}
+        cancelLabel={t('common.cancel')}
+        confirmLabel={busy?.startsWith('delete-') ? admin.messages.saving : copy.confirmDelete}
+        onConfirm={() => void confirmDelete()}
+      />
 
       <EditorModal
         open={Boolean(memberClub)}

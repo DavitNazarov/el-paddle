@@ -26,8 +26,8 @@ The Next.js App Router application provides:
 
 - a public marketing landing page plus club, player, event, bracket, schedule, and match-history pages with SEO metadata, sitemap, and structured data;
 - player dashboards for the club, entries, events, opponent requests, notifications, match history, and account settings;
-- judge assignment, court queue, and scoring screens;
-- administrative screens for events, registrations, opponent requests, brackets, schedules, users, judges, clubs, categories, settings, and operations.
+- the match control console: court, time, draw, and scoring on one screen;
+- administrative screens for events, registrations, opponent requests, brackets, schedules, match control, users, clubs, categories, settings, and operations.
 
 The UI is bilingual (English and Georgian) via the shared i18n provider. The shared API client (`frontend/src/lib/api/`) sends credentialed requests and automatically retrieves `/api/auth/csrf` before unsafe requests, sending the token in `x-csrf-token`.
 
@@ -64,15 +64,15 @@ In production, Docker runs the worker as a separate service (`RUN_OUTBOX_IN_API=
 | Module | Responsibility |
 | --- | --- |
 | `auth` | registration with email verification codes, login, logout, invite completion, Google OAuth, first-admin bootstrap, self-service club creation and club-mate invites |
-| `users` | user/judge administration, invites, disqualification, judge activation, public player directory, account deletion |
+| `users` | account administration, invites, disqualification, activation, public player directory, account deletion |
 | `clubs` | club directory, leader-managed rosters, join requests, and member removal with registration resolution |
 | `categories` | competition categories |
 | `events` | event configuration (including fee and bank details), lifecycle, and publication controls |
 | `registrations` | club team entries, review workflow, lineup replacement, roster publication |
 | `opponent-requests` | first-round opponent negotiation windows, player responses, and admin decisions |
-| `brackets` | draw generation, first-round placement, slot defaults, locking, publication, and the single-elimination progression graph |
-| `scheduling` | courts, queues and their ordering, judge assignments, timing, publication, judge queue reads |
-| `matches` | start, slot scoring, completion, correction, reopening, snapshots, history, and visibility rules |
+| `brackets` | draw generation, first-round placement, set defaults, locking, publication, and the single-elimination progression graph |
+| `scheduling` | courts, queues and their ordering, timing, publication, court queue reads (judge assignment endpoints remain but have no UI) |
+| `matches` | start, set scoring, completion, correction, reopening, snapshots, history, and visibility rules |
 | `notifications` | in-app notification inbox and read state |
 | `dashboard` | player dashboard aggregate, admin summary counts, and platform statistics (bucketed aggregates behind a 60 s in-process cache; pure bucket and delta maths in `statsModel.ts`) |
 | `operations` | audit inspection and email-delivery retry |
@@ -99,13 +99,13 @@ Mutable tournament records (events, registrations, requests, brackets, matches, 
 
 State-changing tournament commands accept `commandId`. The server hashes the payload and stores a `CommandReceipt`. Repeating the same ID with the same payload returns the existing result; reusing an ID with a different payload is rejected.
 
-### Slot scoring
+### Set scoring
 
-`Match.scoringMode` selects the engine: `POINTS` for events played before the slot format, `SLOTS` for everything since. A slot match races to `Match.slotCount` slot wins, capped at `2 * slotCount - 1` slots so a decider always exists; the rules live as pure functions in `backend/src/modules/matches/slot-engine.ts`.
+`Match.scoringMode` selects the engine: `POINTS` for events played before the set format, `SETS` for everything since. A set match races to `Match.setCount` set wins, capped at `2 * setCount - 1` sets so a decider always exists; the rules live as pure functions in `backend/src/modules/matches/set-engine.ts`.
 
-`MatchSlot` holds the current decided slots and is the row an undo deletes. `SlotEvent` is the append-only history of every decision and withdrawal, and its `@@unique([actorId, commandId])` is the idempotency anchor, mirroring `ScoreEvent` in the legacy engine. `Match.scoreA`/`scoreB` denormalize the tally so every existing read path — serializers, public boards, match history — keeps working unchanged; they are rewritten from the `MatchSlot` rows inside the same transaction.
+`MatchSet` holds the current decided sets and is the row an undo deletes. `SetEvent` is the append-only history of every decision and withdrawal, and its `@@unique([actorId, commandId])` is the idempotency anchor, mirroring `ScoreEvent` in the legacy engine. `Match.scoreA`/`scoreB` denormalize the tally so every existing read path — serializers, public boards, match history — keeps working unchanged; they are rewritten from the `MatchSet` rows inside the same transaction.
 
-The format is resolved once, when the match starts: the per-match `slotCountOverride`, else the `BracketRoundConfig` row for that round, else one. The resolved value is written to `Match.slotCount`, which is what makes later configuration changes safe during live play.
+The format is resolved once, when the match starts: the per-match `setCountOverride`, else the `BracketRoundConfig` row for that round, else one. The resolved value is written to `Match.setCount`, which is what makes later configuration changes safe during live play.
 
 ### Queue ordering
 
@@ -134,7 +134,7 @@ Roles are `USER` (player), `JUDGE`, `ORGANISER`, and `ADMIN`.
 - Administrators require the specific capability for each privileged operation; capabilities can be individually granted or denied per user.
 - `ADMIN_EMAILS` elevation applies only after the email address is verified.
 
-Realtime subscriptions use the same boundaries: authentication alone is insufficient to join an unpublished event or match room.
+Realtime subscriptions use the same boundaries: authentication alone is insufficient to join an unpublished event or match room. Because the event room's public gate (`isPublished`) is coarser than the per-match publication rules the REST reads apply, the room a subscriber lands in decides what they may hear: staff on the event join `event-staff:<id>` and receive full payloads, everyone else joins `event:<id>` and receives the topic with the payload stripped to the event id. A stripped topic is still a complete invalidation signal, because clients refetch the authoritative record rather than trusting a payload.
 
 ## Event lifecycle
 

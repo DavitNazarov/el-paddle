@@ -1,14 +1,14 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { CalendarClock, ClipboardList, GitBranch, Swords } from 'lucide-react';
+import { CalendarClock, ClipboardList, GitBranch, Radio, Swords } from 'lucide-react';
 import { SignalCard, SignalGrid } from '@/components/shared/dashboard/DashboardSignals';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import type { EventWorkspaceSignals } from '@/hooks/useEventWorkspaceSignals';
 import type { EventDto } from '@/types/admin';
 
-type StageKey = 'registrations' | 'requests' | 'bracket' | 'schedule';
+type StageKey = 'registrations' | 'requests' | 'bracket' | 'schedule' | 'control';
 
 type Stage = {
   key: StageKey;
@@ -30,10 +30,10 @@ type Stage = {
 const focusByStatus: Partial<Record<EventDto['status'], StageKey>> = {
   REGISTRATION_OPEN: 'registrations',
   REGISTRATION_CLOSED: 'requests',
-  ONGOING: 'schedule',
+  ONGOING: 'control',
 };
 
-/** The four operational stages of an event, each carrying its own live count. */
+/** The five operational stages of an event, each carrying its own live count. */
 export function EventStageBoard({ event, signals }: { event: EventDto; signals: EventWorkspaceSignals }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale].admin.event;
@@ -95,6 +95,21 @@ export function EventStageBoard({ event, signals }: { event: EventDto; signals: 
         : null,
       quiet: signals.schedule?.courts === 0,
       attention: false,
+    },
+    {
+      key: 'control',
+      href: `${base}/control`,
+      icon: Radio,
+      title: copy.control,
+      detail: copy.controlDetail,
+      signal: signals.control
+        ? signals.control.live || signals.control.ready
+          ? fillTemplate(copy.controlSignal, signals.control)
+          : copy.nothingYet
+        : null,
+      quiet: signals.control?.live === 0 && signals.control?.ready === 0,
+      // A match ready to start on an ongoing event is the operator's next move.
+      attention: actionable && event.status === 'ONGOING' && Boolean(signals.control?.ready),
     },
   ];
 

@@ -14,8 +14,6 @@ export default function robots(): MetadataRoute.Robots {
           '/admin/',
           '/dashboard',
           '/dashboard/',
-          '/judge',
-          '/judge/',
           '/notifications',
           '/notifications/',
           '/invite',

@@ -14,11 +14,10 @@ import {
   isValidEmail,
   jsonError,
 } from '../../common/http.js';
-import { sendVerificationCodeEmail } from '../../common/notifications.js';
 import {
   addMinutes,
   compareSecret,
-  createVerificationCode,
+  createInviteToken,
   hashSecret,
   hashToken,
   passwordValidationError,
@@ -35,21 +34,24 @@ import {
   OAUTH_LEGAL_COOKIE,
   reconcileUserRole,
   requireUser,
+  revokeSession,
   revokeUserSessions,
+  readSessionId,
   roleForEmail,
   setOAuthStateCookie,
   setOAuthLegalCookie,
   setApplicationCookie,
-  setSessionCookie,
+  startSession,
   toPublicUser,
   touchLastLogin,
 } from './auth.service.js';
-import { createClubForPlayer, inviteClubMate, requireClubId, setPlayerClub } from '../clubs/clubs.service.js';
+import { createClubForPlayer, inviteClubMate, requireClubId, requireClubLeadership, setPlayerClub } from '../clubs/clubs.service.js';
 import { startGoogleApplication } from '../club-applications/club-applications.service.js';
 import { serializeClub } from '../../common/serializers.js';
 import { clubInclude } from '../../common/includes.js';
 import { assertNotDisqualified } from '../../common/disqualification.js';
-import { rateLimit } from '../../common/rateLimit.js';
+import { sendPasswordResetEmail } from '../../common/notifications.js';
+import { consumeLimit, rateLimit } from '../../common/rateLimit.js';
 import { auditLog, requestIp } from '../../common/audit.js';
 import {
   ACCOUNT_TERMS_VERSION,
@@ -61,7 +63,6 @@ export const authRouter = Router();
 
 const ADMIN_BOOTSTRAP_LOCK_ID = 730_127_001;
 
-const authBurstLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, keyPrefix: 'auth' });
 const authStrictLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyPrefix: 'auth-strict' });
 const bootstrapLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, keyPrefix: 'bootstrap' });
 
@@ -183,145 +184,19 @@ authRouter.post('/api/admin/bootstrap', bootstrapLimit, asyncHandler(async (requ
   });
   await reconcileUserRole(result.user.id);
   touchLastLogin(result.user.id);
-  setSessionCookie(response, result.user);
+  await startSession(response, result.user);
   response.status(result.created ? 201 : 200).json({
     created: result.created,
     user: toPublicUser(result.user),
   });
 }));
 
-authRouter.post('/api/auth/register', authBurstLimit, asyncHandler(async (request, response) => {
-  const email = cleanEmail(request.body.email);
-  const name = cleanString(request.body.name);
-  const surname = cleanString(request.body.surname);
-  const phone = cleanString(request.body.phone);
-  const password = cleanString(request.body.password);
-
-  requireAccountLegalAcceptance({
-    legalAccepted: request.body.legalAccepted,
-    eligibilityConfirmed: request.body.eligibilityConfirmed,
-  });
-
-  if (!isValidEmail(email)) jsonError('Enter a valid email.');
-  if (!name || !surname) jsonError('Name and surname are required.');
-  if (phone.length < 5) jsonError('Phone number is required.');
-  const passwordError = passwordValidationError(password);
-  if (passwordError) jsonError(passwordError);
-
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing?.status === UserStatus.ACTIVE && existing.passwordHash) {
-    jsonError('This email is already registered.', 409);
-  }
-
-  // Do not elevate via ADMIN_EMAILS until the email is verified.
-  const role =
-    existing?.role === UserRole.ADMIN ? UserRole.ADMIN : UserRole.USER;
-
-  const passwordHash = await hashSecret(password);
-  const acceptedAt = new Date();
-  const user = existing
-    ? await prisma.user.update({
-        where: { id: existing.id },
-        data: {
-          name,
-          surname,
-          phone,
-          passwordHash,
-          role,
-          status: UserStatus.PENDING_VERIFICATION,
-          termsAcceptedAt: acceptedAt,
-          termsVersion: ACCOUNT_TERMS_VERSION,
-          privacyAcknowledgedAt: acceptedAt,
-          privacyVersion: PRIVACY_POLICY_VERSION,
-          eligibilityConfirmedAt: acceptedAt,
-        },
-      })
-    : await prisma.user.create({
-        data: {
-          email,
-          name,
-          surname,
-          phone,
-          passwordHash,
-          role,
-          status: UserStatus.PENDING_VERIFICATION,
-          termsAcceptedAt: acceptedAt,
-          termsVersion: ACCOUNT_TERMS_VERSION,
-          privacyAcknowledgedAt: acceptedAt,
-          privacyVersion: PRIVACY_POLICY_VERSION,
-          eligibilityConfirmedAt: acceptedAt,
-        },
-      });
-
-  const code = createVerificationCode();
-  await prisma.emailVerificationCode.create({
-    data: {
-      userId: user.id,
-      codeHash: await hashSecret(code),
-      expiresAt: addMinutes(30),
-    },
-  });
-
-  await sendVerificationCodeEmail(email, code);
-  response.status(201).json({ ok: true, email, message: 'Verification code sent.' });
-}));
-
-authRouter.post('/api/auth/verify', authStrictLimit, asyncHandler(async (request, response) => {
-  const email = cleanEmail(request.body.email);
-  const code = cleanString(request.body.code);
-
-  if (!email || !code) jsonError('Email and code are required.');
-
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) jsonError('User not found.', 404);
-
-  const verification = await prisma.emailVerificationCode.findFirst({
-    where: {
-      userId: user.id,
-      usedAt: null,
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  if (!verification) {
-    jsonError('No verification code found. Sign up again to receive a new code.');
-  }
-
-  if (verification.expiresAt.getTime() <= Date.now()) {
-    jsonError('Verification code expired. Sign up again to receive a new code.');
-  }
-
-  const codeOk = await compareSecret(code, verification.codeHash);
-  if (!codeOk) jsonError('Incorrect verification code.', 401);
-
-  const verifiedUser = await prisma.$transaction(async (tx) => {
-    await tx.emailVerificationCode.update({
-      where: { id: verification.id },
-      data: { usedAt: new Date() },
-    });
-    return tx.user.update({
-      where: { id: user.id },
-      data: {
-        emailVerifiedAt: new Date(),
-        status: UserStatus.ACTIVE,
-        role: roleForEmail(user.email, user.role, { emailVerified: true }),
-      },
-      include: {
-        clubMemberships: {
-          include: {
-            club: { select: { id: true, name: true, slug: true } },
-          },
-          take: 1,
-        },
-      },
-    });
-  });
-
-  await reconcileUserRole(verifiedUser.id);
-  touchLastLogin(verifiedUser.id);
-  setSessionCookie(response, verifiedUser);
-  response.json({ user: toPublicUser(verifiedUser) });
-}));
+// There is deliberately no direct `/api/auth/register` + `/api/auth/verify`
+// pair here. New signups are club applications reviewed by an admin
+// (`/api/applications`), and a self-service route that minted an ACTIVE account
+// bypassed that gate entirely. It also let an unauthenticated caller write a
+// password hash onto any address that was not yet both ACTIVE and
+// password-backed, which survived a later Google sign-in as a takeover.
 
 authRouter.post('/api/auth/login', authStrictLimit, asyncHandler(async (request, response) => {
   const email = cleanEmail(request.body.email);
@@ -329,6 +204,12 @@ authRouter.post('/api/auth/login', authStrictLimit, asyncHandler(async (request,
   const ip = requestIp(request);
 
   if (!email || !password) jsonError('Email and password are required.');
+  // The middleware limiter above counts per address, which a credential-stuffing
+  // run spreads across thousands of them. Counting per target account is what
+  // actually bounds attempts on any one password. The bucket depends only on
+  // the caller's own request count, so it reveals nothing about whether the
+  // address has an account.
+  consumeLimit({ windowMs: 15 * 60 * 1000, max: 20, keyPrefix: 'login-email', subject: email });
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -381,14 +262,18 @@ authRouter.post('/api/auth/login', authStrictLimit, asyncHandler(async (request,
   auditLog({ event: 'auth.login', outcome: 'success', userId: user.id, email, ip });
   await reconcileUserRole(user.id);
   touchLastLogin(user.id);
-  setSessionCookie(response, user);
+  await startSession(response, user);
   response.json({ user: toPublicUser(user) });
 }));
 
+// Signs out this device only. The session id is read from the cookie directly
+// rather than via getCurrentUser, so a device whose account was already revoked
+// elsewhere can still clean up its own row.
 authRouter.post('/api/auth/logout', asyncHandler(async (request, response) => {
+  const sessionId = readSessionId(request);
   const current = await getCurrentUser(request);
+  if (sessionId) await revokeSession(sessionId);
   if (current) {
-    await revokeUserSessions(current.id);
     auditLog({
       event: 'auth.logout',
       outcome: 'success',
@@ -398,6 +283,135 @@ authRouter.post('/api/auth/logout', asyncHandler(async (request, response) => {
     });
   }
   clearSessionCookie(response);
+  response.json({ ok: true });
+}));
+
+// Signs out every device, including this one. Separate from logout on purpose:
+// one is routine, the other is what you reach for when a device is lost or a
+// password may be known — and it should say so rather than happen by surprise.
+authRouter.post('/api/auth/logout-all', asyncHandler(async (request, response) => {
+  const current = await requireUser(request);
+  await revokeUserSessions(current.id);
+  auditLog({
+    event: 'auth.logout_all',
+    outcome: 'success',
+    userId: current.id,
+    email: current.email,
+    ip: requestIp(request),
+  });
+  clearSessionCookie(response);
+  response.json({ ok: true });
+}));
+
+/** How long a reset link stays usable. Short: it is a bearer token in an inbox. */
+const PASSWORD_RESET_LIFETIME_MINUTES = 30;
+
+/**
+ * Ask for a reset link.
+ *
+ * The response never varies. Telling the caller whether an address has an
+ * account turns this endpoint into an account-existence oracle, which is worse
+ * than the small confusion of a silent no-op for a mistyped address.
+ */
+authRouter.post('/api/auth/password-reset', authStrictLimit, asyncHandler(async (request, response) => {
+  const email = cleanEmail(request.body.email);
+  const identical = { ok: true, message: 'If that email has an account, a reset link is on its way.' };
+
+  if (!isValidEmail(email)) {
+    response.json(identical);
+    return;
+  }
+  // Per-address, so a script cannot mail-bomb one person's inbox by rotating
+  // source addresses. Charged before the lookup so the timing does not differ.
+  consumeLimit({ windowMs: 15 * 60 * 1000, max: 3, keyPrefix: 'password-reset', subject: email });
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, status: true },
+  });
+
+  // An INVITED account has its own completion link, and an INACTIVE one must not
+  // be revivable by email alone.
+  if (user && user.status === UserStatus.ACTIVE) {
+    const token = createInviteToken();
+    await prisma.$transaction([
+      // One live link at a time: requesting a new one retires the old.
+      prisma.passwordResetToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: hashToken(token),
+          expiresAt: addMinutes(PASSWORD_RESET_LIFETIME_MINUTES),
+        },
+      }),
+    ]);
+    auditLog({
+      event: 'auth.password_reset_request',
+      outcome: 'success',
+      userId: user.id,
+      email: user.email,
+      ip: requestIp(request),
+    });
+    await sendPasswordResetEmail(user.email, token, PASSWORD_RESET_LIFETIME_MINUTES);
+  }
+
+  response.json(identical);
+}));
+
+/**
+ * Redeem a reset link.
+ *
+ * Consuming one bumps `sessionVersion`, so whoever knew the old password — the
+ * reason the reset was needed — is signed out of every device. The caller is
+ * not signed in here: they log in with the new password, which also proves it
+ * reached the right person.
+ */
+authRouter.post('/api/auth/password-reset/complete', authStrictLimit, asyncHandler(async (request, response) => {
+  const token = cleanString(request.body.token);
+  const password = cleanString(request.body.password);
+
+  if (!token) jsonError('Reset link is missing or incomplete.');
+  const passwordError = passwordValidationError(password);
+  if (passwordError) jsonError(passwordError);
+
+  const reset = await prisma.passwordResetToken.findFirst({
+    where: { tokenHash: hashToken(token), usedAt: null, expiresAt: { gt: new Date() } },
+    include: { user: { select: { id: true, email: true, status: true } } },
+  });
+  // One message for expired, already-used, and never-existed: distinguishing
+  // them tells a holder of a stale link which kind of stale it is.
+  if (!reset || reset.user.status !== UserStatus.ACTIVE) {
+    jsonError('This reset link is no longer valid. Request a new one.', 400);
+  }
+
+  const passwordHash = await hashSecret(password);
+  await prisma.$transaction([
+    // Guarded on `usedAt` still being null so two submissions of the same link
+    // cannot both redeem it.
+    prisma.passwordResetToken.updateMany({
+      where: { id: reset.id, usedAt: null },
+      data: { usedAt: new Date() },
+    }),
+    prisma.user.update({
+      where: { id: reset.user.id },
+      data: { passwordHash, sessionVersion: { increment: 1 } },
+    }),
+    prisma.session.updateMany({
+      where: { userId: reset.user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ]);
+
+  auditLog({
+    event: 'auth.password_reset_complete',
+    outcome: 'success',
+    userId: reset.user.id,
+    email: reset.user.email,
+    ip: requestIp(request),
+  });
   response.json({ ok: true });
 }));
 
@@ -505,7 +519,7 @@ authRouter.post('/api/auth/invite/complete', asyncHandler(async (request, respon
   });
   await reconcileUserRole(user.id);
   touchLastLogin(user.id);
-  setSessionCookie(response, user);
+  await startSession(response, user);
   response.json({ user: toPublicUser(user) });
 }));
 
@@ -529,6 +543,11 @@ authRouter.post('/api/account/club/mate', asyncHandler(async (request, response)
   const current = await requireUser(request);
   if (isStaffRole(current.role)) jsonError('Staff accounts do not belong to clubs.', 400);
   if (!current.club) jsonError('Create your club first.', 400);
+  await requireClubLeadership(current.id, current.club.id);
+  // Each invite mails a caller-supplied address in the club's name, so an
+  // unthrottled route is a relay for mail-bombing a stranger and for burning
+  // the sender's reputation. Five an hour is generous for a real roster.
+  consumeLimit({ windowMs: 60 * 60 * 1000, max: 5, keyPrefix: 'club-mate', subject: current.id });
   assertNotDisqualified({
     disqualifiedUntil: current.disqualifiedUntil ? new Date(current.disqualifiedUntil) : null,
     disqualificationReason: current.disqualificationReason,
@@ -738,7 +757,7 @@ authRouter.get('/api/auth/google/callback', asyncHandler(async (request, respons
 
   await reconcileUserRole(user.id);
   touchLastLogin(user.id);
-  setSessionCookie(response, user);
+  await startSession(response, user);
   const role = roleForEmail(user.email, user.role, { emailVerified: true });
   const isStaff = role === UserRole.ADMIN || role === UserRole.JUDGE;
   if (!isStaff) {

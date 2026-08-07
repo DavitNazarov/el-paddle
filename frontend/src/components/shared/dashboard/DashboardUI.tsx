@@ -19,6 +19,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { tournamentStatus } from '@/lib/i18n/tournament';
 import { DashboardStyles } from './DashboardStyles';
 import { PageNotice, type NoticeTone } from './Feedback';
 
@@ -116,11 +117,16 @@ function HeaderBell({ href, label, unread = 0 }: { href: string; label: string; 
       href={href}
       aria-label={unread > 0 ? `${label} (${unread})` : label}
       title={label}
-      className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-[var(--dash-border)] bg-white text-[var(--dash-muted)] transition-colors hover:border-[var(--dash-border-strong)] hover:text-[var(--dash-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
+      className="relative inline-flex h-11 w-11 items-center justify-center rounded-md border border-[var(--dash-border)] bg-white text-[var(--dash-muted)] transition-colors hover:border-[var(--dash-border-strong)] hover:text-[var(--dash-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
     >
       <Bell className="h-4 w-4" />
       {unread > 0 ? (
-        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--dash-coral)] ring-2 ring-white" aria-hidden />
+        <span
+          className="absolute -right-1.5 -top-1.5 inline-flex h-[1.15rem] min-w-[1.15rem] items-center justify-center rounded-full bg-[var(--dash-coral)] px-1 text-[0.65rem] font-bold leading-none text-white ring-2 ring-white"
+          aria-hidden
+        >
+          {unread > 9 ? '9+' : unread}
+        </span>
       ) : null}
     </Link>
   );
@@ -155,7 +161,7 @@ function ProfileMenu({ name, email, items }: { name?: string; email?: string; it
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[var(--dash-border)] bg-white pl-1 pr-2 text-[var(--dash-text)] transition-colors hover:border-[var(--dash-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
+        className="inline-flex h-11 items-center gap-1.5 rounded-full border border-[var(--dash-border)] bg-white pl-1 pr-2 text-[var(--dash-text)] transition-colors hover:border-[var(--dash-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
       >
         <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--dash-primary)] font-display text-sm font-semibold text-white">
           {initial}
@@ -598,15 +604,17 @@ export function FeedbackBanner({
   kind,
   title,
   children,
+  actions,
   onDismiss,
 }: {
   kind: NoticeTone;
   title?: string;
   children: ReactNode;
+  actions?: ReactNode;
   onDismiss?: () => void;
 }) {
   return (
-    <PageNotice tone={kind} title={title} onDismiss={onDismiss}>
+    <PageNotice tone={kind} title={title} actions={actions} onDismiss={onDismiss}>
       {children}
     </PageNotice>
   );
@@ -690,13 +698,12 @@ export function RegistrationStatusBadge({
 }: {
   status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'NEEDS_CHANGES' | 'WAITLISTED' | 'WITHDRAWN' | 'CANCELLED';
 }) {
-  const { t } = useI18n();
-  const translated = status === 'APPROVED' || status === 'DECLINED' || status === 'PENDING'
-    ? t(`dashboard.status.${status}`)
-    : status.replaceAll('_', ' ');
+  // Every status is translated — a Georgian reader must never meet a raw
+  // "NEEDS CHANGES" where the rest of the screen speaks their language.
+  const { locale } = useI18n();
   return (
     <Badge className={cn('dash-status', `dash-status--${status.toLowerCase().replaceAll('_', '-')}`)}>
-      {translated}
+      {tournamentStatus(locale, status)}
     </Badge>
   );
 }

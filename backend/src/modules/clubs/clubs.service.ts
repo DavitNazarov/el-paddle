@@ -11,14 +11,24 @@ import {
   type Prisma,
 } from '../../generated/prisma/client.js';
 import { clubInclude } from '../../common/includes.js';
-import { isUniqueConstraintError, isValidEmail, jsonError } from '../../common/http.js';
+import {
+  isNotFoundError,
+  isUniqueConstraintError,
+  isValidEmail,
+  jsonError,
+} from '../../common/http.js';
 import { prisma } from '../../database/prisma.js';
 import { slugify, isSafeSlug } from '../../common/slug.js';
 import { isDisqualified } from '../../common/disqualification.js';
 import { addDays, createInviteToken, hashToken } from '../../common/security.js';
 import { sendClubMateInviteEmail } from '../../common/notifications.js';
 import { roleForEmail } from '../auth/auth.service.js';
-import { queueNotification, queueOutbox, writeAudit } from '../../common/domain-events.js';
+import {
+  queueNotification,
+  queueNotifications,
+  queueOutbox,
+  writeAudit,
+} from '../../common/domain-events.js';
 import { cursorArgs, toPage, type ListRange } from '../../common/pagination.js';
 
 export async function listAdminClubs(range: ListRange = {}) {
@@ -87,14 +97,14 @@ export async function setPlayerClub(
   });
 }
 
-type CreateClubInput = {
+type ClubProfileInput = {
   name: string;
   slug: string;
   description: string;
   logoUrl: string;
 };
 
-export async function createClub(input: CreateClubInput) {
+export async function createClub(input: ClubProfileInput) {
   const { name, slug, description, logoUrl } = input;
   if (!isSafeSlug(slug)) jsonError('Club slug is required.');
 
@@ -112,6 +122,166 @@ export async function createClub(input: CreateClubInput) {
     if (isUniqueConstraintError(error)) jsonError('Club slug already exists.', 409);
     throw error;
   }
+}
+
+/**
+ * Edit a club profile. The slug is part of the profile because it is the public
+ * URL: renaming a club without it leaves the old name in the address bar. The
+ * before/after pair is audited so a changed public address stays attributable.
+ */
+export async function updateClub(
+  clubId: string,
+  input: ClubProfileInput,
+  actorId: string,
+  ip?: string | null,
+) {
+  const before = await prisma.club.findUnique({
+    where: { id: clubId },
+    select: { id: true, name: true, slug: true, description: true, logoUrl: true },
+  });
+  if (!before) jsonError('Club not found.', 404);
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const club = await tx.club.update({
+        where: { id: clubId },
+        data: {
+          name: input.name,
+          slug: input.slug,
+          description: input.description || null,
+          logoUrl: input.logoUrl || null,
+        },
+        include: clubInclude,
+      });
+      await writeAudit(tx, {
+        action: 'club.updated',
+        actorId,
+        entityType: 'Club',
+        entityId: club.id,
+        before: {
+          name: before.name,
+          slug: before.slug,
+          description: before.description,
+          logoUrl: before.logoUrl,
+        },
+        after: {
+          name: club.name,
+          slug: club.slug,
+          description: club.description,
+          logoUrl: club.logoUrl,
+        },
+        ip,
+      });
+      return club;
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) jsonError('Club slug already exists.', 409);
+    if (isNotFoundError(error)) jsonError('Club not found.', 404);
+    throw error;
+  }
+}
+
+/** Entry states that still hold a place for the club in an unfinished event. */
+const activeClubRegistrationStatuses = [
+  RegistrationStatus.PENDING,
+  RegistrationStatus.APPROVED,
+  RegistrationStatus.NEEDS_CHANGES,
+  RegistrationStatus.WAITLISTED,
+] as const;
+
+/** The audit row a deleted club leaves behind; nothing else survives. */
+export const CLUB_DELETION_AUDIT_ACTION = 'club.deleted';
+
+/**
+ * A club with a team still in an unfinished event cannot be deleted: the entry
+ * would keep its place in the draw while losing the club it plays for. Finished
+ * events are safe — a played match keeps its own participant snapshot.
+ */
+export function assertClubDeletable(liveEntryTitles: string[]) {
+  if (!liveEntryTitles.length) return;
+  jsonError(
+    `This club is still entered in ${liveEntryTitles.length} unfinished event(s): ${liveEntryTitles.join(', ')}. Withdraw those entries first.`,
+    409,
+  );
+}
+
+/**
+ * Delete a club. Memberships and join requests cascade, past entries keep their
+ * row but lose the club link, so the audit row written before the delete is the
+ * only surviving record of the club. Members are told they now have no club.
+ */
+export async function deleteClub(clubId: string, actorId: string, ip?: string | null) {
+  return prisma.$transaction(async (tx) => {
+    const club = await tx.club.findUnique({
+      where: { id: clubId },
+      include: {
+        members: {
+          include: { user: { select: { id: true, email: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+        _count: { select: { registrations: true } },
+      },
+    });
+    if (!club) jsonError('Club not found.', 404);
+
+    // Read inside the transaction: an entry added between the check and the
+    // delete would otherwise lose its club instead of blocking the delete.
+    const liveEntries = await tx.eventRegistration.findMany({
+      where: {
+        clubId,
+        status: { in: [...activeClubRegistrationStatuses] },
+        event: { status: { not: EventStatus.COMPLETED } },
+      },
+      select: { event: { select: { title: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    assertClubDeletable(liveEntries.map((entry) => entry.event.title));
+
+    await writeAudit(tx, {
+      action: CLUB_DELETION_AUDIT_ACTION,
+      actorId,
+      entityType: 'Club',
+      entityId: club.id,
+      before: {
+        name: club.name,
+        slug: club.slug,
+        memberCount: club.members.length,
+        pastEntries: club._count.registrations,
+      },
+      ip,
+    });
+    await queueNotifications(
+      tx,
+      club.members.map((member) => ({
+        recipientUserId: member.user.id,
+        recipientEmail: member.user.email,
+        type: NotificationType.CLUB_MEMBERSHIP_REMOVED,
+        title: `${club.name} was removed`,
+        message: `${club.name} no longer exists on El Padel, so you are not a member of any club. You can request to join another club or create your own.`,
+        entityType: 'Club',
+        entityId: club.id,
+        actionPath: '/complete-club',
+        version: member.createdAt.getTime(),
+        metadata: { clubId: club.id, reason: 'club.deleted' },
+        emailEyebrow: 'Club membership',
+        emailActionLabel: 'Choose a club',
+      })),
+    );
+    await tx.club.delete({ where: { id: club.id } });
+    await queueOutbox(tx, {
+      topic: 'club.deleted',
+      aggregateType: 'Club',
+      aggregateId: club.id,
+      payload: {
+        clubId: club.id,
+        name: club.name,
+        memberUserIds: club.members.map((member) => member.userId),
+      },
+      deduplicationKey: `club:${club.id}:deleted`,
+    });
+
+    return { removedMembers: club.members.length };
+  });
 }
 
 /**
@@ -313,12 +483,22 @@ export function assertClubKickAllowed(
   }
 }
 
-const activeClubRegistrationStatuses = [
-  RegistrationStatus.PENDING,
-  RegistrationStatus.APPROVED,
-  RegistrationStatus.NEEDS_CHANGES,
-  RegistrationStatus.WAITLISTED,
-] as const;
+/**
+ * Adding a group mate creates an account, joins it to the club, and mails an
+ * invitation in the club's name, so it is a leadership action in the same way
+ * removing a player is. Every other roster write already required LEADER; this
+ * one did not, which let any member enlarge the roster the leader then had to
+ * unpick one player at a time — and mail a stranger for each attempt.
+ *
+ * Kept out of `inviteClubMate` itself, which is also the path club-application
+ * approval takes to seed the founding pair before any membership exists.
+ */
+export async function requireClubLeadership(actorUserId: string, clubId: string) {
+  const membership = await prisma.clubMember.findUnique({ where: { userId: actorUserId } });
+  if (!membership || membership.clubId !== clubId || membership.membershipRole !== ClubMembershipRole.LEADER) {
+    jsonError('Only the club leader can add a group mate.', 403);
+  }
+}
 
 type MemberRemovalResolution = {
   registrationId: string;

@@ -3,9 +3,9 @@ import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { Server, type Socket } from 'socket.io';
 import { config } from '../config/env.js';
 import { prisma } from '../database/prisma.js';
-import { SESSION_COOKIE } from '../modules/auth/auth.service.js';
+import { SESSION_AUDIENCE, SESSION_COOKIE } from '../modules/auth/auth.service.js';
 import { isEventOrganiser } from '../common/capabilities.js';
-import { registerSocketServer } from './socket.js';
+import { eventRoom, eventStaffRoom, registerSocketServer } from './socket.js';
 
 type SocketUser = { id: string; role: string };
 
@@ -51,7 +51,7 @@ async function authenticateSocket(socket: Socket) {
   try {
     const token = cookieValue(socket.handshake.headers.cookie, SESSION_COOKIE);
     if (!token) return undefined;
-    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] }) as JwtPayload & { sub?: string; sv?: number };
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'], audience: SESSION_AUDIENCE }) as JwtPayload & { sub?: string; sv?: number };
     if (!payload.sub) return undefined;
     const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, status: true, sessionVersion: true } });
     if (user?.status === 'ACTIVE' && user.sessionVersion === (payload.sv ?? 0)) return user;
@@ -71,10 +71,14 @@ async function currentSocketUser(socket: Socket) {
   return undefined;
 }
 
-async function canSubscribeToEvent(user: SocketUser | undefined, eventId: string) {
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { isPublished: true } });
-  if (!event) return false;
-  if (event.isPublished) return true;
+/**
+ * Actors allowed to hear an event's unpublished scores, winners and
+ * registration decisions. Mirrors the REST scoring authorization: admins
+ * always, organisers on the events handed to them, judges holding a live court
+ * assignment. Players are deliberately absent — a participant reads their own
+ * match through the API, which redacts what publication has not released.
+ */
+async function isEventStaff(user: SocketUser | undefined, eventId: string) {
   if (!user) return false;
   if (user.role === 'ADMIN') return true;
   // An organiser sees only the events handed to them, never another's.
@@ -92,7 +96,23 @@ async function canSubscribeToEvent(user: SocketUser | undefined, eventId: string
       select: { id: true },
     }));
   }
-  return Boolean(await prisma.eventRegistration.findFirst({ where: { eventId, OR: [{ ownerId: user.id }, { teammateId: user.id }] }, select: { id: true } }));
+  return false;
+}
+
+/**
+ * Which event room this subscriber earns, or `null` when they may not listen at
+ * all. Staff join the full-payload room; everyone else joins the public room,
+ * whose payloads are stripped to a bare invalidation signal. Nobody joins both,
+ * so a topic is never delivered twice to the same socket.
+ */
+export async function eventRoomFor(user: SocketUser | undefined, eventId: string) {
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { isPublished: true } });
+  if (!event) return null;
+  if (await isEventStaff(user, eventId)) return eventStaffRoom(eventId);
+  if (event.isPublished) return eventRoom(eventId);
+  if (!user) return null;
+  const participant = await prisma.eventRegistration.findFirst({ where: { eventId, OR: [{ ownerId: user.id }, { teammateId: user.id }] }, select: { id: true } });
+  return participant ? eventRoom(eventId) : null;
 }
 
 async function canSubscribeToMatch(user: SocketUser | undefined, matchId: string) {
@@ -141,10 +161,15 @@ export function createRealtimeGateway(server: HttpServer) {
           return;
         }
         const currentUser = await currentSocketUser(socket);
-        const roomName = `event:${eventId}`;
-        const allowed = canJoinMoreRooms(socket, roomName) && await canSubscribeToEvent(currentUser, eventId);
-        if (allowed) await socket.join(roomName);
-        acknowledge?.({ ok: allowed });
+        // The room is chosen by authorization, not by the caller, so it has to
+        // be resolved before the per-socket room quota is charged.
+        const roomName = await eventRoomFor(currentUser, eventId);
+        if (!roomName || !canJoinMoreRooms(socket, roomName)) {
+          acknowledge?.({ ok: false });
+          return;
+        }
+        await socket.join(roomName);
+        acknowledge?.({ ok: true });
       } catch {
         acknowledge?.({ ok: false });
       }

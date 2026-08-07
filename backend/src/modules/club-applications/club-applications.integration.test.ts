@@ -5,10 +5,10 @@ import { createAdmin, createUser, resetDb } from '../../test/helpers.js';
 import {
   approveApplication,
   rejectApplication,
+  resendApplicationVerificationCode,
   startApplication,
   submitApplication,
   updateApplicationDraft,
-  verifyApplicationEmail,
 } from './club-applications.service.js';
 import { resolveClubSlug } from '../clubs/clubs.service.js';
 
@@ -116,6 +116,38 @@ describe('club applications', () => {
   it('refuses a request for an address that already has an account', async () => {
     await createUser({ email: APPLICANT.email });
     await expect(startApplication(APPLICANT)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('resends a verification code and retires the previous one', async () => {
+    await startApplication(APPLICANT);
+    const application = await prisma.clubApplication.findUniqueOrThrow({ where: { email: APPLICANT.email } });
+    const first = await prisma.clubApplicationCode.findFirstOrThrow({
+      where: { applicationId: application.id, usedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    await resendApplicationVerificationCode(APPLICANT.email);
+
+    const retired = await prisma.clubApplicationCode.findUniqueOrThrow({ where: { id: first.id } });
+    expect(retired.usedAt).not.toBeNull();
+
+    const fresh = await prisma.clubApplicationCode.findFirstOrThrow({
+      where: { applicationId: application.id, usedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(fresh.id).not.toBe(first.id);
+    expect(await prisma.clubApplicationCode.count({ where: { applicationId: application.id, usedAt: null } })).toBe(1);
+  });
+
+  it('refuses to resend once the email is already verified', async () => {
+    await startApplication(APPLICANT);
+    const application = await prisma.clubApplication.findUniqueOrThrow({ where: { email: APPLICANT.email } });
+    await prisma.clubApplication.update({
+      where: { id: application.id },
+      data: { emailVerifiedAt: new Date() },
+    });
+
+    await expect(resendApplicationVerificationCode(APPLICANT.email)).rejects.toMatchObject({ status: 409 });
   });
 
   it('resolves a free club slug when the obvious one is taken', async () => {

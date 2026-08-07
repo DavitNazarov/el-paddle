@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ClubMembershipRole } from '../../generated/prisma/client.js';
 import { ApiError } from '../../common/http.js';
 import {
+  assertClubDeletable,
   assertClubKickAllowed,
   assertMemberRemovalResolutionsComplete,
 } from './clubs.service.js';
@@ -77,5 +78,25 @@ describe('club member registration resolutions', () => {
         ),
       400,
     );
+  });
+});
+
+describe('club deletion guard', () => {
+  it('allows deleting a club with no live entry', () => {
+    expect(() => assertClubDeletable([])).not.toThrow();
+  });
+
+  it('refuses while a team is still entered in an unfinished event', () => {
+    expectStatus(() => assertClubDeletable(['Spring Open']), 409);
+  });
+
+  it('names the events holding the club so the reader can act on them', () => {
+    try {
+      assertClubDeletable(['Spring Open', 'Autumn Cup']);
+      throw new Error('Expected deletion to be refused.');
+    } catch (error) {
+      expect((error as ApiError).message).toContain('Spring Open');
+      expect((error as ApiError).message).toContain('Autumn Cup');
+    }
   });
 });

@@ -25,9 +25,8 @@ import { useI18n } from '@/components/shared/I18nProvider';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import { CourtBoard } from './schedule/CourtBoard';
 import { CourtDetail } from './schedule/CourtDetail';
-import { EventJudgePanel } from './schedule/EventJudgePanel';
 import { ScheduleDayHeader } from './schedule/ScheduleDayHeader';
-import { AddJudgeDialog, AddMatchDialog, CreateCourtDialog, type JudgeForm, type MatchSelection } from './schedule/ScheduleDialogs';
+import { AddMatchDialog, CreateCourtDialog, type MatchSelection } from './schedule/ScheduleDialogs';
 import { UnscheduledPool } from './schedule/UnscheduledPool';
 import {
   POOL_ITEM_PREFIX,
@@ -38,7 +37,6 @@ import {
   nudgeOrder,
   resolveDrop,
   unscheduledMatches,
-  type EventJudge,
 } from './schedule/scheduleModel';
 import styles from './schedule/Schedule.module.css';
 
@@ -48,9 +46,7 @@ export function AdminScheduleClient({ eventId }: { eventId: string }) {
   const [event, setEvent] = useState<EventDto | null>(null);
   const [courts, setCourts] = useState<CourtDto[]>([]);
   const [brackets, setBrackets] = useState<BracketDto[]>([]);
-  const [judges, setJudges] = useState<EventJudge[]>([]);
-  const [dialog, setDialog] = useState<'court' | 'judge' | 'match' | null>(null);
-  const [judgeNotice, setJudgeNotice] = useState('');
+  const [dialog, setDialog] = useState<'court' | 'match' | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [loading, setLoading] = useState(true);
@@ -62,22 +58,19 @@ export function AdminScheduleClient({ eventId }: { eventId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, b, c, d] = await Promise.all([
+      const [a, b, c] = await Promise.all([
         apiFetch(`/api/events/${eventId}`, { cache: 'no-store' }),
         apiFetch(`/api/admin/events/${eventId}/schedule`, { cache: 'no-store' }),
         apiFetch(`/api/admin/events/${eventId}/brackets`, { cache: 'no-store' }),
-        apiFetch(`/api/admin/events/${eventId}/judges`, { cache: 'no-store' }),
       ]);
       const eventData = await a.json() as { event?: EventDto; error?: string };
       const scheduleData = await b.json() as { courts?: CourtDto[]; error?: string };
       const bracketData = await c.json() as { brackets?: BracketDto[] };
-      const userData = await d.json() as { judges?: EventJudge[] };
       if (!a.ok || !b.ok) setError(eventData.error ?? scheduleData.error ?? copy.admin.schedule.loadError);
       else {
         setEvent(eventData.event ?? null);
         setCourts(scheduleData.courts ?? []);
         setBrackets(bracketData.brackets ?? []);
-        setJudges(userData.judges ?? []);
       }
     } catch {
       setError(copy.admin.schedule.loadError);
@@ -141,33 +134,8 @@ export function AdminScheduleClient({ eventId }: { eventId: string }) {
     if (result) setDialog(null);
   }
 
-  async function addJudge(form: JudgeForm) {
-    setJudgeNotice('');
-    const result = await send('judge-add', `/api/admin/events/${eventId}/judges`, { method: 'POST', body: form }, copy.admin.judges.addError);
-    if (!result) return;
-    setJudgeNotice(fillTemplate(result.invited ? copy.admin.judges.invited : copy.admin.judges.added, { email: form.email }));
-    setDialog(null);
-  }
 
-  async function removeJudge(judge: EventJudge) {
-    setJudgeNotice('');
-    await send(`judge-remove-${judge.id}`, `/api/admin/events/${eventId}/judges/${judge.id}`, { method: 'DELETE' }, copy.admin.judges.removeError);
-  }
 
-  async function assignJudge(court: CourtDto, judgeId: string) {
-    if (!event || !judgeId) return;
-    // The assignment window brackets the event day so a judge is never refused for timing.
-    const startsAt = new Date(event.date);
-    startsAt.setHours(startsAt.getHours() - 2);
-    const endsAt = new Date(event.date);
-    endsAt.setHours(endsAt.getHours() + 12);
-    await send(
-      `judge-${court.id}`,
-      `/api/admin/events/${eventId}/courts/${court.id}/judge-assignments`,
-      { method: 'POST', body: { judgeId, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() } },
-      copy.admin.schedule.assignError,
-    );
-  }
 
   async function addMatch(selection: MatchSelection) {
     if (!selection.courtId || !selection.matchId) return;
@@ -309,9 +277,7 @@ export function AdminScheduleClient({ eventId }: { eventId: string }) {
                       busy={busy}
                       court={openCourt}
                       courts={courts}
-                      judges={judges}
                       locked={isCompleted}
-                      onAssign={assignJudge}
                       onMoveToCourt={moveToCourt}
                       onNudge={nudge}
                       onStep={stepCourt}
@@ -335,14 +301,6 @@ export function AdminScheduleClient({ eventId }: { eventId: string }) {
               matches={waiting}
               onPlace={placeMatch}
             />
-            <EventJudgePanel
-              busy={busy}
-              judges={judges}
-              locked={isCompleted}
-              notice={judgeNotice}
-              onAdd={() => { setJudgeNotice(''); setDialog('judge'); }}
-              onRemove={removeJudge}
-            />
           </div>
         </div>
 
@@ -357,18 +315,11 @@ export function AdminScheduleClient({ eventId }: { eventId: string }) {
         busy={busy === 'court'}
         onSubmit={createCourt}
       />
-      <AddJudgeDialog
-        open={dialog === 'judge'}
-        onOpenChange={(open) => { if (!open) setDialog(null); }}
-        busy={busy === 'judge-add'}
-        onSubmit={addJudge}
-      />
       <AddMatchDialog
         open={dialog === 'match'}
         onOpenChange={(open) => { if (!open) setDialog(null); }}
         busy={busy === 'match'}
         courts={courts}
-        judges={judges}
         matches={waiting}
         onSubmit={addMatch}
       />

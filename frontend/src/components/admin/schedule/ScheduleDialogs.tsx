@@ -1,40 +1,23 @@
 'use client';
 
-import { useState } from 'react';
 import type { CourtDto, MatchDto } from '@/types/tournament';
 import { DashboardField, DashboardModal, formControlClassName, selectControlClassName } from '@/components/shared/dashboard/DashboardUI';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { useResetOnOpen } from '@/hooks/useResetOnOpen';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
-import { isQueueFinished, judgeName, matchTitle, type EventJudge } from './scheduleModel';
+import { isQueueFinished, matchTitle } from './scheduleModel';
 
 /**
  * The three schedule forms. Each owns its own fields and resets when it opens,
  * so the board itself holds no half-typed state.
  */
 
-export type JudgeForm = { email: string; name: string; surname: string };
-export type MatchSelection = { courtId: string; matchId: string; judgeId: string; plannedStartAt: string };
+export type MatchSelection = { courtId: string; matchId: string; plannedStartAt: string };
 
-const emptyJudge: JudgeForm = { email: '', name: '', surname: '' };
-const emptySelection: MatchSelection = { courtId: '', matchId: '', judgeId: '', plannedStartAt: '' };
-
-/**
- * Clears a dialog's fields each time it is opened, by adjusting state during
- * render rather than in an effect — the dialog must not paint the previous
- * entry's values for a frame before resetting them.
- */
-function useResetOnOpen<T>(open: boolean, initial: T) {
-  const [value, setValue] = useState(initial);
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setValue(initial);
-  }
-  return [value, setValue] as const;
-}
+const emptySelection: MatchSelection = { courtId: '', matchId: '', plannedStartAt: '' };
 
 export function CreateCourtDialog({
   open,
@@ -86,64 +69,11 @@ export function CreateCourtDialog({
   );
 }
 
-export function AddJudgeDialog({
-  open,
-  onOpenChange,
-  busy,
-  onSubmit,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  busy: boolean;
-  onSubmit: (form: JudgeForm) => void;
-}) {
-  const { locale } = useI18n();
-  const copy = tournamentCopy[locale];
-  const [form, setForm] = useResetOnOpen(open, emptyJudge);
-  const complete = form.email.trim() && form.name.trim() && form.surname.trim();
-
-  const field = (key: keyof JudgeForm) => (fieldEvent: { target: { value: string } }) =>
-    setForm((current) => ({ ...current, [key]: fieldEvent.target.value }));
-
-  return (
-    <DashboardModal
-      open={open}
-      onOpenChange={onOpenChange}
-      title={copy.admin.judges.addTitle}
-      description={copy.admin.judges.addDescription}
-      size="md"
-      footer={(
-        <ModalFormFooter
-          formId="add-judge-form"
-          onCancel={() => onOpenChange(false)}
-          cancelLabel={copy.common.cancel}
-          busy={busy}
-          disabled={!complete}
-          submitLabel={busy ? copy.admin.judges.adding : copy.admin.judges.add}
-        />
-      )}
-    >
-      <form id="add-judge-form" className="space-y-4" onSubmit={(formEvent) => { formEvent.preventDefault(); onSubmit(form); }}>
-        <DashboardField label={copy.admin.judges.email} id="judge-email">
-          <Input id="judge-email" autoFocus required type="email" value={form.email} onChange={field('email')} className={formControlClassName} />
-        </DashboardField>
-        <DashboardField label={copy.admin.judges.firstName} id="judge-name">
-          <Input id="judge-name" required value={form.name} onChange={field('name')} className={formControlClassName} />
-        </DashboardField>
-        <DashboardField label={copy.admin.judges.lastName} id="judge-surname">
-          <Input id="judge-surname" required value={form.surname} onChange={field('surname')} className={formControlClassName} />
-        </DashboardField>
-      </form>
-    </DashboardModal>
-  );
-}
-
 export function AddMatchDialog({
   open,
   onOpenChange,
   busy,
   courts,
-  judges,
   matches,
   onSubmit,
 }: {
@@ -151,7 +81,6 @@ export function AddMatchDialog({
   onOpenChange: (open: boolean) => void;
   busy: boolean;
   courts: CourtDto[];
-  judges: EventJudge[];
   matches: MatchDto[];
   onSubmit: (selection: MatchSelection) => void;
 }) {
@@ -194,13 +123,6 @@ export function AddMatchDialog({
           onChange={(value) => setSelection((current) => ({ ...current, matchId: value }))}
           options={matches.map((match) => ({ value: match.id, label: matchTitle(locale, match) }))}
         />
-        <FieldSelect
-          label={schedule.judge}
-          value={selection.judgeId}
-          onChange={(value) => setSelection((current) => ({ ...current, judgeId: value }))}
-          options={judges.map((judge) => ({ value: judge.id, label: judgeName(judge) }))}
-          optional
-        />
         <DashboardField label={schedule.plannedStart} id="planned-start" hint={schedule.optional}>
           <Input
             id="planned-start"
@@ -220,14 +142,12 @@ function FieldSelect({
   value,
   onChange,
   options,
-  optional = false,
   disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
-  optional?: boolean;
   disabled?: boolean;
 }) {
   const { locale } = useI18n();
@@ -243,7 +163,7 @@ function FieldSelect({
         value={value}
         onChange={(fieldEvent) => onChange(fieldEvent.target.value)}
       >
-        <option value="">{optional ? copy.notAssigned : fillTemplate(copy.select, { label: label.toLowerCase() })}</option>
+        <option value="">{fillTemplate(copy.select, { label: label.toLowerCase() })}</option>
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </div>

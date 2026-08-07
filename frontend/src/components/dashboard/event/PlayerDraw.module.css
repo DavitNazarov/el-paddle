@@ -1,0 +1,167 @@
+/*
+ * The draw, read by one competitor. Rounds run top to bottom as plain lists —
+ * a scrollable tree is the organiser's tool; the player wants to find their
+ * own name and trace where winning takes them. Matches on the reader's path
+ * carry an accent border, never color alone: their pair is also marked "Your
+ * team" in text.
+ */
+
+.page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.category {
+  overflow: hidden;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+
+.rounds {
+  display: grid;
+  gap: 0;
+}
+
+.round {
+  border-top: 1px solid var(--dash-border);
+  padding: var(--space-4) var(--space-5);
+}
+
+.roundTitle {
+  margin: 0 0 0.75rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.8125rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dash-muted);
+}
+
+.roundTitle small {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--dash-faint);
+}
+
+.matchList {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 48rem) {
+  .matchList {
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  }
+}
+
+.match {
+  min-width: 0;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-tile);
+  background: #fdfbfa;
+}
+
+.matchLink {
+  display: block;
+  padding: 0.8rem 0.9rem;
+  color: inherit;
+  text-decoration: none;
+  border-radius: inherit;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.matchLink:hover {
+  background: #fff;
+}
+
+.matchLink:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--padel-focus-ring);
+}
+
+.match[data-yours='true'] .matchLink:hover {
+  background: #fff;
+}
+
+.match[data-yours='true'] {
+  border-color: rgba(164, 22, 26, 0.4);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(43, 26, 24, 0.06);
+}
+
+.matchHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.55rem;
+}
+
+.matchNumber {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dash-faint);
+}
+
+.pair {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.2rem 0;
+  font-size: 0.875rem;
+  color: var(--dash-text);
+}
+
+.pair[data-pending='true'] {
+  color: var(--dash-faint);
+  font-style: italic;
+}
+
+.pair[data-winner='true'] {
+  font-weight: 650;
+}
+
+.pairName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pair svg {
+  height: 0.85rem;
+  width: 0.85rem;
+  flex: none;
+  color: var(--dash-teal);
+}
+
+.youBadge {
+  flex: none;
+  border: 1px solid rgba(164, 22, 26, 0.3);
+  border-radius: 999px;
+  background: rgba(164, 22, 26, 0.07);
+  padding: 0.1rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dash-primary);
+}
+
+.score {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--dash-text);
+}

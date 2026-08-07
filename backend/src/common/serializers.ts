@@ -13,7 +13,7 @@ import {
   type User,
 } from '../generated/prisma/client.js';
 import { toPublicUser, type PublicUserSource } from '../modules/auth/auth.service.js';
-import { maxSlots, slotWinsNeeded } from '../modules/matches/slot-engine.js';
+import { maxSets, setWinsNeeded } from '../modules/matches/set-engine.js';
 
 type CategoryWithEventCount = Category & {
   _count?: { eventLinks: number };
@@ -168,7 +168,7 @@ type MatchWithEntries = Match & {
   participantB?: EntryWithUsers | null;
   winner?: EntryWithUsers | null;
   loser?: EntryWithUsers | null;
-  slots?: { slotNumber: number; winnerSide: 'A' | 'B'; winnerEntryId: string; decidedAt: Date }[];
+  sets?: { setNumber: number; winnerSide: 'A' | 'B'; winnerEntryId: string; decidedAt: Date }[];
   snapshots?: {
     side: 'A' | 'B';
     clubId: string;
@@ -191,7 +191,7 @@ type MatchWithEntries = Match & {
 
 type BracketWithMatches = Bracket & {
   matches?: MatchWithEntries[];
-  roundConfigs?: { round: MatchRound; slotCount: number }[];
+  roundConfigs?: { round: MatchRound; setCount: number }[];
   eventCategory?: { category: Category };
 };
 
@@ -230,15 +230,15 @@ export function serializeMatch(match: MatchWithEntries) {
     scoreA: match.scoreA,
     scoreB: match.scoreB,
     scoringMode: match.scoringMode,
-    slotCount: match.slotCount,
-    slotCountOverride: match.slotCountOverride,
-    slotsToWin: match.slotCount === null ? null : slotWinsNeeded(match.slotCount),
-    maxSlots: match.slotCount === null ? null : maxSlots(match.slotCount),
-    slots: (match.slots ?? []).map((slot) => ({
-      slotNumber: slot.slotNumber,
-      winnerSide: slot.winnerSide,
-      winnerEntryId: slot.winnerEntryId,
-      decidedAt: slot.decidedAt.toISOString(),
+    setCount: match.setCount,
+    setCountOverride: match.setCountOverride,
+    setsToWin: match.setCount === null ? null : setWinsNeeded(match.setCount),
+    maxSets: match.setCount === null ? null : maxSets(match.setCount),
+    sets: (match.sets ?? []).map((set) => ({
+      setNumber: set.setNumber,
+      winnerSide: set.winnerSide,
+      winnerEntryId: set.winnerEntryId,
+      decidedAt: set.decidedAt.toISOString(),
     })),
     status: match.status,
     resultType: match.resultType,
@@ -335,7 +335,7 @@ export function serializeMatchDetail(match: MatchWithEntries, redactResult = fal
     ...serialized,
     scoreA: null,
     scoreB: null,
-    slots: [],
+    sets: [],
     resultType: null,
     resultReason: null,
     winnerEntryId: null,
@@ -408,7 +408,7 @@ export function serializeBracket(bracket: BracketWithMatches) {
     lockedAt: bracket.lockedAt?.toISOString() ?? null,
     publishedAt: bracket.publishedAt?.toISOString() ?? null,
     completedAt: bracket.completedAt?.toISOString() ?? null,
-    slotDefaults: Object.fromEntries((bracket.roundConfigs ?? []).map((config) => [config.round, config.slotCount])),
+    setDefaults: Object.fromEntries((bracket.roundConfigs ?? []).map((config) => [config.round, config.setCount])),
     eventCategory: bracket.eventCategory
       ? { category: serializeCategory(bracket.eventCategory.category) }
       : undefined,
@@ -418,13 +418,14 @@ export function serializeBracket(bracket: BracketWithMatches) {
 
 /** The four fields the saved-teammate dropdown reads — not a full profile (F7). */
 export function serializeTeammateOption(
-  user: Pick<User, 'id' | 'email' | 'name' | 'surname' | 'phone'>,
+  user: Pick<User, 'id' | 'email' | 'name' | 'surname' | 'phone' | 'status'>,
 ) {
   return {
     id: user.id,
     email: user.email,
     fullName: [user.name, user.surname].filter(Boolean).join(' ') || user.email,
     phone: user.phone ?? '',
+    status: user.status,
   };
 }
 

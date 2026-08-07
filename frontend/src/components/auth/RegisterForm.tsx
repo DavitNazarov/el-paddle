@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { ArrowRight, Mail } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { friendlyError } from '@/lib/utils/errors';
 import { cn } from '@/lib/utils';
 
 type Step = 'account' | 'verify' | 'club' | 'mate' | 'submitted';
+
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export function RegisterForm({ oauthError, initialStep }: { oauthError?: string; initialStep?: string }) {
   const { t, locale } = useI18n();
@@ -34,8 +36,16 @@ export function RegisterForm({ oauthError, initialStep }: { oauthError?: string;
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [eligibilityConfirmed, setEligibilityConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setResendCooldown((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   const stepIndex = step === 'account' ? 0 : step === 'verify' ? 1 : step === 'club' ? 2 : step === 'mate' ? 3 : 4;
   const stepLabels = [
@@ -66,6 +76,7 @@ export function RegisterForm({ oauthError, initialStep }: { oauthError?: string;
       }
 
       setStep('verify');
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setMessage(data.message ?? t('forms.register.sent'));
     } catch {
       setError(t('forms.apiConnectionError'));
@@ -99,6 +110,35 @@ export function RegisterForm({ oauthError, initialStep }: { oauthError?: string;
       setError(t('forms.apiConnectionError'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendCode = async () => {
+    if (resending || resendCooldown > 0 || !email) return;
+    setResending(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const response = await apiFetch('/api/applications/resend-code', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await readApiJson<{ error?: string; message?: string }>(response, {});
+
+      if (!response.ok) {
+        setError(friendlyError(data.error, t('forms.register.resendError'), t('forms.databaseNotReady')));
+        if (response.status === 429) setResendCooldown(RESEND_COOLDOWN_SECONDS);
+        return;
+      }
+
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      setMessage(data.message ?? t('forms.register.sent'));
+    } catch {
+      setError(t('forms.apiConnectionError'));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -186,6 +226,13 @@ export function RegisterForm({ oauthError, initialStep }: { oauthError?: string;
           : step === 'mate'
             ? t('forms.register.mateCopy')
             : t('forms.register.submittedCopy', { email });
+
+  const resendLabel =
+    resending
+      ? t('forms.register.resending')
+      : resendCooldown > 0
+        ? t('forms.register.resendIn', { seconds: resendCooldown })
+        : t('forms.register.resendCode');
 
   return (
     <div className="space-y-6">
@@ -276,6 +323,17 @@ export function RegisterForm({ oauthError, initialStep }: { oauthError?: string;
           <Button type="submit" variant="red" size="lg" disabled={loading} className="min-h-12 w-full">
             {loading ? t('forms.register.verifying') : t('forms.register.continue')}
             <ArrowRight className="h-5 w-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            disabled={loading || resending || resendCooldown > 0}
+            className="min-h-12 w-full border-[var(--padel-ink)]/20 bg-transparent text-[var(--padel-ink)] hover:bg-[var(--padel-ink)]/5"
+            onClick={() => void resendCode()}
+            aria-live="polite"
+          >
+            {resendLabel}
           </Button>
         </form>
       ) : null}

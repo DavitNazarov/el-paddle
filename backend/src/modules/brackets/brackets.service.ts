@@ -4,7 +4,7 @@ import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { entryUserSelect } from '../../common/includes.js';
-import { isValidSlotCount } from '../matches/slot-engine.js';
+import { isValidSetCount } from '../matches/set-engine.js';
 
 export const bracketInclude = {
   eventCategory: { include: { category: true } },
@@ -14,7 +14,10 @@ export const bracketInclude = {
       participantA: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } },
       participantB: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } },
       scheduleItem: { include: { court: true } },
-      slots: { orderBy: { slotNumber: 'asc' as const } },
+      sets: { orderBy: { setNumber: 'asc' as const } },
+      // Club identity for the match control console. Written when the bracket locks,
+      // so every match the console can act on carries it.
+      snapshots: true,
     },
     orderBy: { matchNumber: 'asc' as const },
   },
@@ -40,31 +43,31 @@ export async function createBracket(input: { eventId: string; categoryId: string
 }
 
 /**
- * Per-round slot defaults. Only bind when a match starts, so they stay editable on a locked
+ * Per-round set defaults. Only bind when a match starts, so they stay editable on a locked
  * bracket; a running match keeps the count it snapshotted.
  */
-export async function setBracketSlotDefaults(input: { eventId: string; bracketId: string; actorId: string; defaults: Partial<Record<MatchRound, number>>; expectedVersion: number; commandId: string }) {
-  for (const value of Object.values(input.defaults)) if (!isValidSlotCount(value)) jsonError('Slot count must be 1, 2, or 3.');
+export async function setBracketSetDefaults(input: { eventId: string; bracketId: string; actorId: string; defaults: Partial<Record<MatchRound, number>>; expectedVersion: number; commandId: string }) {
+  for (const value of Object.values(input.defaults)) if (!isValidSetCount(value)) jsonError('Set count must be 1, 2, or 3.');
   const hash = payloadHash(input);
   return prisma.$transaction(async (tx) => {
-    const replay = await findCommandReceipt(tx, input.actorId, 'bracket.slot-defaults', input.commandId, hash);
+    const replay = await findCommandReceipt(tx, input.actorId, 'bracket.set-defaults', input.commandId, hash);
     if (replay) return tx.bracket.findUniqueOrThrow({ where: { id: input.bracketId }, include: bracketInclude });
     const bracket = await tx.bracket.findFirst({ where: { id: input.bracketId, eventId: input.eventId }, include: { roundConfigs: true, event: { select: { status: true } } } });
     if (!bracket) jsonError('Bracket not found.', 404);
     if (bracket.event.status === 'COMPLETED') jsonError('Reopen the completed event before editing its bracket.', 409);
     if (bracket.version !== input.expectedVersion) jsonError('Bracket changed. Refresh and try again.', 409);
-    const before = Object.fromEntries(bracket.roundConfigs.map((config) => [config.round, config.slotCount]));
+    const before = Object.fromEntries(bracket.roundConfigs.map((config) => [config.round, config.setCount]));
     for (const round of Object.values(MatchRound)) {
-      const slotCount = input.defaults[round];
-      if (slotCount === undefined) await tx.bracketRoundConfig.deleteMany({ where: { bracketId: bracket.id, round } });
-      else await tx.bracketRoundConfig.upsert({ where: { bracketId_round: { bracketId: bracket.id, round } }, update: { slotCount }, create: { bracketId: bracket.id, round, slotCount } });
+      const setCount = input.defaults[round];
+      if (setCount === undefined) await tx.bracketRoundConfig.deleteMany({ where: { bracketId: bracket.id, round } });
+      else await tx.bracketRoundConfig.upsert({ where: { bracketId_round: { bracketId: bracket.id, round } }, update: { setCount }, create: { bracketId: bracket.id, round, setCount } });
     }
     const updateResult = await tx.bracket.updateMany({ where: { id: bracket.id, version: input.expectedVersion }, data: { version: { increment: 1 } } });
     if (updateResult.count !== 1) jsonError('Bracket changed. Refresh and try again.', 409);
     const updated = await tx.bracket.findUniqueOrThrow({ where: { id: bracket.id }, include: bracketInclude });
-    await writeAudit(tx, { action: 'bracket.slot-defaults.updated', actorId: input.actorId, eventId: input.eventId, entityType: 'Bracket', entityId: bracket.id, before, after: input.defaults });
-    await queueOutbox(tx, { topic: 'bracket.updated', aggregateType: 'Bracket', aggregateId: bracket.id, payload: { eventId: input.eventId, bracketId: bracket.id, version: updated.version }, deduplicationKey: `bracket:${bracket.id}:slot-defaults:v${updated.version}` });
-    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.slot-defaults', commandId: input.commandId, hash });
+    await writeAudit(tx, { action: 'bracket.set-defaults.updated', actorId: input.actorId, eventId: input.eventId, entityType: 'Bracket', entityId: bracket.id, before, after: input.defaults });
+    await queueOutbox(tx, { topic: 'bracket.updated', aggregateType: 'Bracket', aggregateId: bracket.id, payload: { eventId: input.eventId, bracketId: bracket.id, version: updated.version }, deduplicationKey: `bracket:${bracket.id}:set-defaults:v${updated.version}` });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.set-defaults', commandId: input.commandId, hash });
     return updated;
   });
 }
@@ -112,7 +115,7 @@ async function createMatchGraph(tx: Prisma.TransactionClient, bracketId: string,
           round: current.round,
           roundPosition: position,
           matchNumber: current.firstMatchNumber + position - 1,
-          scoringMode: ScoringMode.SLOTS,
+          scoringMode: ScoringMode.SETS,
           nextMatchId: target?.id,
           nextMatchSlot: target ? (position % 2 === 1 ? MatchSide.A : MatchSide.B) : undefined,
         },

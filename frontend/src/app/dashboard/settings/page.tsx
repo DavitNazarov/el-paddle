@@ -12,7 +12,8 @@ export default async function DashboardSettingsPage() {
   if (!user) redirect('/login?next=/dashboard/settings');
   if (user.role === 'ADMIN') redirect('/admin/settings');
   if (user.role === 'ORGANISER') redirect('/admin');
-  if (user.role === 'JUDGE') redirect('/judge');
+  // The judge role has no player dashboard and no judge workspace; send it to the public site.
+  if (user.role === 'JUDGE') redirect('/');
   if (!user.club) redirect('/complete-club');
 
   return <PlayerSettingsClient initialUser={user} />;

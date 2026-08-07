@@ -1,8 +1,8 @@
 /*
  * Courts & schedule. The board is a grid of fixed-height court tiles, so a
  * ten-court event still reads in one screenful; the queue itself is expanded
- * for one court at a time below the board. The holding area and the judge pool
- * sit in a rail beside both from 80rem.
+ * for one court at a time below the board. The holding area sits in a rail
+ * beside both from 80rem.
  */
 
 /* ---- The day: the reading the operator arrives for ---- */
@@ -296,7 +296,7 @@
   color: var(--dash-teal);
 }
 
-/* Judge and progress share a line: on a phone, every saved line is a court more on screen. */
+/* Progress sits on one line: on a phone, every saved line is a court more on screen. */
 .tileMeta {
   display: flex;
   flex-wrap: wrap;
@@ -306,31 +306,9 @@
   margin: 0;
 }
 
-.tileJudge {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.35rem;
-  overflow-wrap: anywhere;
-  color: var(--dash-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
 
-.tileJudge svg {
-  width: 0.8rem;
-  height: 0.8rem;
-  flex: 0 0 auto;
-  color: var(--dash-faint);
-}
 
-.tileJudge[data-missing='true'] {
-  color: var(--dash-amber);
-}
 
-.tileJudge[data-missing='true'] svg {
-  color: var(--dash-amber);
-}
 
 .tileBar {
   overflow: hidden;
@@ -525,10 +503,6 @@
   padding: var(--space-4) var(--space-4) var(--space-3);
 }
 
-.detailJudge {
-  display: grid;
-  gap: 0.3rem;
-}
 
 .detailHint {
   margin: 0;
@@ -554,21 +528,7 @@
   text-transform: uppercase;
 }
 
-.courtJudgeLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--dash-faint);
-  font-size: 0.625rem;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
-.courtJudgeLabel svg {
-  width: 0.8rem;
-  height: 0.8rem;
-}
 
 /*
  * The only long list on the page, and it is capped: a court with thirty matches
@@ -861,51 +821,12 @@
   gap: 0.4rem;
 }
 
-/* ---- Event judge pool ---- */
 
-.judgeBody {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-}
 
-.judgeList {
-  display: grid;
-  gap: 0.5rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
 
-.judgeRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
 
-.judgeName {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--dash-text);
-  font-size: 0.8125rem;
-  font-weight: 650;
-}
 
-.judgeEmail {
-  display: block;
-  color: var(--dash-muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-}
 
-.judgeEmpty {
-  margin: 0;
-  color: var(--dash-faint);
-  font-size: 0.75rem;
-  line-height: 1.15rem;
-}
 
 /* ---- Drag ghost ---- */
 

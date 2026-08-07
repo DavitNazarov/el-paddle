@@ -5,10 +5,10 @@ This runbook describes the intended tournament sequence and the checks administr
 ## Roles
 
 - Administrator: approves club requests, configures and publishes the competition, approves entries, hands events to organisers, and resolves exceptional results.
-- Organiser: runs an event an administrator handed them — bracket, schedule, courts, judges, opponent requests, lifecycle, and scoring. They cannot create or edit events, review registrations, correct a finished result, reopen a completed event, or manage accounts and clubs.
+- Organiser: runs an event an administrator handed them — bracket, schedule, courts, opponent requests, lifecycle, and scoring. They cannot create or edit events, review registrations, correct a finished result, reopen a completed event, or manage accounts and clubs.
 - Club leader: creates the club, manages its roster, and can edit the club's registered team.
 - Player: enters as a two-person club team, negotiates a preferred first-round opponent, and views published information.
-- Judge: works only assigned courts within assigned time windows and records match outcomes.
+- Judge: a server-side role only. It still exists and its API still works, but it has no screens: administrators and organisers run matches from **Match control**.
 
 ## 0. Prerequisites: clubs and players
 
@@ -31,7 +31,7 @@ Publish the event page when registration should become discoverable.
 
 ## 2. Review registrations
 
-A player enters their club's team as an owner/teammate pair, accepting the participation terms, refund policy, and risk acknowledgement. Teammates without an account receive an email invitation; the entry can proceed while the invitation is pending. Administrators review each entry and move it to the appropriate status:
+A player enters their club's team as an owner/teammate pair, accepting the participation terms, refund policy, and risk acknowledgement. Both players must already have accepted their club invitation — an entry cannot be created around someone who has not. A captain whose teammate is still pending sees them greyed out in the picker; chase the invitation, then register. Administrators review each entry and move it to the appropriate status:
 
 - `PENDING`: awaiting review;
 - `APPROVED`: eligible for opponent requests and the bracket;
@@ -50,9 +50,9 @@ Each bracket category needs 2–16 approved entries. The bracket size adapts to 
 
 ### Handing the event to an organiser
 
-Once the entries are approved, an administrator can hand the event to an organiser with **Send to organiser** — available on the event workspace and at the top of the event's registrations screen. The organiser is emailed and, from then on, runs this event's bracket, schedule, courts, judges, opponent requests and lifecycle, and can start and score its matches. Everything else stays with administrators, including registration decisions, result corrections, reopening the event, and accounts and clubs. Revoke the assignment from the same panel to take the event back.
+Once the entries are approved, an administrator can hand the event to an organiser with **Send to organiser** — available on the event workspace and at the top of the event's registrations screen. The organiser is emailed and, from then on, runs this event's bracket, schedule, courts, opponent requests and lifecycle, and can start and score its matches. Everything else stays with administrators, including registration decisions, result corrections, reopening the event, and accounts and clubs. Revoke the assignment from the same panel to take the event back.
 
-Unlike a judge, an organiser is not tied to one court, so they can run several matches at once. The physical rules still hold for everyone: a court's queue is played in order, and only one match runs on a court at a time.
+Administrators and organisers are not tied to one court, so they can run several matches at once. The physical rules still hold for everyone: a court's queue is played in order, and only one match runs on a court at a time.
 
 ## 3. Close registration and open opponent requests
 
@@ -82,21 +82,21 @@ Review:
 - bye placement is acceptable;
 - later-round progression links are complete.
 
-Rearrange a draft draw by dragging an entry onto another first-round slot, or with the move button on each pair. Dropping on an occupied slot swaps the two entries. If a move separates a pairing that came from an approved opponent request, the request returns to the approved list and the page says so — regenerate or place the pair yourself before locking.
+Rearrange a draft draw by dragging an entry onto another first-round set, or with the move button on each pair. Dropping on an occupied set swaps the two entries. If a move separates a pairing that came from an approved opponent request, the request returns to the approved list and the page says so — regenerate or place the pair yourself before locking.
 
 Regenerating a draft rebuilds the match graph; nothing is final until the bracket is locked. Locking freezes the draw, snapshots participant identity for history, and automatically advances bye winners, after which placement can no longer change. Publish only after the review is complete — a draft bracket cannot be published.
 
-### Slot format
+### Set format
 
-Each match is decided over 1, 2, or 3 slot wins. Set the default per round in the bracket header, and override an individual match from its card when the draw calls for a longer or shorter contest. The effective value is the match override, else the round default, else one.
+Each match is decided over 1, 2, or 3 set wins. Set the default per round in the bracket header, and override an individual match from its card when the draw calls for a longer or shorter contest. The effective value is the match override, else the round default, else one.
 
-Slot settings are editable until the match starts. Starting the match snapshots the format onto it, so later changes to a round default never affect a match already under way, and the server rejects an override on a started match.
+Set settings are editable until the match starts. Starting the match snapshots the format onto it, so later changes to a round default never affect a match already under way, and the server rejects an override on a started match.
 
 ## 5. Build and publish the schedule
 
-Judges are drawn from the event's own pool. Add one by email on the schedule screen: a new address is invited to set a password, an address already used by a player or admin is refused. Only judges in the pool can be assigned here, which keeps one event's judges out of another's schedule. Removing a judge from the pool revokes their court assignments for this event but leaves their account alone.
+There is no judge pool to manage. The endpoints still exist for API clients, but nothing in the product assigns a judge, and no court needs one before its matches can be played.
 
-Create the physical courts, then assign a judge to each court for a defined time interval (overlapping judge intervals are rejected). Leaving a court or a queued match without a judge is allowed — whoever runs the event can score it. Add matches to court queues and set optional planned start/end times. A match whose participants are not both known yet stays `TENTATIVE` and becomes `READY` automatically when both sides resolve.
+Create the physical courts, then add matches to their queues with optional planned start/end times. A match whose participants are not both known yet stays `TENTATIVE` and becomes `READY` automatically when both sides resolve. Planned times can also be edited later, one match at a time, on **Match control**.
 
 Reorder a queue by dragging a match within its court, or drag it onto another court to move it there. Keyboard and touch users get the same result from the move up/down buttons and the "Move to court" picker on each row. Three rules constrain every move, on the server as well as in the UI:
 
@@ -120,19 +120,29 @@ Publish the schedule independently from the bracket.
 
 Move the event to ongoing only when at least one bracket is locked and operational scheduling is ready. Optionally enable public live scoring (available only while the event is ongoing).
 
-Judges process the court queue strictly from top to bottom:
+This is what **Match control** (`/admin/events/:eventId/control`) is for. It is the one screen the event is run from, and it answers the only question that matters on the day: what is happening on which court, between whom, and where does the winner go. Each match card carries its court, its planned time, both pairs with their clubs, the set tally, and the controls — the same card in the "on now and up next" list and in the draw below it, so there is one card to learn rather than two screens to reconcile.
 
-1. Open the assigned court.
-2. Confirm the displayed players and match number.
-3. Start the first ready match (earlier queue positions must be finished first). Starting the match freezes its slot format.
-4. When a slot finishes, press the button for the side that won it and confirm in the dialog. The dialog names the pair and says whether the decision completes the match.
-5. Reaching the required slot wins completes the match automatically.
-6. To correct the most recent slot, use "Undo last slot" while the match is still in progress.
-7. For a walkover, withdrawal, or disqualification, select the winner and provide a reason.
+Bracket and Courts & schedule remain the setup tools: seeding, generating and locking draws, creating courts, and building queues. Match control changes only what moves on the day.
 
-Judges record slot winners, not points. A match races to its configured slot count: first to 1 (a single slot), first to 2 (up to three slots, so 1–1 goes to a decider), or first to 3 (up to five slots). The match score is the slot tally — 2–1, not 6–4.
+Whoever runs the event processes each court queue strictly from top to bottom:
 
-Every slot command is versioned and idempotent, and every decision and undo is stored as a `SlotEvent`. The confirmation dialog keeps one command id from the moment it opens, so retrying after a dropped connection replays the same command instead of recording a second slot. If the screen reports a conflict, refresh before continuing rather than repeating with a new assumption.
+1. Confirm the displayed players, clubs and match number against the four people on court.
+2. Start the match (earlier queue positions must be finished first, and the match must be on a court). Starting the match freezes its set format.
+3. When the match finishes, write the result: the sets each side won, in the two number fields marked A and B — the same letters that mark the two pairs on the card. "Record result" stays off until the two numbers form a finished tally, and the dialog names the winning pair before the result is written.
+4. Recording the result completes the match and moves the winner into the next round.
+5. For a walkover or a retirement, use "Finish early", choose the side that advances, and give a reason.
+
+Several matches can run at once, one per court: administrators and organisers are not bound to a single match the way a judge is.
+
+Planned start times are editable in place on each card, until the match starts — a started or finished match keeps the time it was played at.
+
+There is no undo on this screen. To correct a result recorded the wrong way round, reopen the match from the bracket page (see §7); that requires `MATCH_RESULT_CORRECT`, which organisers do not hold.
+
+Scoring counts sets, not points. A match races to its configured set count: first to 1 (a single set), first to 2 (up to three sets, so 1–1 goes to a decider), or first to 3 (up to five sets). The match score is the set tally — 2–1, not 6–4. The console asks for that tally as a whole rather than set by set, because that is how a result reaches the desk: "one two", not an account of who took which set. The server derives the `MatchSet` rows the tally is made of, giving the decider to the winner, so the rows and `scoreA`/`scoreB` still agree.
+
+A judge scoring courtside through the API still records sets one at a time. A result may only add to sets already recorded that way, never take one back; taking one back is an undo.
+
+Every command is versioned and idempotent, and each one is stored as a `SetEvent`. The confirmation dialog keeps one command id from the moment it opens, so retrying after a dropped connection replays the same command instead of recording a second result. If the screen reports a conflict, refresh before continuing rather than repeating with a new assumption.
 
 Completion automatically:
 
@@ -145,15 +155,15 @@ Completion automatically:
 
 ## 7. Correct exceptional results
 
-Administrators can correct a completed match with a mandatory reason. A correction may change winner, loser, and scores; it reverses player statistics and updates an unresolved downstream slot.
+Administrators can correct a completed match with a mandatory reason. A correction may change winner, loser, and scores; it reverses player statistics and updates an unresolved downstream set.
 
 The correction command is intentionally blocked when the dependent match has already started. At that point, stop play and use a controlled bracket-repair procedure rather than rewriting history through the standard UI.
 
-For slot matches, a correction must land on a finished tally (for example 2–1, or 3–2 in a first-to-3 match). The recorded per-slot winners are left untouched and stop being displayed once the result becomes an administrator decision, because they no longer add up to the official score. The original sequence stays in the audit trail.
+For set matches, a correction must land on a finished tally (for example 2–1, or 3–2 in a first-to-3 match). The recorded per-set winners are left untouched and stop being displayed once the result becomes an administrator decision, because they no longer add up to the official score. The original sequence stays in the audit trail.
 
-### Reopening a completed slot match
+### Reopening a completed set match
 
-When the wrong side was recorded, reopen the match instead of correcting it: on the bracket card, choose "Reopen match" and give a reason. This withdraws the last slot, retracts the winner from the next round, reverses the players' win/loss records, returns the match to in progress, and notifies the four players. The judge can then record the correct slot winner.
+When the wrong side was recorded, reopen the match instead of correcting it: on the bracket card, choose "Reopen match" and give a reason. This withdraws the last set, retracts the winner from the next round, reverses the players' win/loss records, returns the match to in progress, and notifies the four players. The correct result can then be recorded. Reopening withdraws one set at a time, and a new result may not be lower than the sets that remain, so flipping a result the other way takes as many reopens as it takes to clear them.
 
 Reopening is refused when:
 
@@ -182,11 +192,11 @@ A completed event is read-only: registrations, brackets, schedules, opponent req
 
 ### Score conflict
 
-Refresh the judge match, verify the score history, and apply only the missing action. Do not repeatedly submit a stale version.
+Refresh the match, verify the set history, and apply only the missing action. Do not repeatedly submit a stale version.
 
-### Judge cannot open a match
+### A match will not start
 
-Confirm the user has role `JUDGE` and is active, the assignment covers the current time and is not revoked, the court and event match, and the requested match is next in the queue with no earlier unfinished item.
+Confirm the event is `ONGOING`, the match is `READY` with both participants known, it sits on a court, it is next in that court's queue with no earlier unfinished item, and no other match is already running on that court. An organiser must also still hold the event.
 
 ### Club leader cannot remove a member
 

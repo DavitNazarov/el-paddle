@@ -1,10 +1,10 @@
-import { BracketStatus, MatchResultType, MatchRound, MatchSide, MatchStatus, NotificationType, ScheduleItemStatus, ScoreAction, ScoringMode, SlotEventAction, UserRole, type Prisma } from '../../generated/prisma/client.js';
+import { BracketStatus, MatchResultType, MatchRound, MatchSide, MatchStatus, NotificationType, ScheduleItemStatus, ScoreAction, ScoringMode, SetEventAction, UserRole, type Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { entryUserSelect } from '../../common/includes.js';
-import { isTerminalTally, isValidSlotCount, maxSlots, nextSlotNumber, slotMatchWinner, tallySlots, terminalTallyExample } from './slot-engine.js';
+import { isTerminalTally, isValidSetCount, maxSets, nextSetNumber, setMatchWinner, setsToReachTally, tallySets, terminalTallyExample } from './set-engine.js';
 
 /** Event fields serializeMatch emits plus the publication flags getMatchDetail gates on. No bank columns. */
 const matchEventSelect = {
@@ -28,7 +28,7 @@ export const matchInclude = {
   winner: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } },
   loser: { include: { owner: { select: entryUserSelect }, teammate: { select: entryUserSelect } } },
   scheduleItem: { include: { court: true } },
-  slots: { orderBy: { slotNumber: 'asc' as const } },
+  sets: { orderBy: { setNumber: 'asc' as const } },
   snapshots: true,
 } satisfies Prisma.MatchInclude;
 
@@ -119,33 +119,33 @@ export async function getJudgeMatch(judgeId: string, judgeRole: UserRole, matchI
   return prisma.$transaction((tx) => requireMatchScorer(tx, judgeId, judgeRole, matchId));
 }
 
-/** Slot wins this match races to: the admin override, else the bracket round default, else one. */
-async function resolveSlotCount(tx: Prisma.TransactionClient, match: { bracketId: string; round: MatchRound; slotCountOverride: number | null }) {
-  if (match.slotCountOverride !== null) return match.slotCountOverride;
+/** Set wins this match races to: the admin override, else the bracket round default, else one. */
+async function resolveSetCount(tx: Prisma.TransactionClient, match: { bracketId: string; round: MatchRound; setCountOverride: number | null }) {
+  if (match.setCountOverride !== null) return match.setCountOverride;
   const config = await tx.bracketRoundConfig.findUnique({ where: { bracketId_round: { bracketId: match.bracketId, round: match.round } } });
-  return config?.slotCount ?? 1;
+  return config?.setCount ?? 1;
 }
 
-export async function setMatchSlotConfig(input: { actorId: string; matchId: string; slotCountOverride: number | null; expectedVersion: number; commandId: string }) {
-  if (input.slotCountOverride !== null && !isValidSlotCount(input.slotCountOverride)) jsonError('Slot count must be 1, 2, or 3.');
+export async function setMatchSetConfig(input: { actorId: string; matchId: string; setCountOverride: number | null; expectedVersion: number; commandId: string }) {
+  if (input.setCountOverride !== null && !isValidSetCount(input.setCountOverride)) jsonError('Set count must be 1, 2, or 3.');
   const hash = payloadHash(input);
   return prisma.$transaction(async (tx) => {
-    const replay = await findCommandReceipt(tx, input.actorId, 'match.slot-config', input.commandId, hash);
+    const replay = await findCommandReceipt(tx, input.actorId, 'match.set-config', input.commandId, hash);
     if (replay) return tx.match.findUniqueOrThrow({ where: { id: input.matchId }, include: matchInclude });
     const match = await tx.match.findUnique({ where: { id: input.matchId }, include: matchInclude });
     if (!match) jsonError('Match not found.', 404);
     if (match.bracket.event.status === 'COMPLETED') jsonError('Reopen the completed event before editing its bracket.', 409);
-    if (match.startedAt || (match.status !== MatchStatus.PENDING && match.status !== MatchStatus.READY)) jsonError('Match already started. Slot settings are locked.', 409);
+    if (match.startedAt || (match.status !== MatchStatus.PENDING && match.status !== MatchStatus.READY)) jsonError('Match already started. Set settings are locked.', 409);
     if (match.version !== input.expectedVersion) jsonError('Match changed. Refresh and try again.', 409);
     const configResult = await tx.match.updateMany({
       where: { id: match.id, version: input.expectedVersion, startedAt: null },
-      data: { slotCountOverride: input.slotCountOverride, version: { increment: 1 } },
+      data: { setCountOverride: input.setCountOverride, version: { increment: 1 } },
     });
     if (configResult.count !== 1) jsonError('Match changed. Refresh and try again.', 409);
     const updated = await tx.match.findUniqueOrThrow({ where: { id: match.id }, include: matchInclude });
-    await writeAudit(tx, { action: 'match.slot-config.updated', actorId: input.actorId, eventId: match.bracket.eventId, entityType: 'Match', entityId: match.id, before: { slotCountOverride: match.slotCountOverride }, after: { slotCountOverride: updated.slotCountOverride } });
-    await queueOutbox(tx, { topic: 'match.config.updated', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, matchId: match.id, version: updated.version }, deduplicationKey: `match:${match.id}:slot-config:v${updated.version}` });
-    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'match.slot-config', commandId: input.commandId, hash });
+    await writeAudit(tx, { action: 'match.set-config.updated', actorId: input.actorId, eventId: match.bracket.eventId, entityType: 'Match', entityId: match.id, before: { setCountOverride: match.setCountOverride }, after: { setCountOverride: updated.setCountOverride } });
+    await queueOutbox(tx, { topic: 'match.config.updated', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, matchId: match.id, version: updated.version }, deduplicationKey: `match:${match.id}:set-config:v${updated.version}` });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'match.set-config', commandId: input.commandId, hash });
     return updated;
   });
 }
@@ -167,11 +167,11 @@ export async function startMatch(input: { judgeId: string; judgeRole: UserRole; 
     // An unbound scorer runs as many courts at once as the event needs.
     const judgeActive = unbound ? null : await tx.scheduleItem.findFirst({ where: { assignedJudgeId: input.judgeId, status: ScheduleItemStatus.IN_PROGRESS, id: { not: match.scheduleItem!.id } } });
     if (judgeActive) jsonError('You already have an active match.', 409);
-    // Freeze the slot format for the running match so later config edits cannot change it.
-    const slotCount = match.scoringMode === ScoringMode.SLOTS ? await resolveSlotCount(tx, match) : null;
+    // Freeze the set format for the running match so later config edits cannot change it.
+    const setCount = match.scoringMode === ScoringMode.SETS ? await resolveSetCount(tx, match) : null;
     const startResult = await tx.match.updateMany({
       where: { id: match.id, status: MatchStatus.READY, version: input.expectedVersion },
-      data: { status: MatchStatus.IN_PROGRESS, startedAt: new Date(), ...(slotCount === null ? {} : { slotCount }), version: { increment: 1 } },
+      data: { status: MatchStatus.IN_PROGRESS, startedAt: new Date(), ...(setCount === null ? {} : { setCount }), version: { increment: 1 } },
     });
     if (startResult.count !== 1) jsonError('Match changed. Refresh and try again.', 409);
     const scheduleResult = await tx.scheduleItem.updateMany({
@@ -239,20 +239,20 @@ async function completeMatch(
   if (match.round === MatchRound.FINAL) await tx.bracket.update({ where: { id: match.bracketId }, data: { status: BracketStatus.COMPLETED, completedAt: new Date(), version: { increment: 1 } } });
   await writeAudit(tx, { action: 'match.completed', actorId: input.actorId, eventId: match.bracket.eventId, entityType: 'Match', entityId: match.id, before: { status: match.status, scoreA: match.scoreA, scoreB: match.scoreB }, after: { status: MatchStatus.COMPLETED, winnerEntryId: input.winnerEntryId, resultType: input.resultType } , publicReason: input.reason });
   await queueOutbox(tx, { topic: 'match.completed', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, bracketId: match.bracketId, matchId: match.id, winnerEntryId: input.winnerEntryId, version: completed.version }, deduplicationKey: `match:${match.id}:completed:v${completed.version}` });
-  const resultMessage = match.scoringMode === ScoringMode.SLOTS
-    ? `Slot result: ${completed.scoreA}–${completed.scoreB}.`
+  const resultMessage = match.scoringMode === ScoringMode.SETS
+    ? `Set result: ${completed.scoreA}–${completed.scoreB}.`
     : `Final score: ${completed.scoreA}–${completed.scoreB}.`;
   await queueNotifications(tx, [winner, loser].flatMap((entry) => [entry.owner, entry.teammate].map((user) => ({ recipientUserId: user.id, recipientEmail: user.email, type: NotificationType.MATCH_COMPLETED, title: 'Match completed', message: resultMessage, entityType: 'Match', entityId: match.id, eventId: match.bracket.eventId, actionPath: `/matches/${match.id}`, version: completed.version }))));
   return completed;
 }
 
-/** Loads a slot match ready for a judge command, or the plain record for an admin one. */
-async function loadSlotMatch(tx: Prisma.TransactionClient, actorId: string, actorRole: UserRole, matchId: string, judgeMode: boolean) {
+/** Loads a set match ready for a judge command, or the plain record for an admin one. */
+async function loadSetMatch(tx: Prisma.TransactionClient, actorId: string, actorRole: UserRole, matchId: string, judgeMode: boolean) {
   const match = judgeMode
     ? await requireMatchScorer(tx, actorId, actorRole, matchId)
     : await tx.match.findUnique({ where: { id: matchId }, include: matchInclude });
   if (!match) jsonError('Match not found.', 404);
-  if (match.scoringMode !== ScoringMode.SLOTS) jsonError('This match does not use slot scoring.', 409);
+  if (match.scoringMode !== ScoringMode.SETS) jsonError('This match does not use set scoring.', 409);
   return match;
 }
 
@@ -262,79 +262,135 @@ function entryIdForSide(match: { participantAEntryId: string | null; participant
   return entryId;
 }
 
-export async function decideSlot(input: { judgeId: string; judgeRole: UserRole; matchId: string; slotNumber: number; winnerSide: MatchSide; expectedVersion: number; commandId: string }) {
+export async function decideSet(input: { judgeId: string; judgeRole: UserRole; matchId: string; setNumber: number; winnerSide: MatchSide; expectedVersion: number; commandId: string }) {
   const hash = payloadHash(input);
   return prisma.$transaction(async (tx) => {
-    const replay = await findCommandReceipt(tx, input.judgeId, 'match.slot.decide', input.commandId, hash);
+    const replay = await findCommandReceipt(tx, input.judgeId, 'match.set.decide', input.commandId, hash);
     if (replay) return tx.match.findUniqueOrThrow({ where: { id: input.matchId }, include: matchInclude });
-    const match = await loadSlotMatch(tx, input.judgeId, input.judgeRole, input.matchId, true);
+    const match = await loadSetMatch(tx, input.judgeId, input.judgeRole, input.matchId, true);
     if (match.status !== MatchStatus.IN_PROGRESS) jsonError('Match is not in progress.', 409);
-    if (match.version !== input.expectedVersion) jsonError('Slot changed. Refresh and try again.', 409);
-    const slotCount = match.slotCount;
-    if (slotCount === null) jsonError('Slot format is not set for this match.', 409);
-    // The client names the slot it is deciding, so a stale retry fails loudly instead of
+    if (match.version !== input.expectedVersion) jsonError('Set changed. Refresh and try again.', 409);
+    const setCount = match.setCount;
+    if (setCount === null) jsonError('Set format is not set for this match.', 409);
+    // The client names the set it is deciding, so a stale retry fails loudly instead of
     // silently recording the next one.
-    if (input.slotNumber !== nextSlotNumber(match.slots)) jsonError('This slot was already decided. Refresh and try again.', 409);
-    if (input.slotNumber > maxSlots(slotCount)) jsonError('This match has no further slots.', 409);
+    if (input.setNumber !== nextSetNumber(match.sets)) jsonError('This set was already decided. Refresh and try again.', 409);
+    if (input.setNumber > maxSets(setCount)) jsonError('This match has no further sets.', 409);
     const winnerEntryId = entryIdForSide(match, input.winnerSide);
-    const before = tallySlots(match.slots);
-    await tx.matchSlot.create({ data: { matchId: match.id, slotNumber: input.slotNumber, winnerSide: input.winnerSide, winnerEntryId, decidedById: input.judgeId } });
-    const after = tallySlots([...match.slots, { winnerSide: input.winnerSide }]);
-    const slotResult = await tx.match.updateMany({
+    const before = tallySets(match.sets);
+    await tx.matchSet.create({ data: { matchId: match.id, setNumber: input.setNumber, winnerSide: input.winnerSide, winnerEntryId, decidedById: input.judgeId } });
+    const after = tallySets([...match.sets, { winnerSide: input.winnerSide }]);
+    const setResult = await tx.match.updateMany({
       where: { id: match.id, status: MatchStatus.IN_PROGRESS, version: input.expectedVersion },
-      data: { scoreA: after.slotsA, scoreB: after.slotsB, version: { increment: 1 } },
+      data: { scoreA: after.setsA, scoreB: after.setsB, version: { increment: 1 } },
     });
-    if (slotResult.count !== 1) jsonError('Slot changed. Refresh and try again.', 409);
+    if (setResult.count !== 1) jsonError('Set changed. Refresh and try again.', 409);
     let updated = await tx.match.findUniqueOrThrow({ where: { id: match.id }, include: matchInclude });
-    await tx.slotEvent.create({ data: { matchId: match.id, actorId: input.judgeId, action: SlotEventAction.DECIDED, slotNumber: input.slotNumber, winnerSide: input.winnerSide, winnerEntryId, slotsABefore: before.slotsA, slotsBBefore: before.slotsB, slotsAAfter: after.slotsA, slotsBAfter: after.slotsB, matchVersion: updated.version, commandId: input.commandId } });
-    await queueOutbox(tx, { topic: 'match.slot.decided', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, matchId: match.id, slotNumber: input.slotNumber, scoreA: after.slotsA, scoreB: after.slotsB, version: updated.version }, deduplicationKey: `match:${match.id}:slot:v${updated.version}` });
-    const matchWinnerSide = slotMatchWinner(after.slotsA, after.slotsB, slotCount);
+    await tx.setEvent.create({ data: { matchId: match.id, actorId: input.judgeId, action: SetEventAction.DECIDED, setNumber: input.setNumber, winnerSide: input.winnerSide, winnerEntryId, setsABefore: before.setsA, setsBBefore: before.setsB, setsAAfter: after.setsA, setsBAfter: after.setsB, matchVersion: updated.version, commandId: input.commandId } });
+    await queueOutbox(tx, { topic: 'match.set.decided', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, matchId: match.id, setNumber: input.setNumber, scoreA: after.setsA, scoreB: after.setsB, version: updated.version }, deduplicationKey: `match:${match.id}:set:v${updated.version}` });
+    const matchWinnerSide = setMatchWinner(after.setsA, after.setsB, setCount);
     if (matchWinnerSide) {
       updated = await completeMatch(
         tx,
-        { ...match, scoreA: after.slotsA, scoreB: after.slotsB, version: updated.version },
+        { ...match, scoreA: after.setsA, scoreB: after.setsB, version: updated.version },
         { actorId: input.judgeId, winnerEntryId: entryIdForSide(match, matchWinnerSide), resultType: MatchResultType.NORMAL },
       );
     }
-    await saveCommandReceipt(tx, { actorId: input.judgeId, action: 'match.slot.decide', commandId: input.commandId, hash, response: { matchId: match.id, version: updated.version } });
+    await saveCommandReceipt(tx, { actorId: input.judgeId, action: 'match.set.decide', commandId: input.commandId, hash, response: { matchId: match.id, version: updated.version } });
     return updated;
   });
 }
 
 /**
- * Withdraws the last decided slot. A judge may do this while the match runs; reopening a
+ * Records a whole match result as a tally: two numbers, one command, one completed
+ * match. This is how the match control console scores, because that is how an
+ * operator hears a result — "one two", not a set-by-set account.
+ *
+ * The set rows are still what the tally is made of, so they are written here in the
+ * derived order `setsToReachTally` gives. A tally may only add to sets a courtside
+ * judge already recorded; taking one back is an undo, which has its own command.
+ */
+export async function recordSetResult(input: { actorId: string; actorRole: UserRole; matchId: string; setsA: number; setsB: number; expectedVersion: number; commandId: string }) {
+  const hash = payloadHash(input);
+  return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'match.result.record', input.commandId, hash);
+    if (replay) return tx.match.findUniqueOrThrow({ where: { id: input.matchId }, include: matchInclude });
+    const match = await loadSetMatch(tx, input.actorId, input.actorRole, input.matchId, true);
+    if (match.status !== MatchStatus.IN_PROGRESS) jsonError('Match is not in progress.', 409);
+    if (match.version !== input.expectedVersion) jsonError('Match changed. Refresh and try again.', 409);
+    const setCount = match.setCount;
+    if (setCount === null) jsonError('Set format is not set for this match.', 409);
+    if (!isTerminalTally(input.setsA, input.setsB, setCount)) jsonError(`The result must be a finished set tally (for example ${terminalTallyExample(setCount)}).`);
+    const before = tallySets(match.sets);
+    if (input.setsA < before.setsA || input.setsB < before.setsB) jsonError('The result is lower than the sets already recorded. Undo those first.', 409);
+    const after = { setsA: input.setsA, setsB: input.setsB };
+    const pending = setsToReachTally(before, after);
+    const decidedAt = new Date();
+    await tx.matchSet.createMany({
+      data: pending.map((winnerSide, index) => ({
+        matchId: match.id,
+        setNumber: nextSetNumber(match.sets) + index,
+        winnerSide,
+        winnerEntryId: entryIdForSide(match, winnerSide),
+        decidedById: input.actorId,
+        decidedAt,
+      })),
+    });
+    const resultUpdate = await tx.match.updateMany({
+      where: { id: match.id, status: MatchStatus.IN_PROGRESS, version: input.expectedVersion },
+      data: { scoreA: after.setsA, scoreB: after.setsB, version: { increment: 1 } },
+    });
+    if (resultUpdate.count !== 1) jsonError('Match changed. Refresh and try again.', 409);
+    const scored = await tx.match.findUniqueOrThrow({ where: { id: match.id }, include: matchInclude });
+    const winnerSide = setMatchWinner(after.setsA, after.setsB, setCount)!;
+    const winnerEntryId = entryIdForSide(match, winnerSide);
+    // One history row for one command: the operator entered a result, not a run of sets.
+    await tx.setEvent.create({ data: { matchId: match.id, actorId: input.actorId, action: SetEventAction.DECIDED, setNumber: match.sets.length + pending.length, winnerSide, winnerEntryId, setsABefore: before.setsA, setsBBefore: before.setsB, setsAAfter: after.setsA, setsBAfter: after.setsB, matchVersion: scored.version, commandId: input.commandId } });
+    await queueOutbox(tx, { topic: 'match.result.recorded', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, matchId: match.id, scoreA: after.setsA, scoreB: after.setsB, version: scored.version }, deduplicationKey: `match:${match.id}:result:v${scored.version}` });
+    const completed = await completeMatch(
+      tx,
+      { ...match, scoreA: after.setsA, scoreB: after.setsB, version: scored.version },
+      { actorId: input.actorId, winnerEntryId, resultType: MatchResultType.NORMAL },
+    );
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'match.result.record', commandId: input.commandId, hash, response: { matchId: match.id, version: completed.version } });
+    return completed;
+  });
+}
+
+/**
+ * Withdraws the last decided set. A judge may do this while the match runs; reopening a
  * completed match is admin-only and additionally retracts the winner from the next round.
  */
-export async function undoLastSlot(input: { actorId: string; actorRole: UserRole; matchId: string; reason?: string; expectedVersion: number; commandId: string; judgeMode: boolean }) {
-  const action = input.judgeMode ? 'match.slot.undo' : 'match.slot.undo.admin';
+export async function undoLastSet(input: { actorId: string; actorRole: UserRole; matchId: string; reason?: string; expectedVersion: number; commandId: string; judgeMode: boolean }) {
+  const action = input.judgeMode ? 'match.set.undo' : 'match.set.undo.admin';
   if (!input.judgeMode && !input.reason?.trim()) jsonError('An undo reason is required.');
   const hash = payloadHash(input);
   return prisma.$transaction(async (tx) => {
     const replay = await findCommandReceipt(tx, input.actorId, action, input.commandId, hash);
     if (replay) return tx.match.findUniqueOrThrow({ where: { id: input.matchId }, include: matchInclude });
-    const match = await loadSlotMatch(tx, input.actorId, input.actorRole, input.matchId, input.judgeMode);
+    const match = await loadSetMatch(tx, input.actorId, input.actorRole, input.matchId, input.judgeMode);
     if (match.bracket.event.status === 'COMPLETED') jsonError('Reopen the completed event before correcting a match.', 409);
     if (match.version !== input.expectedVersion) jsonError('Match changed. Refresh and try again.', 409);
-    const lastSlot = match.slots.at(-1);
-    if (!lastSlot) jsonError('No slot result to undo.', 409);
+    const lastSet = match.sets.at(-1);
+    if (!lastSet) jsonError('No set result to undo.', 409);
     const reopening = match.status === MatchStatus.COMPLETED;
     if (reopening) {
       if (input.judgeMode) jsonError('The match is complete. Ask an administrator to reopen it.', 409);
-      if (match.resultType !== MatchResultType.NORMAL) jsonError('Only a normally scored slot match can be reopened. Use a correction instead.', 409);
+      if (match.resultType !== MatchResultType.NORMAL) jsonError('Only a normally scored set match can be reopened. Use a correction instead.', 409);
       await assertCourtAndJudgeFree(tx, match);
       await retractAdvancedWinner(tx, match);
     } else if (match.status !== MatchStatus.IN_PROGRESS) {
       jsonError('Match is not in progress.', 409);
     }
 
-    const before = tallySlots(match.slots);
-    await tx.matchSlot.delete({ where: { matchId_slotNumber: { matchId: match.id, slotNumber: lastSlot.slotNumber } } });
-    const after = tallySlots(match.slots.filter((slot) => slot.slotNumber !== lastSlot.slotNumber));
+    const before = tallySets(match.sets);
+    await tx.matchSet.delete({ where: { matchId_setNumber: { matchId: match.id, setNumber: lastSet.setNumber } } });
+    const after = tallySets(match.sets.filter((set) => set.setNumber !== lastSet.setNumber));
     const undoResult = await tx.match.updateMany({
       where: { id: match.id, status: match.status, version: input.expectedVersion },
       data: {
-        scoreA: after.slotsA,
-        scoreB: after.slotsB,
+        scoreA: after.setsA,
+        scoreB: after.setsB,
         version: { increment: 1 },
         ...(reopening
           ? { status: MatchStatus.IN_PROGRESS, winnerEntryId: null, loserEntryId: null, resultType: null, resultReason: null, completedAt: null }
@@ -347,12 +403,12 @@ export async function undoLastSlot(input: { actorId: string; actorRole: UserRole
       if (match.scheduleItem) await tx.scheduleItem.update({ where: { id: match.scheduleItem.id }, data: { status: ScheduleItemStatus.IN_PROGRESS, version: { increment: 1 } } });
     }
     const updated = await tx.match.findUniqueOrThrow({ where: { id: match.id }, include: matchInclude });
-    await tx.slotEvent.create({ data: { matchId: match.id, actorId: input.actorId, action: SlotEventAction.UNDONE, slotNumber: lastSlot.slotNumber, winnerSide: lastSlot.winnerSide, winnerEntryId: lastSlot.winnerEntryId, slotsABefore: before.slotsA, slotsBBefore: before.slotsB, slotsAAfter: after.slotsA, slotsBAfter: after.slotsB, matchVersion: updated.version, commandId: input.commandId, reason: input.reason?.trim() || null } });
-    await writeAudit(tx, { action: reopening ? 'match.reopened' : 'match.slot.undone', actorId: input.actorId, eventId: match.bracket.eventId, entityType: 'Match', entityId: match.id, before: { status: match.status, scoreA: match.scoreA, scoreB: match.scoreB, winnerEntryId: match.winnerEntryId }, after: { status: updated.status, scoreA: updated.scoreA, scoreB: updated.scoreB, winnerEntryId: updated.winnerEntryId }, publicReason: input.reason?.trim() || undefined });
-    await queueOutbox(tx, { topic: reopening ? 'match.reopened' : 'match.slot.undone', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, matchId: match.id, version: updated.version }, deduplicationKey: `match:${match.id}:slot-undo:v${updated.version}` });
+    await tx.setEvent.create({ data: { matchId: match.id, actorId: input.actorId, action: SetEventAction.UNDONE, setNumber: lastSet.setNumber, winnerSide: lastSet.winnerSide, winnerEntryId: lastSet.winnerEntryId, setsABefore: before.setsA, setsBBefore: before.setsB, setsAAfter: after.setsA, setsBAfter: after.setsB, matchVersion: updated.version, commandId: input.commandId, reason: input.reason?.trim() || null } });
+    await writeAudit(tx, { action: reopening ? 'match.reopened' : 'match.set.undone', actorId: input.actorId, eventId: match.bracket.eventId, entityType: 'Match', entityId: match.id, before: { status: match.status, scoreA: match.scoreA, scoreB: match.scoreB, winnerEntryId: match.winnerEntryId }, after: { status: updated.status, scoreA: updated.scoreA, scoreB: updated.scoreB, winnerEntryId: updated.winnerEntryId }, publicReason: input.reason?.trim() || undefined });
+    await queueOutbox(tx, { topic: reopening ? 'match.reopened' : 'match.set.undone', aggregateType: 'Match', aggregateId: match.id, payload: { eventId: match.bracket.eventId, matchId: match.id, version: updated.version }, deduplicationKey: `match:${match.id}:set-undo:v${updated.version}` });
     if (reopening) {
       const affected = [match.participantA, match.participantB].filter((entry) => entry !== null);
-      await queueNotifications(tx, affected.flatMap((entry) => [entry.owner, entry.teammate].map((user) => ({ recipientUserId: user.id, type: NotificationType.MATCH_REOPENED, title: 'Match reopened', message: 'An administrator reopened your match. The last slot result was withdrawn.', entityType: 'Match', entityId: match.id, eventId: match.bracket.eventId, actionPath: `/matches/${match.id}`, version: updated.version }))));
+      await queueNotifications(tx, affected.flatMap((entry) => [entry.owner, entry.teammate].map((user) => ({ recipientUserId: user.id, type: NotificationType.MATCH_REOPENED, title: 'Match reopened', message: 'An administrator reopened your match. The last set result was withdrawn.', entityType: 'Match', entityId: match.id, eventId: match.bracket.eventId, actionPath: `/matches/${match.id}`, version: updated.version }))));
     }
     await saveCommandReceipt(tx, { actorId: input.actorId, action, commandId: input.commandId, hash, response: { matchId: match.id, version: updated.version } });
     return updated;
@@ -397,7 +453,7 @@ export async function scoreMatch(input: { judgeId: string; judgeRole: UserRole; 
     const replay = await findCommandReceipt(tx, input.judgeId, 'match.score', input.commandId, hash);
     if (replay) return tx.match.findUniqueOrThrow({ where: { id: input.matchId }, include: matchInclude });
     const match = await requireMatchScorer(tx, input.judgeId, input.judgeRole, input.matchId);
-    if (match.scoringMode !== ScoringMode.POINTS) jsonError('This match uses slot scoring.', 409);
+    if (match.scoringMode !== ScoringMode.POINTS) jsonError('This match uses set scoring.', 409);
     if (match.status !== MatchStatus.IN_PROGRESS) jsonError('Match is not in progress.', 409);
     if (match.version !== input.expectedVersion) jsonError('Score changed. Refresh and try again.', 409);
     const current = input.side === MatchSide.A ? match.scoreA : match.scoreB;
@@ -481,12 +537,12 @@ export async function correctCompletedMatch(input: { actorId: string; matchId: s
     if (replay) return tx.match.findUniqueOrThrow({ where: { id: input.matchId }, include: matchInclude });
     const match = await tx.match.findUnique({ where: { id: input.matchId }, include: matchInclude });
     if (!match || match.status !== MatchStatus.COMPLETED || !match.winnerEntryId || !match.loserEntryId) jsonError('Completed match not found.', 404);
-    // Point matches keep the 0-6 rule; slot matches must land on a finished tally instead.
-    if (match.scoringMode === ScoringMode.SLOTS) {
-      const slotCount = match.slotCount ?? 1;
-      if (!isTerminalTally(input.scoreA, input.scoreB, slotCount)) jsonError(`Slot tallies must form a finished result (for example ${terminalTallyExample(slotCount)}).`);
+    // Point matches keep the 0-6 rule; set matches must land on a finished tally instead.
+    if (match.scoringMode === ScoringMode.SETS) {
+      const setCount = match.setCount ?? 1;
+      if (!isTerminalTally(input.scoreA, input.scoreB, setCount)) jsonError(`Set tallies must form a finished result (for example ${terminalTallyExample(setCount)}).`);
       const leadingSide = input.scoreA > input.scoreB ? MatchSide.A : MatchSide.B;
-      if (entryIdForSide(match, leadingSide) !== input.winnerEntryId) jsonError('The winner must be the side with more slot wins.');
+      if (entryIdForSide(match, leadingSide) !== input.winnerEntryId) jsonError('The winner must be the side with more set wins.');
     } else if (![input.scoreA, input.scoreB].every((score) => Number.isInteger(score) && score >= 0 && score <= 6)) {
       jsonError('Scores must be between 0 and 6.');
     }

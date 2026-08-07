@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
-import { ArrowRight, ArrowRightLeft, CalendarDays, CheckCircle2, Clock, LockKeyhole, MapPin, WalletCards } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, CalendarDays, CheckCircle2, Clock, LockKeyhole, MapPin, Users, WalletCards } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   DashboardField,
   DashboardModal,
+  FeedbackBanner,
   MetaRow,
   RegistrationStatusBadge,
   SurfaceCard,
@@ -17,7 +18,9 @@ import {
   selectControlClassName,
   softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
+import { StatusLabel } from '@/components/tournament/TournamentUI';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { fillTemplate, tournamentCopy, tournamentStatus } from '@/lib/i18n/tournament';
 import { cn } from '@/lib/utils';
 import type { EventDto, RegistrationDto } from '@/types/dashboard';
 import type { PlayerDashboardApi } from '@/hooks/usePlayerDashboard';
@@ -37,8 +40,9 @@ export function EventCard({
   onRegister,
   onEditRegistration,
 }: EventCardProps) {
-  const { dictionary, t, formatDate } = useI18n();
+  const { dictionary, t, locale, formatDate } = useI18n();
   const player = dictionary.dashboard.player;
+  const homeCopy = tournamentCopy[locale].playerHome;
 
   const clubRegistration = clubEntries[0] ?? null;
   const registeredCategoryIds = new Set(clubEntries.map((entry) => entry.category.id));
@@ -60,6 +64,11 @@ export function EventCard({
         <div className="min-w-0 p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-1.5">
+              {/* Where the event stands, stated on the card rather than implied
+                  by which buttons happen to be enabled. */}
+              <StatusLabel icon={eventIsCompleted ? 'check' : 'dot'}>
+                {tournamentStatus(locale, event.status)}
+              </StatusLabel>
               {event.categories.map((category) => {
                 const registered = registeredCategoryIds.has(category.id);
                 return (
@@ -152,55 +161,52 @@ export function EventCard({
             <p className="mt-2 text-xl font-semibold tabular-nums text-[var(--dash-text)]">
               {t('dashboard.player.registerModal.feeAmount', { amount: event.participationFee })}
             </p>
+            {/* Social proof — a real count, shown only when it exists. */}
+            {(event.teamsIn ?? 0) > 0 ? (
+              <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--dash-teal)]">
+                <Users className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {event.teamsIn === 1
+                  ? homeCopy.teamsInOne
+                  : fillTemplate(homeCopy.teamsInMany, { count: event.teamsIn ?? 0 })}
+              </p>
+            ) : null}
           </div>
 
-          {clubRegistration && registrationCanBeEdited ? (
+          <div className="flex flex-col gap-2 sm:w-auto lg:w-full">
+            {clubRegistration && registrationCanBeEdited ? (
+              <Button
+                type="button"
+                variant="red"
+                className="min-h-11 w-full rounded-lg px-4"
+                onClick={() => onEditRegistration(clubRegistration)}
+              >
+                {player.clubEntries.editRegistration}
+                <ArrowRightLeft className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            ) : registrationIsOpen && !clubRegistration ? (
+              <Button variant="red" className="min-h-11 w-full rounded-lg px-5" onClick={() => onRegister(event)}>
+                {player.buttons.openRegister}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            ) : !registrationIsOpen && !clubRegistration && !eventIsOngoing && !eventIsCompleted ? (
+              <p className="inline-flex items-center gap-1.5 text-sm text-[var(--dash-muted)]">
+                <LockKeyhole className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {player.clubEntries.registrationClosed}
+              </p>
+            ) : null}
+
+            {/* Every card opens its event — no state is a dead end. */}
             <Button
-              type="button"
-              variant="red"
-              className="min-h-11 w-full rounded-lg px-4 sm:w-auto lg:w-full"
-              onClick={() => onEditRegistration(clubRegistration)}
-            >
-              {player.clubEntries.editRegistration}
-              <ArrowRightLeft className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          ) : eventIsCompleted ? (
-            <Button asChild variant="outline" className={cn(softButtonClassName, 'min-h-11 w-full rounded-lg px-4 sm:w-auto lg:w-full')}>
-              <Link href={`/dashboard/events/${event.id}`}>
-                {player.clubEntries.viewResults}
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          ) : eventIsOngoing ? (
-            <Button asChild variant="outline" className={cn(softButtonClassName, 'min-h-11 w-full rounded-lg px-4 sm:w-auto lg:w-full')}>
-              <Link href={`/dashboard/events/${event.id}`}>
-                {player.clubEntries.viewEvent}
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          ) : clubRegistration ? (
-            <Button asChild variant="outline" className={cn(softButtonClassName, 'min-h-11 w-full rounded-lg px-4 sm:w-auto lg:w-full')}>
-              <Link href="/dashboard/entries">
-                {player.clubEntries.viewRegistration}
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          ) : !registrationIsOpen ? (
-            <Button
-              type="button"
+              asChild
               variant="outline"
-              className={cn(softButtonClassName, 'min-h-11 w-full rounded-lg px-4 sm:w-auto lg:w-full')}
-              disabled
+              className={cn(softButtonClassName, 'min-h-11 w-full rounded-lg px-4')}
             >
-              {player.clubEntries.registrationClosed}
-              <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+              <Link href={`/dashboard/events/${event.id}`}>
+                {eventIsCompleted ? player.clubEntries.viewResults : player.clubEntries.viewEvent}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
             </Button>
-          ) : (
-            <Button variant="red" className="min-h-11 w-full rounded-lg px-5 sm:w-auto lg:w-full" onClick={() => onRegister(event)}>
-              {player.buttons.openRegister}
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          )}
+          </div>
         </div>
       </article>
     </SurfaceCard>
@@ -216,9 +222,12 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
   const { dictionary, t, locale } = useI18n();
   const [legalAccepted, setLegalAccepted] = useState(false);
   const player = dictionary.dashboard.player;
+  const homeCopy = tournamentCopy[locale].playerHome;
   const {
     registerEvent,
     registerEventBank,
+    registerEventBankStatus,
+    reloadEventBank,
     setRegisterEvent,
     user,
     eventForm,
@@ -247,6 +256,19 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
     legalAccepted &&
     !alreadyRegisteredForEvent &&
     savingEventId !== registerEvent?.id;
+
+  // A disabled submit button must never be a riddle: name the first thing
+  // still missing, in the order the form asks for it.
+  const missingHint =
+    !activeForm || alreadyRegisteredForEvent
+      ? null
+      : !activeForm.ownerPhone.trim()
+        ? player.registerModal.missingPhone
+        : !activeForm.savedTeammateId
+          ? player.registerModal.missingTeammate
+          : !legalAccepted
+            ? player.registerModal.missingLegal
+            : null;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     const registered = await submitRegistration(event, onRegistered);
@@ -286,13 +308,9 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
     >
       {registerEvent && activeForm ? (
         <form id="player-register-form" onSubmit={onSubmit} className="space-y-4">
-          {error ? (
-            <div className="rounded-md border border-red-400/25 bg-red-950/45 px-3 py-2 text-sm text-red-100">{error}</div>
-          ) : null}
+          {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
           {alreadyRegisteredForEvent ? (
-            <div className="rounded-md border border-emerald-400/25 bg-emerald-950/35 px-3 py-2 text-sm text-emerald-100">
-              {player.messages.oneCategoryOnly}
-            </div>
+            <FeedbackBanner kind="success">{player.messages.oneCategoryOnly}</FeedbackBanner>
           ) : null}
 
           <div className="rounded-md border border-[#e7dcd8] bg-white px-3 py-3">
@@ -302,18 +320,39 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
             <p className="mt-1 text-lg font-semibold text-[#2a1f1e]">
               {t('dashboard.player.registerModal.feeAmount', { amount: registerEvent.participationFee })}
             </p>
-            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d5f5c]">
-              {player.registerModal.bankReceiverLabel}
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[#2a1f1e]">
-              {registerEventBank?.bankAccountReceiver ?? '…'}
-            </p>
-            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d5f5c]">
-              {player.registerModal.bankAccountLabel}
-            </p>
-            <p className="mt-1 break-all font-mono text-sm font-semibold tracking-wide text-[#2a1f1e]">
-              {registerEventBank?.bankAccountIban ?? '…'}
-            </p>
+            {registerEventBankStatus === 'error' ? (
+              <FeedbackBanner
+                kind="error"
+                actions={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className={modalSoftButtonClassName}
+                    onClick={() => reloadEventBank(registerEvent.id)}
+                  >
+                    {homeCopy.bankRetry}
+                  </Button>
+                }
+              >
+                {homeCopy.bankLoadError}
+              </FeedbackBanner>
+            ) : (
+              <>
+                <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d5f5c]">
+                  {player.registerModal.bankReceiverLabel}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[#2a1f1e]">
+                  {registerEventBank?.bankAccountReceiver ?? (registerEventBankStatus === 'loading' ? '…' : '…')}
+                </p>
+                <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6d5f5c]">
+                  {player.registerModal.bankAccountLabel}
+                </p>
+                <p className="mt-1 break-all font-mono text-sm font-semibold tracking-wide text-[#2a1f1e]">
+                  {registerEventBank?.bankAccountIban ?? (registerEventBankStatus === 'loading' ? '…' : '…')}
+                </p>
+              </>
+            )}
             <p className="mt-2 text-xs leading-5 text-[#7a6c69]">{player.registerModal.feeNote}</p>
           </div>
 
@@ -360,8 +399,9 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
             >
               <option value="">{player.registerModal.chooseSavedTeammate}</option>
               {savedTeammates.map((teammate) => (
-                <option key={teammate.id} value={teammate.id}>
+                <option key={teammate.id} value={teammate.id} disabled={!teammate.selectable}>
                   {teammate.fullName} · {teammate.email}
+                  {teammate.selectable ? '' : ` — ${player.registerModal.teammatePendingInvite}`}
                 </option>
               ))}
             </select>
@@ -397,6 +437,10 @@ export function RegisterModal({ api, onRegistered }: RegisterModalProps) {
             <input name="participationLegalAccepted" className="mt-1 h-5 w-5 shrink-0 accent-[var(--padel-red)]" type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} required />
             <span>{locale === 'ka' ? 'ვეთანხმები ' : 'I accept the '}<Link href="/legal/terms" target="_blank" className="font-semibold underline underline-offset-4">{locale === 'ka' ? 'ტურნირში მონაწილეობის პირობებს' : 'Tournament Participation Terms'}</Link>{locale === 'ka' ? ', გავეცანი ' : ', acknowledge the '}<Link href="/legal/refunds" target="_blank" className="font-semibold underline underline-offset-4">{locale === 'ka' ? 'თანხის დაბრუნებისა და გაუქმების პოლიტიკას' : 'Refund and Cancellation Policy'}</Link>{locale === 'ka' ? ' და ვადასტურებ გადახდის ვალდებულებასა და სპორტში მონაწილეობის ჩვეულებრივ ფიზიკურ რისკებს.' : ', and confirm the payment obligation and ordinary physical risks of participation.'}</span>
           </label>
+
+          {missingHint ? (
+            <p role="status" className="text-sm text-[#7a6c69]">{missingHint}</p>
+          ) : null}
         </form>
       ) : null}
     </DashboardModal>

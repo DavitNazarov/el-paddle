@@ -42,7 +42,7 @@ export function InviteForm({ token }: { token: string }) {
         return;
       }
 
-      router.push(data.user?.role === 'JUDGE' ? '/judge' : data.user?.club ? '/dashboard' : '/complete-club');
+      router.push(data.user?.role === 'JUDGE' ? '/' : data.user?.club ? '/dashboard' : '/complete-club');
       router.refresh();
     } catch {
       setError(t('forms.apiConnectionError'));

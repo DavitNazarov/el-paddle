@@ -1,48 +1,8 @@
 import type { NextConfig } from 'next';
 
-function resolvePublicApiUrl() {
-  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
-  if (!configured || !/^https?:\/\//i.test(configured)) {
-    return 'http://localhost:4000';
-  }
-  return configured;
-}
-
-const apiUrl = resolvePublicApiUrl();
-
-function websocketOrigin(value: string) {
-  try {
-    const url = new URL(value);
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    return url.origin;
-  } catch {
-    return '';
-  }
-}
-
-const connectSources = ["'self'", apiUrl, websocketOrigin(apiUrl)].filter(Boolean).join(' ');
-
-// React's development build uses eval() for hot reload and callstack reconstruction.
-// Production builds never do, so the relaxation is confined to `next dev`.
-const isDevelopment = process.env.NODE_ENV !== 'production';
-const scriptSources = ["'self'", "'unsafe-inline'", ...(isDevelopment ? ["'unsafe-eval'"] : [])].join(
-  ' ',
-);
-
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "style-src 'self' 'unsafe-inline'",
-  `script-src ${scriptSources}`,
-  `connect-src ${connectSources}`,
-  "worker-src 'self' blob:",
-].join('; ');
-
+// The Content-Security-Policy is built per request in `src/middleware.ts`: it
+// carries a fresh nonce, which a static header cannot. Everything below is the
+// part of the security header set that is the same on every response.
 const securityHeadersWithoutCsp = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -77,12 +37,10 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // All app routes except sitemap/robots metadata files.
+        // All app routes except sitemap/robots metadata files. CSP is added on
+        // top of these by the middleware, which owns the per-request nonce.
         source: '/((?!sitemap\\.xml$|robots\\.txt$).*)',
-        headers: [
-          ...securityHeadersWithoutCsp,
-          { key: 'Content-Security-Policy', value: contentSecurityPolicy },
-        ],
+        headers: securityHeadersWithoutCsp,
       },
     ];
   },

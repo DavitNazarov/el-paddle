@@ -15,9 +15,10 @@ import {
   getCurrentUser,
   requireUser,
   revokeUserSessions,
-  setSessionCookie,
+  startSession,
 } from '../auth/auth.service.js';
 import { auditLog, requestIp } from '../../common/audit.js';
+import { endOfDayInZone } from '../../common/time.js';
 import { passwordValidationError } from '../../common/security.js';
 import { requireCapability } from '../../common/capabilities.js';
 import { parseListRange } from '../../common/pagination.js';
@@ -149,8 +150,10 @@ usersRouter.post('/api/admin/users/:id/disqualify', asyncHandler(async (request,
   const reason = cleanString(request.body.reason);
   if (!untilRaw) jsonError('Disqualification end date is required.');
 
-  const until = new Date(`${untilRaw}T23:59:59`);
-  if (Number.isNaN(until.getTime())) jsonError('Enter a valid end date.');
+  // A bare date means a Georgian calendar day. Resolving it in the server's own
+  // zone made the ban end at a different moment depending on where the API ran.
+  const until = endOfDayInZone(untilRaw);
+  if (!until) jsonError('Enter a valid end date.');
 
   const targetId = requireParamId(request.params.id);
   const user = await setUserDisqualification(targetId, { until, reason });
@@ -224,8 +227,9 @@ usersRouter.post('/api/account/password', accountPasswordLimit, asyncHandler(asy
     ip: requestIp(request),
   });
 
-  // The change revoked every outstanding session; keep this device signed in.
-  setSessionCookie(response, updated);
+  // The change revoked every outstanding session, including this one; issue a
+  // fresh device record so the person who just changed their password stays in.
+  await startSession(response, updated);
   response.json({ ok: true });
 }));
 

@@ -20,6 +20,7 @@ import {
   addClubMember,
   createClub,
   decideClubJoinRequest,
+  deleteClub,
   getPendingClubRequest,
   getPlayerClubDetails,
   getClubMemberRemovalImpact,
@@ -29,9 +30,24 @@ import {
   removeClubMember,
   requestClubMembership,
   serializeClubOption,
+  updateClub,
 } from './clubs.service.js';
 
 export const clubsRouter = Router();
+
+/** The four editable profile fields, read and validated the same way for create and edit. */
+function readClubProfile(body: Record<string, unknown>) {
+  const name = cleanString(body.name);
+  const description = cleanString(body.description);
+  const logoUrl = cleanString(body.logoUrl);
+  const slug = slugify(cleanString(body.slug) || name);
+
+  if (name.length < 2) jsonError('Club name is required.');
+  if (!isSafeSlug(slug)) jsonError('Club slug is required.');
+  if (!isSafeHttpUrl(logoUrl)) jsonError('Logo URL must be an http(s) link.');
+
+  return { name, slug, description, logoUrl };
+}
 
 clubsRouter.get('/api/public/clubs', asyncHandler(async (_request, response) => {
   const clubs = await listPublicClubs();
@@ -145,17 +161,34 @@ clubsRouter.get('/api/admin/clubs', asyncHandler(async (request, response) => {
 
 clubsRouter.post('/api/admin/clubs', asyncHandler(async (request, response) => {
   await requireCapability(request, Capability.CLUB_MANAGE);
-  const name = cleanString(request.body.name);
-  const description = cleanString(request.body.description);
-  const logoUrl = cleanString(request.body.logoUrl);
-  const slug = slugify(cleanString(request.body.slug) || name);
-
-  if (name.length < 2) jsonError('Club name is required.');
-  if (!isSafeSlug(slug)) jsonError('Club slug is required.');
-  if (!isSafeHttpUrl(logoUrl)) jsonError('Logo URL must be an http(s) link.');
-
-  const club = await createClub({ name, slug, description, logoUrl });
+  const club = await createClub(readClubProfile(request.body));
   response.status(201).json({ club: serializeClub(club) });
+}));
+
+clubsRouter.patch('/api/admin/clubs/:id', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.CLUB_MANAGE);
+  const clubId = requireParamId(request.params.id);
+  const club = await updateClub(
+    clubId,
+    readClubProfile(request.body),
+    admin.id,
+    requestIp(request),
+  );
+  response.json({ club: serializeClub(club) });
+}));
+
+clubsRouter.delete('/api/admin/clubs/:id', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.CLUB_MANAGE);
+  const clubId = requireParamId(request.params.id);
+  const { removedMembers } = await deleteClub(clubId, admin.id, requestIp(request));
+  auditLog({
+    event: 'club.deleted',
+    userId: admin.id,
+    email: admin.email,
+    ip: requestIp(request),
+    detail: `clubId=${clubId};removedMembers=${removedMembers}`,
+  });
+  response.json({ ok: true });
 }));
 
 clubsRouter.post('/api/admin/clubs/:id/members', asyncHandler(async (request, response) => {

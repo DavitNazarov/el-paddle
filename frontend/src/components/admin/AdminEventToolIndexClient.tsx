@@ -10,7 +10,7 @@ import type { EventDto } from '@/types/admin';
 import { AdminShell } from './AdminShell';
 import { AdminEventBoard } from './AdminEventBoard';
 
-type EventTool = 'workspace' | 'brackets' | 'opponents' | 'schedule';
+type EventTool = 'workspace' | 'brackets' | 'opponents' | 'schedule' | 'control';
 
 // An empty suffix lands on the event workspace itself, so every sidebar step
 // has an event picker behind it and none of them dead-end.
@@ -19,6 +19,7 @@ const toolSuffix: Record<EventTool, string> = {
   brackets: 'bracket',
   opponents: 'opponent-requests',
   schedule: 'schedule',
+  control: 'control',
 };
 
 /**

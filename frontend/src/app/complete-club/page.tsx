@@ -14,7 +14,8 @@ export default async function CompleteClubPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login?next=/complete-club');
   if (user.role === 'ADMIN' || user.role === 'ORGANISER') redirect('/admin');
-  if (user.role === 'JUDGE') redirect('/judge');
+  // The judge role has no player dashboard and no judge workspace; send it to the public site.
+  if (user.role === 'JUDGE') redirect('/');
   if (user.club) redirect('/dashboard');
 
   return (

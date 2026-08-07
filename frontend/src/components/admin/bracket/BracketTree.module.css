@@ -321,14 +321,14 @@
   display: none;
 }
 
-/* Slot format controls: round defaults in the round header, overrides on each match card. */
-.slotControl {
+/* Set format controls: round defaults in the round header, overrides on each match card. */
+.setControl {
   display: flex;
   align-items: center;
   gap: 0.35rem;
 }
 
-.slotControl select {
+.setControl select {
   min-height: 2.75rem;
   max-width: 100%;
   padding: 0.3rem 0.45rem;
@@ -340,22 +340,22 @@
   font-weight: 650;
 }
 
-.slotControl select:disabled {
+.setControl select:disabled {
   background: #f4f5f8;
   color: var(--dash-faint);
 }
 
-.slotControl select:focus-visible {
+.setControl select:focus-visible {
   outline: 2px solid var(--dash-primary);
   outline-offset: 1px;
 }
 
-.roundSlotControl {
+.roundSetControl {
   grid-column: 1 / -1;
   margin-top: 0.15rem;
 }
 
-.roundSlotControl label {
+.roundSetControl label {
   color: var(--dash-faint);
   font-size: 0.6rem;
   font-weight: 700;
@@ -383,7 +383,7 @@
   font-weight: 700;
 }
 
-.slotChips {
+.setChips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
@@ -392,7 +392,7 @@
   padding: 0;
 }
 
-.slotChips li {
+.setChips li {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;

@@ -1,0 +1,677 @@
+/*
+ * My profile. The sentence a player arrives with is "this is me on El Padel —
+ * is what it says about me right?", so the page opens with one object that is
+ * recognisably them — monogram, name, club, record — rather than a stack of
+ * equally-weighted panels in which their name is the same size as their phone
+ * number. Everything below the card splits into what they can change and what
+ * the platform holds about them.
+ */
+
+/* Passport ---------------------------------------------------------------- */
+
+.passport {
+  overflow: hidden;
+  border: 1px solid rgba(164, 22, 26, 0.24);
+  border-radius: var(--radius-card);
+  background: linear-gradient(150deg, rgba(164, 22, 26, 0.1), #fff 52%, rgba(168, 103, 18, 0.05));
+  box-shadow:
+    0 1px 3px rgba(43, 26, 24, 0.04),
+    0 16px 38px rgba(43, 26, 24, 0.04);
+}
+
+/* A suspended account is not a decoration on the card — it is what the card
+   says. The brand gradient would celebrate it, so it is dropped. */
+.passport[data-flagged='true'] {
+  border-color: rgba(168, 103, 18, 0.34);
+  background: linear-gradient(150deg, rgba(168, 103, 18, 0.11), #fff 55%, rgba(168, 103, 18, 0.04));
+}
+
+.passportTop {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+@media (min-width: 48rem) {
+  .passportTop {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-6);
+  }
+}
+
+.identity {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Monogram on a court. The motif is the one piece of ornament on the screen and
+   it earns its place by saying what this account is for. */
+.crest {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 4.5rem;
+  width: 4.5rem;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid rgba(164, 22, 26, 0.22);
+  border-radius: var(--radius-tile);
+  background: linear-gradient(160deg, rgba(164, 22, 26, 0.16), rgba(255, 255, 255, 0.92));
+}
+
+@media (min-width: 48rem) {
+  .crest {
+    height: 5.25rem;
+    width: 5.25rem;
+  }
+}
+
+.court {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  color: var(--dash-primary);
+  opacity: 0.22;
+}
+
+.crestInitials {
+  position: relative;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--dash-primary);
+}
+
+@media (min-width: 48rem) {
+  .crestInitials {
+    font-size: 1.9rem;
+  }
+}
+
+/* The club crest worn on the monogram: whose player this is, in one glance. */
+.crestClub {
+  position: absolute;
+  right: -0.35rem;
+  bottom: -0.35rem;
+  height: 1.75rem;
+  width: 1.75rem;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--dash-border);
+  background: #fff;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(43, 26, 24, 0.12);
+}
+
+.identityText {
+  min-width: 0;
+  padding-top: 0.1rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dash-primary);
+}
+
+.name {
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--dash-text);
+}
+
+@media (min-width: 48rem) {
+  .name {
+    font-size: 1.85rem;
+  }
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1.15rem;
+  margin-top: 0.65rem;
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.8125rem;
+  color: var(--dash-muted);
+}
+
+.metaItem svg {
+  height: 0.85rem;
+  width: 0.85rem;
+  flex: none;
+  color: var(--dash-faint);
+}
+
+.metaText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.publicLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  margin-top: 0.15rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--dash-primary);
+  border-radius: var(--radius-control);
+}
+
+.publicLink svg {
+  height: 0.9rem;
+  width: 0.9rem;
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.publicLink:hover {
+  text-decoration: underline;
+}
+
+.publicLink:hover svg {
+  transform: translate(1px, -1px);
+}
+
+.publicLink:focus-visible {
+  outline: 2px solid var(--padel-focus-ring);
+  outline-offset: 3px;
+}
+
+/* Record ring ------------------------------------------------------------- */
+
+.ringWrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  height: 7.25rem;
+  width: 7.25rem;
+}
+
+@media (min-width: 48rem) {
+  .ringWrap {
+    justify-self: end;
+    height: 8rem;
+    width: 8rem;
+  }
+}
+
+.ring {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.ringTrack {
+  fill: none;
+  stroke: rgba(43, 26, 24, 0.09);
+  stroke-width: 3.6;
+}
+
+.ringArc {
+  fill: none;
+  stroke-width: 3.6;
+  stroke-linecap: butt;
+  /* Only a `from` frame: the ring settles into whatever share the element
+     already carries, so the arc lengths stay in the markup where they can be
+     read. The dashboard's reduced-motion rule collapses the duration. */
+  animation: profile-arc 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ringArc[data-tone='win'] {
+  stroke: var(--dash-teal);
+}
+
+.ringArc[data-tone='loss'] {
+  stroke: var(--dash-coral);
+  animation-delay: 190ms;
+}
+
+@keyframes profile-arc {
+  from {
+    stroke-dasharray: 0 100;
+  }
+}
+
+/* Plain DOM text rather than <text> inside the SVG: it is selectable, it is not
+   scaled by the viewBox, and a screen reader meets it as a sentence. */
+.ringCenter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.ringValue {
+  margin: 0;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.75rem;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ringLabel {
+  margin: 0.3rem 0 0;
+  font-size: 0.5625rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dash-faint);
+}
+
+/* Record band ------------------------------------------------------------- */
+
+.band {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border-top: 1px solid var(--dash-border);
+  background: var(--dash-border);
+}
+
+.bandCell {
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.8rem 1rem;
+}
+
+@media (min-width: 40rem) {
+  .bandCell {
+    padding: 0.9rem var(--space-5);
+  }
+}
+
+.bandValue {
+  margin: 0;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bandLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dash-faint);
+}
+
+/* Ties the word to its arc in the ring above. The word is the signal; the dot
+   only says which slice of the ring it names. */
+.bandDot {
+  height: 0.45rem;
+  width: 0.45rem;
+  flex: none;
+  border-radius: var(--radius-pill);
+}
+
+.bandDot[data-tone='win'] {
+  background: var(--dash-teal);
+}
+
+.bandDot[data-tone='loss'] {
+  background: var(--dash-coral);
+}
+
+.bandNote {
+  margin: 0;
+  border-top: 1px solid var(--dash-border);
+  background: rgba(255, 255, 255, 0.55);
+  padding: 0.7rem var(--space-5);
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  color: var(--dash-muted);
+}
+
+/* No completed matches is not an empty state to apologise for — it is the
+   beginning of a record, so it points at the way to start one. */
+.bandEmpty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--dash-border);
+  background: rgba(255, 255, 255, 0.62);
+  padding: var(--space-4) var(--space-5);
+}
+
+.bandEmptyText {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.35rem;
+  color: var(--dash-muted);
+}
+
+/* Page layout ------------------------------------------------------------- */
+
+/* Three supporting panels, laid out by how much room there is rather than by a
+   breakpoint list: three across on a desktop, two on a tablet, one on a phone. */
+.panels {
+  display: grid;
+  gap: var(--space-5);
+  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(17.5rem, 1fr));
+}
+
+/* Panels ------------------------------------------------------------------ */
+
+.panelHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--dash-border);
+  padding: var(--space-4) var(--space-5);
+}
+
+.panelHeadText {
+  min-width: 0;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--dash-text);
+}
+
+.panelNote {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  color: var(--dash-muted);
+}
+
+/* Recorded details -------------------------------------------------------- */
+
+/* Hairline grid: the gap is the card's own border colour showing through, so
+   the cells stay separated at any wrap without a border on each one. */
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 1px;
+  background: var(--dash-border);
+}
+
+.detail {
+  min-width: 0;
+  background: var(--dash-surface-strong);
+  padding: 0.9rem var(--space-5);
+}
+
+/* A value the platform needs and does not have is asking something of the
+   reader, and carries the same amber spine as every other queue here. */
+.detail[data-attention='true'] {
+  box-shadow: inset 3px 0 0 var(--dash-amber);
+}
+
+.detailLabel {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--dash-faint);
+}
+
+.detailValue {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.9375rem;
+  line-height: 1.4rem;
+  color: var(--dash-text);
+}
+
+.detailValue[data-missing='true'] {
+  font-style: italic;
+  color: var(--dash-faint);
+}
+
+.detailNote {
+  margin: 0;
+  border-top: 1px solid var(--dash-border);
+  background: var(--dash-tint);
+  padding: 0.7rem var(--space-5);
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  color: var(--dash-muted);
+}
+
+.facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fact {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  border-top: 1px solid var(--dash-border);
+  padding: 0.9rem var(--space-5);
+}
+
+.fact:first-child {
+  border-top: 0;
+}
+
+/* The spine every queue in this product uses for "you are being asked for
+   something". A fact that is merely stated never gets one. */
+.fact[data-attention='true'] {
+  box-shadow: inset 3px 0 0 var(--dash-amber);
+}
+
+.factIcon {
+  display: grid;
+  place-items: center;
+  height: 2rem;
+  width: 2rem;
+  flex: none;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: var(--dash-tint);
+  color: var(--dash-muted);
+}
+
+.factIcon svg {
+  height: 1rem;
+  width: 1rem;
+}
+
+.factIcon[data-tone='positive'] {
+  border-color: rgba(22, 128, 106, 0.28);
+  background: var(--dash-teal-soft);
+  color: var(--dash-teal);
+}
+
+.factIcon[data-tone='warning'] {
+  border-color: rgba(168, 103, 18, 0.28);
+  background: var(--dash-amber-soft);
+  color: var(--dash-amber);
+}
+
+.factText {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.factLabel {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--dash-faint);
+}
+
+.factValue {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  line-height: 1.35rem;
+  color: var(--dash-text);
+}
+
+.factHint {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  color: var(--dash-muted);
+}
+
+/* Club identity strip inside the club panel. */
+.clubRow {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: var(--space-4) var(--space-5);
+}
+
+.clubCrest {
+  display: grid;
+  place-items: center;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: var(--dash-faint);
+}
+
+.clubCrest img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
+
+.clubCrest svg {
+  height: 1.1rem;
+  width: 1.1rem;
+}
+
+.clubName {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35rem;
+  color: var(--dash-text);
+}
+
+.clubMeta {
+  margin: 0.1rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  color: var(--dash-muted);
+}
+
+.panelFoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-top: 1px solid var(--dash-border);
+  background: var(--dash-tint);
+  padding: var(--space-4) var(--space-5);
+}
+
+/* Doorways ---------------------------------------------------------------- */
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 3.5rem;
+  border-top: 1px solid var(--dash-border);
+  padding: 0.85rem var(--space-5);
+  transition: background 0.15s ease;
+}
+
+.linkRow:first-child {
+  border-top: 0;
+}
+
+.linkRow:hover {
+  background: var(--dash-tint);
+}
+
+.linkRow:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--padel-focus-ring);
+}
+
+.linkTitle {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--dash-text);
+}
+
+.linkDetail {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  color: var(--dash-muted);
+}
+
+.linkArrow {
+  height: 1rem;
+  width: 1rem;
+  flex: none;
+  margin-left: auto;
+  color: var(--dash-faint);
+  transition: transform 0.15s ease;
+}
+
+.linkRow:hover .linkArrow {
+  transform: translateX(2px);
+}

@@ -9,12 +9,12 @@ import {
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
-  Gavel,
   GitBranch,
   Handshake,
   Home,
   LayoutDashboard,
   LogOut,
+  Radio,
   Settings,
   Shield,
   ShieldCheck,
@@ -97,6 +97,7 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
     { href: scoped('opponent-requests', '/admin/opponent-requests'), label: nav.opponentRequests, icon: Handshake },
     { href: scoped('bracket', '/admin/brackets'), label: nav.brackets, icon: GitBranch },
     { href: scoped('schedule', '/admin/schedule'), label: nav.schedule, icon: CalendarClock },
+    { href: scoped('control', '/admin/control'), label: nav.matchControl, icon: Radio },
   ];
 
   // Accounts get one screen per role: their powers and required fields differ,
@@ -106,7 +107,6 @@ export function AdminShell({ title, description, eyebrow, children }: AdminShell
     : [
         { href: '/admin/users/admins', label: nav.admins, icon: Shield },
         { href: '/admin/users/organisers', label: nav.organisers, icon: UserCog },
-        { href: '/admin/users/judges', label: nav.judges, icon: Gavel },
         { href: '/admin/users/players', label: nav.players, icon: Users },
         { href: '/admin/clubs', label: nav.clubs, icon: Building2 },
         { href: '/admin/applications', label: nav.applications, icon: ClipboardCheck, badge: counts.applications || undefined },

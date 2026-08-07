@@ -7,7 +7,7 @@ export default async function PlayerTournamentEventPage({ params }: { params: Pr
   const user = await getCurrentUser();
   if (!user) redirect(`/login?next=/dashboard/events/${eventId}`);
   if (user.role === 'ADMIN' || user.role === 'ORGANISER') redirect(`/admin/events/${eventId}`);
-  if (user.role === 'JUDGE') redirect('/judge');
-  return <PlayerTournamentEventClient eventId={eventId} initialUser={user} />;
+  if (user.role === 'JUDGE') redirect('/');
+    return <PlayerTournamentEventClient eventId={eventId} initialUser={user} />;
 }
 

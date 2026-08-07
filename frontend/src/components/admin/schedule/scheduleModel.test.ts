@@ -16,8 +16,8 @@ function item(id: string, queuePosition: number, status: ScheduleItemDto['status
   return { id, queuePosition, status, version: 1 } as ScheduleItemDto;
 }
 
-function court(id: string, items: ScheduleItemDto[], judged = false) {
-  return { id, name: id, scheduleItems: items, judgeAssignments: judged ? [{}] : [] } as unknown as CourtDto;
+function court(id: string, items: ScheduleItemDto[]) {
+  return { id, name: id, scheduleItems: items } as unknown as CourtDto;
 }
 
 describe('drop resolution', () => {
@@ -80,26 +80,25 @@ describe('queue positions', () => {
 
 describe('court state', () => {
   it('reads finished before anything else', () => {
-    expect(courtState(court('a', [item('a1', 1, 'COMPLETED'), item('a2', 2, 'CANCELLED')], true))).toBe('done');
+    expect(courtState(court('a', [item('a1', 1, 'COMPLETED'), item('a2', 2, 'CANCELLED')]))).toBe('done');
   });
 
-  it('reads a running match as live even when the court has no judge on record', () => {
+  it('reads a running match as live', () => {
     expect(courtState(court('a', [item('a1', 1, 'IN_PROGRESS')]))).toBe('live');
   });
 
-  it('flags a court nobody is judging, then one with nothing left to play', () => {
-    expect(courtState(court('a', [item('a1', 1)]))).toBe('unstaffed');
-    expect(courtState(court('a', [], true))).toBe('idle');
-    expect(courtState(court('a', [item('a1', 1)], true))).toBe('ready');
+  it('flags a court with nothing left to play, and reads a waiting queue as ready', () => {
+    expect(courtState(court('a', []))).toBe('idle');
+    expect(courtState(court('a', [item('a1', 1)]))).toBe('ready');
   });
 
   it('asks for the operator only where a decision is outstanding', () => {
-    expect((['unstaffed', 'idle'] as const).map((state) => courtNeedsAttention(state))).toEqual([true, true]);
+    expect(courtNeedsAttention('idle')).toBe(true);
     expect((['done', 'live', 'ready'] as const).map((state) => courtNeedsAttention(state))).toEqual([false, false, false]);
   });
 
   it('names the running match and the one after it, and counts the rest', () => {
-    const busy = court('a', [item('a1', 1, 'COMPLETED'), item('a2', 2, 'IN_PROGRESS'), item('a3', 3), item('a4', 4)], true);
+    const busy = court('a', [item('a1', 1, 'COMPLETED'), item('a2', 2, 'IN_PROGRESS'), item('a3', 3), item('a4', 4)]);
     const focus = courtFocus(busy);
     expect(focus.live?.id).toBe('a2');
     expect(focus.next?.id).toBe('a3');
@@ -107,7 +106,7 @@ describe('court state', () => {
   });
 
   it('names only the next match when nothing is running', () => {
-    const focus = courtFocus(court('a', [item('a1', 1), item('a2', 2)], true));
+    const focus = courtFocus(court('a', [item('a1', 1), item('a2', 2)]));
     expect(focus.live).toBeNull();
     expect(focus.next?.id).toBe('a1');
     expect(focus.waiting).toBe(2);

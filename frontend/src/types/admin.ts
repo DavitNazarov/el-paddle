@@ -61,6 +61,7 @@ export type ClubDto = {
   name: string;
   slug: string;
   description: string;
+  logoUrl: string;
   members: {
     id: string;
     roleTitle: string;

@@ -1,13 +1,18 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { ArrowRightLeft, Network, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { apiFetch, createCommandId } from '@/lib/api';
 import type { PublicUser } from '@/types/auth';
 import type { DashboardData, EventDto, RegistrationDto } from '@/types/dashboard';
 import type { BracketDto, CourtDto, OpponentRequestDto } from '@/types/tournament';
 import { PlayerShell } from './PlayerShell';
 import { PlayerEntryCard } from './PlayerEntryCard';
+import { OpponentRequestModal } from './OpponentRequestModal';
+import { ClubLineupEditor } from './ClubLineupEditor';
+import { RegisterModal } from './PlayerShared';
 import {
   BackLink,
   CommandButton,
@@ -17,12 +22,13 @@ import {
   TournamentSectionHeader,
 } from '@/components/tournament/TournamentUI';
 import { Textarea } from '@/components/ui/textarea';
-import { DashboardField, DashboardModal, formControlClassName, selectControlClassName } from '@/components/shared/dashboard/DashboardUI';
-import { SkeletonCards } from '@/components/shared/dashboard/Feedback';
+import { DashboardField, DashboardModal, formControlClassName, softButtonClassName } from '@/components/shared/dashboard/DashboardUI';
+import { PageNotice, SkeletonCards } from '@/components/shared/dashboard/Feedback';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { tournamentCopy } from '@/lib/i18n/tournament';
+import { usePlayerDashboard } from '@/hooks/usePlayerDashboard';
 import {
   PlayerMatchPanel,
   RequestPanel,
@@ -38,8 +44,6 @@ import {
   sentRequests,
 } from './event/playerEventModel';
 
-type EligibleEntry = { id: string; owner: { fullName: string }; teammate: { fullName: string } };
-
 /**
  * A player's own page for one event, in the order they ask: am I in (their
  * entry path), who am I playing (their opponent requests), when do I play
@@ -47,33 +51,25 @@ type EligibleEntry = { id: string; owner: { fullName: string }; teammate: { full
  * event page — a competitor only needs their own row of each.
  */
 export function PlayerTournamentEventClient({ eventId, initialUser }: { eventId: string; initialUser: PublicUser }) {
-  const { locale } = useI18n();
+  const { locale, dictionary } = useI18n();
   const copy = tournamentCopy[locale];
   const player = copy.playerEvent;
+  const clubCopy = dictionary.dashboard.player.clubEntries;
+  const api = usePlayerDashboard(initialUser);
 
   const [event, setEvent] = useState<EventDto | null>(null);
   const [entries, setEntries] = useState<RegistrationDto[]>([]);
   const [requests, setRequests] = useState<OpponentRequestDto[]>([]);
   const [brackets, setBrackets] = useState<BracketDto[]>([]);
   const [courts, setCourts] = useState<CourtDto[]>([]);
-  const [eligible, setEligible] = useState<EligibleEntry[]>([]);
-  const [form, setForm] = useState({ requestingEntryId: '', targetEntryId: '', message: '' });
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
   const [loading, setLoading] = useState(true);
-  const [eligibleLoadedFor, setEligibleLoadedFor] = useState('');
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [requestDecision, setRequestDecision] = useState<{ request: OpponentRequestDto; action: 'accept' | 'refuse' | 'withdraw' } | null>(null);
   const [decisionReason, setDecisionReason] = useState('');
-
-  const fetchEligible = useCallback(async (entryId: string) => {
-    setError('');
-    const response = await apiFetch(`/api/events/${eventId}/eligible-opponents?requestingEntryId=${encodeURIComponent(entryId)}`, { cache: 'no-store' });
-    const data = await response.json() as { entries?: EligibleEntry[]; error?: string };
-    setEligibleLoadedFor(entryId);
-    if (!response.ok) setError(data.error ?? player.choicesUnavailable);
-    else setEligible(data.entries ?? []);
-  }, [player.choicesUnavailable, eventId]);
+  const [managedEntry, setManagedEntry] = useState<RegistrationDto | null>(null);
 
   const load = useCallback(async () => {
     const [dashboardResponse, requestResponse, bracketResponse, scheduleResponse] = await Promise.all([
@@ -95,12 +91,9 @@ export function PlayerTournamentEventClient({ eventId, initialUser }: { eventId:
       setRequests(requestData.requests ?? []);
       setBrackets(bracketData.brackets ?? []);
       setCourts(scheduleData.courts ?? []);
-      const defaultEntryId = eventEntries.find((entry) => entry.status === 'APPROVED')?.id || '';
-      setForm((current) => ({ ...current, requestingEntryId: current.requestingEntryId || defaultEntryId }));
-      if (defaultEntryId) void fetchEligible(defaultEntryId);
     }
     setLoading(false);
-  }, [player.loadError, eventId, fetchEligible]);
+  }, [player.loadError, eventId]);
 
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
 
@@ -109,42 +102,31 @@ export function PlayerTournamentEventClient({ eventId, initialUser }: { eventId:
   const sent = useMemo(() => sentRequests(requests, mine), [mine, requests]);
   const matches = useMemo(() => playerMatches(brackets, courts, mine), [brackets, courts, mine]);
   const approvedEntries = approvedOf(entries);
-  const eligibleLoading = Boolean(form.requestingEntryId && eligibleLoadedFor !== form.requestingEntryId);
-
-  function selectEntry(entryId: string) {
-    setForm((current) => ({ ...current, requestingEntryId: entryId, targetEntryId: '' }));
-    setEligible([]);
-    setEligibleLoadedFor('');
-    if (entryId) void fetchEligible(entryId);
-  }
-
-  async function sendRequest() {
-    if (!form.requestingEntryId || !form.targetEntryId) return;
-    setBusy('send'); setError('');
-    const response = await apiFetch(`/api/events/${eventId}/opponent-requests`, { method: 'POST', body: JSON.stringify({ ...form, commandId: createCommandId('opponent-request') }) });
-    const data = await response.json() as { error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? player.sendError);
-    else { setEligible([]); setForm((current) => ({ ...current, targetEntryId: '', message: '' })); setRequestModalOpen(false); void load(); }
-  }
+  const clubPlayers = useMemo(
+    () =>
+      [api.user, ...api.clubMembers].filter(
+        (member, index, all) => all.findIndex((candidate) => candidate.id === member.id) === index,
+      ),
+    [api.clubMembers, api.user],
+  );
 
   async function respond(request: OpponentRequestDto, action: 'accept' | 'refuse') {
     const reason = action === 'refuse' ? decisionReason.trim() : '';
-    setBusy(`${action}-${request.id}`); setError('');
+    setBusy(`${action}-${request.id}`); setError(''); setNotice('');
     const response = await apiFetch(`/api/events/${eventId}/opponent-requests/${request.id}/${action}`, { method: 'POST', body: JSON.stringify({ reason, expectedVersion: request.version, commandId: createCommandId(`opponent-${action}`) }) });
     const data = await response.json() as { error?: string };
     setBusy('');
     if (!response.ok) setError(data.error ?? player.sendError);
-    else { setRequestDecision(null); setDecisionReason(''); void load(); }
+    else { setRequestDecision(null); setDecisionReason(''); setNotice(action === 'accept' ? player.requestAccepted : player.requestRefused); void load(); }
   }
 
   async function withdraw(request: OpponentRequestDto) {
-    setBusy(`withdraw-${request.id}`); setError('');
+    setBusy(`withdraw-${request.id}`); setError(''); setNotice('');
     const response = await apiFetch(`/api/events/${eventId}/opponent-requests/${request.id}`, { method: 'DELETE', body: JSON.stringify({ expectedVersion: request.version, commandId: createCommandId('opponent-withdraw') }) });
     const data = await response.json() as { error?: string };
     setBusy('');
     if (!response.ok) setError(data.error ?? player.withdrawError);
-    else { setRequestDecision(null); void load(); }
+    else { setRequestDecision(null); setNotice(player.requestWithdrawn); void load(); }
   }
 
   function openRequestDecision(request: OpponentRequestDto, action: 'accept' | 'refuse' | 'withdraw') {
@@ -155,23 +137,58 @@ export function PlayerTournamentEventClient({ eventId, initialUser }: { eventId:
   return (
     <PlayerShell user={initialUser} title={event?.title ?? player.event} description={player.description} eyebrow={player.eyebrow}>
       <div className="mb-4"><BackLink href="/dashboard/events">{player.allEvents}</BackLink></div>
-      {error ? <div className="mb-4"><InlineNotice kind="error">{error}</InlineNotice></div> : null}
+      {notice ? <PageNotice tone="success" onDismiss={() => setNotice('')}>{notice}</PageNotice> : null}
+      {error && !requestDecision ? <div className="mb-4"><InlineNotice kind="error">{error}</InlineNotice></div> : null}
 
       <div className={playerEventPageClassName}>
-        {/* Am I in? The entry path, in the same vocabulary as the player home. */}
         {loading ? (
           <SkeletonCards count={1} columns={2} label={copy.common.loading} />
         ) : entries.length ? (
           entries.map((entry) => (
-            <PlayerEntryCard key={entry.id} registration={entry} ownershipLabel={entry.category.name} />
+            <PlayerEntryCard
+              key={entry.id}
+              registration={entry}
+              ownershipLabel={
+                entry.owner.id === api.user.id || entry.teammate.id === api.user.id
+                  ? clubCopy.yourTeam
+                  : clubCopy.clubTeam
+              }
+              actions={api.clubMembershipRole === 'LEADER' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(softButtonClassName, 'min-h-11 rounded-lg')}
+                  onClick={() => setManagedEntry(entry)}
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  {clubCopy.manageLineup}
+                </Button>
+              ) : undefined}
+            />
           ))
         ) : (
           <TournamentPanel>
-            <EmptyTournamentState title={player.noEntryTitle} detail={player.noEntryDetail} />
+            <EmptyTournamentState
+              title={player.noEntryTitle}
+              detail={
+                event?.status === 'REGISTRATION_OPEN' ? player.noEntryDetail : player.registrationClosedNote
+              }
+              action={
+                event?.status === 'REGISTRATION_OPEN' ? (
+                  <Button
+                    type="button"
+                    variant="red"
+                    className="min-h-11 rounded-md"
+                    onClick={() => api.openRegister(event)}
+                  >
+                    {player.registerCta}
+                  </Button>
+                ) : undefined
+              }
+            />
           </TournamentPanel>
         )}
 
-        {/* Who am I playing? */}
         <div className={requestsGridClassName}>
           <RequestPanel
             title={player.received}
@@ -206,69 +223,56 @@ export function PlayerTournamentEventClient({ eventId, initialUser }: { eventId:
           </TournamentPanel>
         )}
 
-        {/* When do I play? */}
-        <PlayerMatchPanel matches={matches} emptyTitle={player.noMatches} emptyDetail={player.noMatchesDetail} />
+        <PlayerMatchPanel
+          matches={matches}
+          emptyTitle={player.noMatches}
+          emptyDetail={player.noMatchesDetail}
+          actions={
+            brackets.length ? (
+              <Button asChild variant="outline" size="sm" className={cn(softButtonClassName, 'min-h-11 rounded-md')}>
+                <Link href={`/dashboard/events/${eventId}/draw`}>
+                  <Network className="h-4 w-4" aria-hidden="true" />
+                  {player.seeDraw}
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        />
       </div>
 
-      <DashboardModal
+      <RegisterModal
+        api={api}
+        onRegistered={() => {
+          setNotice(dictionary.dashboard.player.messages.registerSuccess);
+          void load();
+        }}
+      />
+
+      <OpponentRequestModal
         open={requestModalOpen}
-        onOpenChange={(open) => { if (!busy) setRequestModalOpen(open); }}
-        title={player.chooseOpponent}
-        description={player.modalDescription}
-        footer={
-          <ModalFormFooter
-            formId="opponent-request-form"
-            onCancel={() => setRequestModalOpen(false)}
-            cancelLabel={copy.common.cancel}
-            busy={busy === 'send'}
-            disabled={!form.requestingEntryId || !form.targetEntryId || eligibleLoading}
-            submitLabel={busy === 'send' ? player.sending : player.send}
-          />
-        }
-      >
-        <form
-          id="opponent-request-form"
-          className="grid gap-5"
-          onSubmit={(submitEvent) => {
-            submitEvent.preventDefault();
-            void sendRequest();
+        onOpenChange={setRequestModalOpen}
+        eventId={eventId}
+        approvedEntries={approvedEntries}
+        onSent={() => {
+          setNotice(player.requestSent);
+          void load();
+        }}
+      />
+
+      {managedEntry ? (
+        <ClubLineupEditor
+          key={`${managedEntry.id}:${managedEntry.version}`}
+          registration={managedEntry}
+          clubPlayers={clubPlayers}
+          onClose={() => setManagedEntry(null)}
+          onConflict={() => void load()}
+          onUpdated={async () => {
+            setManagedEntry(null);
+            setNotice(clubCopy.success);
+            await load();
           }}
-        >
-          {error ? <InlineNotice kind="error">{error}</InlineNotice> : null}
-          <DashboardField id="own-entry" label={player.competitionEntry}>
-            <select id="own-entry" className={selectControlClassName} value={form.requestingEntryId} onChange={(fieldEvent) => selectEntry(fieldEvent.target.value)} disabled={busy === 'send'}>
-              <option value="">{player.selectEntry}</option>
-              {approvedEntries.map((entry) => (
-                <option key={entry.id} value={entry.id}>{entry.owner.fullName} / {entry.teammate.fullName} · {entry.category.name}</option>
-              ))}
-            </select>
-          </DashboardField>
-          <DashboardField id="opponent-entry" label={player.eligibleOpponent} hint={player.eligibleHint}>
-            <select
-              id="opponent-entry"
-              className={selectControlClassName}
-              value={form.targetEntryId}
-              onChange={(fieldEvent) => setForm((current) => ({ ...current, targetEntryId: fieldEvent.target.value }))}
-              disabled={!form.requestingEntryId || eligibleLoading || busy === 'send'}
-              aria-busy={eligibleLoading}
-            >
-              <option value="">{eligible.length ? player.selectOpponent : eligibleLoading ? player.loadingOpponents : player.noOpponents}</option>
-              {eligible.map((entry) => <option key={entry.id} value={entry.id}>{entry.owner.fullName} / {entry.teammate.fullName}</option>)}
-            </select>
-          </DashboardField>
-          <DashboardField id="request-message" label={player.message} hint={player.messageHint}>
-            <Textarea
-              id="request-message"
-              value={form.message}
-              onChange={(fieldEvent) => setForm((current) => ({ ...current, message: fieldEvent.target.value }))}
-              placeholder={player.messagePlaceholder}
-              className={cn(formControlClassName, 'min-h-28 resize-y leading-6')}
-              disabled={busy === 'send'}
-              rows={4}
-            />
-          </DashboardField>
-        </form>
-      </DashboardModal>
+        />
+      ) : null}
 
       <DashboardModal
         open={Boolean(requestDecision)}
@@ -297,7 +301,9 @@ export function PlayerTournamentEventClient({ eventId, initialUser }: { eventId:
             <Textarea id="response-reason" value={decisionReason} onChange={(fieldEvent) => setDecisionReason(fieldEvent.target.value)} className={cn(formControlClassName, 'min-h-28 resize-y leading-6')} rows={4} />
           </DashboardField>
         ) : (
-          <p className={playerNoteClassName}>{requestDecision?.action === 'accept' ? player.acceptNote : player.withdrawNote}</p>
+          <p className="text-sm leading-6 text-[var(--dash-muted)]">
+            {requestDecision?.action === 'accept' ? player.acceptNote : player.withdrawNote}
+          </p>
         )}
       </DashboardModal>
     </PlayerShell>

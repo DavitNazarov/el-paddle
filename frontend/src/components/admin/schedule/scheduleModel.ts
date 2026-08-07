@@ -31,13 +31,6 @@ export function poolItemId(matchId: string) {
   return `${POOL_ITEM_PREFIX}${matchId}`;
 }
 
-/** A judge admitted to this event. Only these may be assigned to its courts. */
-export type EventJudge = { id: string; name: string | null; surname: string | null; email: string };
-
-export function judgeName(judge: EventJudge) {
-  return [judge.name, judge.surname].filter(Boolean).join(' ') || judge.email;
-}
-
 /** Started and finished matches are pinned; the server rejects any attempt to move them. */
 export function isFrozen(item: ScheduleItemDto) {
   return item.status === 'IN_PROGRESS' || item.status === 'COMPLETED';
@@ -65,22 +58,20 @@ export function courtProgress(court: CourtDto) {
 /**
  * What a court is doing, in one word. The board shows eight of these at once,
  * so each tile has to answer "does this one need me?" before it is read — and
- * the two states that mean *yes* (`unstaffed`, `idle`) are the ones that carry
- * the amber flag.
+ * `idle`, the state that means *yes*, is the one that carries the amber flag.
  */
-export type CourtState = 'done' | 'live' | 'unstaffed' | 'idle' | 'ready';
+export type CourtState = 'done' | 'live' | 'idle' | 'ready';
 
 export function courtState(court: CourtDto): CourtState {
   if (isQueueFinished(court)) return 'done';
   if (court.scheduleItems.some((item) => item.status === 'IN_PROGRESS')) return 'live';
-  if (!court.judgeAssignments.length) return 'unstaffed';
   if (!court.scheduleItems.some((item) => !isSettled(item))) return 'idle';
   return 'ready';
 }
 
 /** A court state the operator still has to act on. */
 export function courtNeedsAttention(state: CourtState) {
-  return state === 'unstaffed' || state === 'idle';
+  return state === 'idle';
 }
 
 /**
@@ -112,7 +103,6 @@ export function unscheduledMatches(matches: MatchDto[], courts: CourtDto[]) {
 
 export type DaySummary = {
   courtCount: number;
-  staffedCourts: number;
   placed: number;
   settled: number;
   unscheduled: number;
@@ -123,7 +113,6 @@ export function buildDaySummary(courts: CourtDto[], unscheduledCount: number, pu
   const items = courts.flatMap((court) => court.scheduleItems);
   return {
     courtCount: courts.length,
-    staffedCourts: courts.filter((court) => court.judgeAssignments.length > 0).length,
     placed: items.length,
     settled: items.filter(isSettled).length,
     unscheduled: unscheduledCount,

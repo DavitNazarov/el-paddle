@@ -2,16 +2,15 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { CalendarDays, Clock, MapPin, Tags } from 'lucide-react';
+import { CalendarDays, Clock, Handshake, MapPin, Tags, Trophy } from 'lucide-react';
 import { StageRail, type RailStep } from '@/components/shared/dashboard/DashboardSignals';
 import { StatusLabel } from '@/components/tournament/TournamentUI';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { fillTemplate, tournamentCopy, tournamentStatus } from '@/lib/i18n/tournament';
-import type { EventDto, RegistrationDto } from '@/types/dashboard';
+import { fillTemplate, tournamentCopy, tournamentRound, tournamentStatus } from '@/lib/i18n/tournament';
+import type { EventDto, NextMatchDto, RegistrationDto } from '@/types/dashboard';
+import { entryNoteKey, entryPath, entryStage, entryStep } from './entryStatusModel';
+import { pairingNoteKey, type PairingState } from './pairingModel';
 import styles from './PlayerHome.module.css';
-
-/** Entry states that are still on the path to playing, in the order they happen. */
-const entryPath = ['stepSubmitted', 'stepApproved', 'stepPlaying'] as const;
 
 /**
  * Whole days from now until the event, floored. Rendered as a count rather than
@@ -26,15 +25,74 @@ export function daysUntil(date: string, now: Date = new Date()) {
   return Math.round((startOfTarget - startOfToday) / day);
 }
 
+const outlineLinkClassName =
+  'inline-flex min-h-11 items-center gap-2 rounded-md border border-[var(--dash-border)] px-4 text-sm font-semibold text-[var(--dash-text)] transition-colors hover:border-[var(--dash-border-strong)] hover:bg-[var(--dash-primary-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]';
+
 /**
- * How far along the entry path a registration has reached. Terminal states
- * (declined, withdrawn, cancelled) are deliberately not on the path: showing
- * them as progress would imply a place that does not exist.
+ * Match-day hero: once the player has a scheduled (or running) match, the
+ * court, the time, and the opponent outrank any countdown. This is the one
+ * thing a competitor opens the app for on the day.
  */
-function entryStep(status: RegistrationDto['status']): number {
-  if (status === 'APPROVED') return 1;
-  if (status === 'PENDING' || status === 'NEEDS_CHANGES' || status === 'WAITLISTED') return 0;
-  return -1;
+export function PlayerNextMatch({ match }: { match: NextMatchDto }) {
+  const { locale, formatDate } = useI18n();
+  const copy = tournamentCopy[locale].playerHome;
+  const eventCopy = tournamentCopy[locale].playerEvent;
+  const live = match.status === 'IN_PROGRESS';
+  const opponents = match.opponent
+    ? `${match.opponent.ownerName} / ${match.opponent.teammateName}`
+    : null;
+  const yourScore = match.yourSide === 'A' ? match.scoreA : match.scoreB;
+  const theirScore = match.yourSide === 'A' ? match.scoreB : match.scoreA;
+
+  return (
+    <section className={styles.next} data-live={live || undefined} aria-labelledby="player-next-match">
+      <div className={styles.nextTop}>
+        <div className={styles.nextCopy}>
+          <p className={styles.nextKicker}>{live ? copy.beingPlayed : copy.yourNextMatch}</p>
+          <h2 id="player-next-match" className={styles.nextTitle}>
+            {opponents ? fillTemplate(copy.youPlay, { opponents }) : copy.opponentTbd}
+          </h2>
+          <div className={styles.nextMeta}>
+            <span>
+              <Trophy aria-hidden="true" />
+              {match.eventTitle} · {tournamentRound(locale, match.round)}
+            </span>
+            {match.court ? (
+              <span>
+                <MapPin aria-hidden="true" />
+                {match.court.name}
+                {match.court.location ? ` · ${match.court.location}` : ''}
+              </span>
+            ) : null}
+            <span>
+              <Clock aria-hidden="true" />
+              {match.plannedStartAt
+                ? formatDate(match.plannedStartAt, { dateStyle: 'medium', timeStyle: 'short' })
+                : eventCopy.timeNotSet}
+            </span>
+          </div>
+        </div>
+        {live ? (
+          <p className={styles.countdown} aria-label={`${yourScore}–${theirScore}`}>
+            <span className={styles.countdownValue}>
+              {yourScore}–{theirScore}
+            </span>
+            <span className={styles.countdownUnit}>{tournamentStatus(locale, match.status)}</span>
+          </p>
+        ) : null}
+      </div>
+      <div className={styles.entry}>
+        <div className={styles.entryActions}>
+          <Link href={`/dashboard/events/${match.eventId}`} className={outlineLinkClassName}>
+            {copy.openEvent}
+          </Link>
+          <Link href={`/matches/${match.id}`} className={outlineLinkClassName}>
+            {copy.openMatch}
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 /**
@@ -45,11 +103,14 @@ function entryStep(status: RegistrationDto['status']): number {
 export function PlayerNextEvent({
   event,
   entry,
+  pairing,
   action,
   loading,
 }: {
   event: EventDto | null;
   entry: RegistrationDto | null;
+  /** Who the reader plays — see `pairingModel`. Drives the note; the client owns the buttons. */
+  pairing?: PairingState;
   action?: ReactNode;
   loading: boolean;
 }) {
@@ -72,7 +133,8 @@ export function PlayerNextEvent({
   }
 
   const remaining = daysUntil(event.date);
-  const step = entry ? entryStep(entry.status) : -1;
+  const stage = entry ? entryStage(entry) : null;
+  const pairingNote = pairing ? pairingNoteKey(pairing) : null;
 
   return (
     <section className={styles.next} aria-labelledby="player-next-event">
@@ -120,32 +182,50 @@ export function PlayerNextEvent({
       <div className={styles.entry}>
         <div className={styles.entryHead}>
           <p className={styles.entryLabel}>{copy.yourEntry}</p>
-          <StatusLabel icon={entry?.status === 'APPROVED' ? 'check' : 'dot'}>
+          <StatusLabel
+            icon={
+              stage?.kind === 'path' && stage.attention === 'NEEDS_CHANGES'
+                ? 'warning'
+                : stage?.kind === 'path' && stage.step >= 1
+                  ? 'check'
+                  : 'dot'
+            }
+          >
             {entry ? tournamentStatus(locale, entry.status) : copy.notEntered}
           </StatusLabel>
         </div>
 
-        {step >= 0 ? (
+        {stage?.kind === 'path' ? (
           <>
             <StageRail
               steps={entryPath.map((key, index): RailStep => ({
                 key,
                 label: copy[key],
-                state: index < step ? 'done' : index === step ? 'current' : 'upcoming',
+                state: index < stage.step ? 'done' : index === stage.step ? 'current' : 'upcoming',
               }))}
             />
-            <p className={styles.entryNote}>{step === 0 ? copy.underReview : copy.approvedNote}</p>
+            <p className={styles.entryNote}>{entry ? copy[entryNoteKey(entry)] : null}</p>
           </>
         ) : (
-          <p className={styles.entryNote}>{entry ? copy.blockedNote : copy.notEnteredDetail}</p>
+          <p className={styles.entryNote}>{entry ? copy[entryNoteKey(entry)] : copy.notEnteredDetail}</p>
         )}
+
+        {/* Who they play, when that is still an open question. The states the
+            player can act on are said by their button instead. */}
+        {pairingNote ? (
+          <p className={styles.pairing}>
+            <Handshake aria-hidden="true" />
+            <span>
+              {pairing?.kind === 'sent'
+                ? fillTemplate(copy[pairingNote], { pair: pairing.opponent })
+                : copy[pairingNote]}
+            </span>
+          </p>
+        ) : null}
 
         <div className={styles.entryActions}>
           {action}
-          <Link
-            href={`/dashboard/events/${event.id}`}
-            className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[var(--dash-border)] px-4 text-sm font-semibold text-[var(--dash-text)] transition-colors hover:border-[var(--dash-border-strong)] hover:bg-[var(--dash-primary-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
-          >
+          <Link href={`/dashboard/events/${event.id}`} className={outlineLinkClassName}>
             {copy.openEvent}
           </Link>
         </div>
@@ -155,10 +235,10 @@ export function PlayerNextEvent({
 }
 
 /** Screen-reader label for the compact entry indicator used in the list below. */
-export function entryStepLabel(status: RegistrationDto['status'], locale: 'en' | 'ka') {
+export function entryStepLabel(registration: Pick<RegistrationDto, 'status' | 'inDraw'>, locale: 'en' | 'ka') {
   const copy = tournamentCopy[locale].playerHome;
-  const step = entryStep(status);
-  if (step < 0) return tournamentStatus(locale, status);
+  const step = entryStep(registration);
+  if (step < 0) return tournamentStatus(locale, registration.status);
   return fillTemplate(copy.stepOf, {
     current: step + 1,
     total: entryPath.length,
@@ -166,4 +246,4 @@ export function entryStepLabel(status: RegistrationDto['status'], locale: 'en' |
   });
 }
 
-export { entryStep, entryPath };
+export { entryPath, entryStage, entryStep, entryNoteKey } from './entryStatusModel';

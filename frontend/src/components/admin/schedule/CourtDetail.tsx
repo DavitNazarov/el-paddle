@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarClock, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, GripVertical, Lock, Trash2, UserRound } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, GripVertical, Lock, Trash2 } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -14,16 +14,13 @@ import {
   firstMovablePosition,
   isFrozen,
   isQueueFinished,
-  judgeName,
   matchPair,
   matchTitle,
   queueDroppableId,
-  type EventJudge,
 } from './scheduleModel';
 import styles from './Schedule.module.css';
 
 export type CourtHandlers = {
-  onAssign: (court: CourtDto, judgeId: string) => void;
   onMoveToCourt: (item: ScheduleItemDto, targetCourtId: string) => void;
   onNudge: (court: CourtDto, item: ScheduleItemDto, delta: number) => void;
   onUnschedule: (item: ScheduleItemDto) => void;
@@ -38,7 +35,6 @@ export function CourtDetail({
   busy,
   court,
   courts,
-  judges,
   locked,
   onStep,
   ...handlers
@@ -46,14 +42,12 @@ export function CourtDetail({
   busy: string;
   court: CourtDto;
   courts: CourtDto[];
-  judges: EventJudge[];
   locked: boolean;
   /** Moves to the previous/next court without going back up to the board. */
   onStep: (delta: number) => void;
 }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale].admin.schedule;
-  const currentJudge = court.judgeAssignments[0]?.judge;
   const finished = isQueueFinished(court);
   const progress = courtProgress(court);
   const { setNodeRef, isOver } = useDroppable({ id: queueDroppableId(court.id), disabled: locked || finished });
@@ -88,24 +82,6 @@ export function CourtDetail({
       </header>
 
       <div className={styles.detailBody}>
-        <div className={styles.detailJudge}>
-          <label className={styles.courtJudgeLabel} htmlFor={`judge-${court.id}`}>
-            <UserRound aria-hidden="true" />
-            {copy.assignedJudge}
-          </label>
-          <select
-            id={`judge-${court.id}`}
-            aria-label={`${copy.assignJudge}: ${court.name}`}
-            className={`${selectControlClassName} h-11 bg-white`}
-            value={currentJudge?.id ?? ''}
-            disabled={locked || busy === `judge-${court.id}`}
-            onChange={(fieldEvent) => handlers.onAssign(court, fieldEvent.target.value)}
-          >
-            <option value="">{copy.assignJudge}</option>
-            {judges.map((judge) => <option key={judge.id} value={judge.id}>{judgeName(judge)}</option>)}
-          </select>
-        </div>
-
         {court.scheduleItems.length ? (
           <QueueMeter
             label={copy.queueProgress}

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ error?: string; step?: string }> }) {
   const user = await getCurrentUser();
-  if (user) redirect(user.role === 'ADMIN' || user.role === 'ORGANISER' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
+  if (user) redirect(user.role === 'ADMIN' || user.role === 'ORGANISER' ? '/admin' : user.role === 'JUDGE' ? '/' : '/dashboard');
 
   return (
     <AuthShell variant="register">

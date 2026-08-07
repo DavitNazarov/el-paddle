@@ -2,7 +2,7 @@ import os from 'os';
 import { DeliveryStatus, NotificationType, OpponentRequestStatus, OutboxStatus, type Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../database/prisma.js';
 import { appUrl, emailButton, emailLayout, escapeHtml, sendEmail } from '../common/email.js';
-import { emitToRoom } from '../realtime/socket.js';
+import { emitToRoom, eventRoom, eventStaffRoom } from '../realtime/socket.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../common/domain-events.js';
 
 const workerId = `${os.hostname()}:${process.pid}`;
@@ -54,13 +54,44 @@ async function sendQueuedEmail(notificationId: string) {
   }
 }
 
-function emitOutbox(topic: string, payload: Prisma.JsonValue) {
+type Emission = { room: string; payload: Record<string, unknown> };
+
+/**
+ * Fan one outbox row out to the rooms that should hear it.
+ *
+ * `event:<id>` is joinable by an anonymous socket on any published event, which
+ * is a far coarser gate than the REST reads: those check bracket and schedule
+ * publication, `publicLiveScoringEnabled` and `resultsPublishedAt` per match.
+ * Broadcasting the raw payload there therefore leaked live scores, winners and
+ * registration decisions ahead of publication. The room now hears the topic
+ * with the payload stripped to the event id; every score, winner and decision
+ * field rides only in the authenticated staff room.
+ *
+ * This costs the public UI nothing: consumers treat a topic purely as an
+ * invalidation signal and refetch the authoritative record through the API,
+ * which applies the publication and redaction rules the socket cannot.
+ */
+export function outboxEmissions(topic: string, payload: Prisma.JsonValue): Emission[] {
   const value = payload as Record<string, unknown>;
-  if (typeof value.recipientUserId === 'string') emitToRoom(`user:${value.recipientUserId}`, topic, value);
-  if (typeof value.eventId === 'string') emitToRoom(`event:${value.eventId}`, topic, value);
-  if (typeof value.matchId === 'string') emitToRoom(`match:${value.matchId}`, topic, value);
-  if (typeof value.courtId === 'string') emitToRoom(`court:${value.courtId}`, topic, value);
-  emitToRoom('admins', topic, value);
+  const emissions: Emission[] = [];
+  if (typeof value.recipientUserId === 'string') emissions.push({ room: `user:${value.recipientUserId}`, payload: value });
+  if (typeof value.eventId === 'string') {
+    emissions.push({ room: eventStaffRoom(value.eventId), payload: value });
+    emissions.push({ room: eventRoom(value.eventId), payload: { eventId: value.eventId } });
+  }
+  if (typeof value.matchId === 'string') emissions.push({ room: `match:${value.matchId}`, payload: value });
+  if (typeof value.courtId === 'string') emissions.push({ room: `court:${value.courtId}`, payload: value });
+  // The admin room mirrors operational activity. It used to mirror personal
+  // topics too, so every admin socket received other people's notifications —
+  // authorized, since an admin can read them anyway, but a copy of someone
+  // else's inbox is not what this room is for. An admin's own notifications
+  // still arrive on their `user:<id>` room.
+  if (typeof value.recipientUserId !== 'string') emissions.push({ room: 'admins', payload: value });
+  return emissions;
+}
+
+function emitOutbox(topic: string, payload: Prisma.JsonValue) {
+  for (const { room, payload: body } of outboxEmissions(topic, payload)) emitToRoom(room, topic, body);
 }
 
 function outboxWhere(mode: OutboxMode): Prisma.OutboxMessageWhereInput {
@@ -79,15 +110,21 @@ function outboxWhere(mode: OutboxMode): Prisma.OutboxMessageWhereInput {
  * Without this these tables grow monotonically (DB-1).
  */
 export async function runRetentionCleanup(now = new Date()) {
-  const [commandReceipts, verificationCodes, inviteTokens] = await prisma.$transaction([
+  const [commandReceipts, verificationCodes, inviteTokens, passwordResets, sessions] = await prisma.$transaction([
     prisma.commandReceipt.deleteMany({ where: { expiresAt: { lt: now } } }),
     prisma.emailVerificationCode.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] } }),
     prisma.inviteToken.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] } }),
+    prisma.passwordResetToken.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null } }] } }),
+    // A session row outlives nothing once its token has expired: the JWT is
+    // already unusable, and the row only existed to make revocation possible.
+    prisma.session.deleteMany({ where: { expiresAt: { lt: now } } }),
   ]);
   return {
     commandReceipts: commandReceipts.count,
     verificationCodes: verificationCodes.count,
     inviteTokens: inviteTokens.count,
+    passwordResets: passwordResets.count,
+    sessions: sessions.count,
   };
 }
 

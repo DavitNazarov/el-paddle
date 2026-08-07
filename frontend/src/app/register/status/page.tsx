@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default async function RegisterStatusPage() {
   const user = await getCurrentUser();
   // An approved applicant has a real account and no request left to track.
-  if (user) redirect(user.role === 'ADMIN' || user.role === 'ORGANISER' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
+  if (user) redirect(user.role === 'ADMIN' || user.role === 'ORGANISER' ? '/admin' : user.role === 'JUDGE' ? '/' : '/dashboard');
 
   return (
     <AuthShell variant="register">

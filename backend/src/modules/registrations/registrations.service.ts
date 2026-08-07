@@ -7,18 +7,11 @@ import {
   UserRole,
   UserStatus,
   type Prisma,
+  type User,
 } from '../../generated/prisma/client.js';
 import { clubSummarySelect, registrationInclude } from '../../common/includes.js';
 import { isUniqueConstraintError, jsonError } from '../../common/http.js';
-import {
-  sendTeammateAddedEmail,
-  sendTeammateInviteEmail,
-} from '../../common/notifications.js';
-import {
-  addDays,
-  createInviteToken,
-  hashToken,
-} from '../../common/security.js';
+import { sendTeammateAddedEmail } from '../../common/notifications.js';
 import { prisma } from '../../database/prisma.js';
 import { roleForEmail } from '../auth/auth.service.js';
 import { assertNotDisqualified, isDisqualified } from '../users/users.service.js';
@@ -56,6 +49,34 @@ async function assertPlayerFreeForEvent(
       ? 'This teammate is already registered for this event.'
       : 'You can only register for one category per event.',
     409,
+  );
+}
+
+type TeammateIdentity = Pick<User, 'status' | 'name' | 'surname' | 'email'>;
+
+/**
+ * A teammate has to be a player in their own right before their club can enter
+ * them. Registration used to create the account itself and email an invitation,
+ * which is how an entry could be approved around someone who never accepted and
+ * then stall at the first thing needing two present players — opponent requests.
+ * Invitations now belong to the club, and registration only reads the result.
+ */
+export function requireActiveTeammate<T extends TeammateIdentity>(teammate: T | null): T {
+  if (!teammate) {
+    jsonError(
+      'This teammate does not have an El Padel account yet. Invite them to your club and wait for them to accept before entering them in an event.',
+      403,
+    );
+  }
+  if (teammate.status === UserStatus.ACTIVE) return teammate;
+  const who = [teammate.name, teammate.surname].filter(Boolean).join(' ') || teammate.email;
+  jsonError(
+    teammate.status === UserStatus.INVITED
+      ? `${who} has not accepted their invitation yet, so they cannot be entered in an event. They can be added once they accept.`
+      : teammate.status === UserStatus.PENDING_VERIFICATION
+        ? `${who} has not verified their email address yet, so they cannot be entered in an event.`
+        : `${who} does not have an active account, so they cannot be entered in an event.`,
+    403,
   );
 }
 
@@ -103,29 +124,21 @@ export async function createRegistration(input: CreateRegistrationInput) {
       jsonError('This teammate is currently disqualified.', 403);
     }
 
-    // Existing active accounts must already share the owner's club — never force-join them.
-    if (existingTeammate?.status === UserStatus.ACTIVE) {
-      const teammateClubId = existingTeammate.clubMemberships[0]?.clubId;
-      if (!teammateClubId) {
-        jsonError('This teammate must join a club before being registered.', 403);
-      }
-      if (teammateClubId !== ownerMembership.clubId) {
-        jsonError('Teammates must belong to the same club.', 403);
-      }
-    } else if (
-      existingTeammate?.clubMemberships.length &&
-      existingTeammate.clubMemberships[0].clubId !== ownerMembership.clubId
-    ) {
-      jsonError('This teammate already belongs to another club.', 409);
+    const teammateAccount = requireActiveTeammate(existingTeammate);
+
+    // An active account must already share the owner's club — never force-join them.
+    const teammateClubId = teammateAccount.clubMemberships[0]?.clubId;
+    if (!teammateClubId) {
+      jsonError('This teammate must join a club before being registered.', 403);
+    }
+    if (teammateClubId !== ownerMembership.clubId) {
+      jsonError('Teammates must belong to the same club.', 403);
     }
 
-    // Wrap invite + registration creation so a unique-constraint failure
-    // cannot leave an orphan invite token / invited user behind.
-    let inviteToken = '';
     const registration = await prisma.$transaction(async (tx) => {
       // Serialize concurrent registrations that touch the same players for this event.
       // Lock order is stable (sorted ids) to avoid deadlocks.
-      const lockIds = [owner.id, existingTeammate?.id].filter(Boolean).sort() as string[];
+      const lockIds = [owner.id, teammateAccount.id].sort();
       for (const id of lockIds) {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reg:${eventId}:${id}`}))`;
       }
@@ -147,70 +160,26 @@ export async function createRegistration(input: CreateRegistrationInput) {
 
       await assertPlayerFreeForEvent(tx, eventId, owner.id, false);
 
-      const teammate =
-        existingTeammate ??
-        (await tx.user.create({
-          data: {
-            email: teammateEmail,
-            status: UserStatus.INVITED,
-            clubMemberships: {
-              create: { clubId: freshOwnerMembership.clubId },
-            },
-          },
-        }));
-
-      if (existingTeammate) {
-        const freshTeammate = await tx.user.findUnique({
-          where: { id: existingTeammate.id },
-          include: { clubMemberships: { take: 1 } },
-        });
-        if (!freshTeammate) jsonError('Teammate not found.', 404);
-        if (isDisqualified(freshTeammate)) {
-          jsonError('This teammate is currently disqualified.', 403);
-        }
-        if (freshTeammate.status === UserStatus.ACTIVE) {
-          const teammateClubId = freshTeammate.clubMemberships[0]?.clubId;
-          if (!teammateClubId) {
-            jsonError('This teammate must join a club before being registered.', 403);
-          }
-          if (teammateClubId !== freshOwnerMembership.clubId) {
-            jsonError('Teammates must belong to the same club.', 403);
-          }
-        }
-
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reg:${eventId}:${teammate.id}`}))`;
-        await assertPlayerFreeForEvent(tx, eventId, teammate.id, true);
-
-        // Only auto-join still-invited accounts into the owner's club.
-        if (freshTeammate.status === UserStatus.INVITED) {
-          const teammateMembership = await tx.clubMember.findUnique({
-            where: { userId: freshTeammate.id },
-          });
-          if (!teammateMembership) {
-            await tx.clubMember.create({
-              data: {
-                clubId: freshOwnerMembership.clubId,
-                userId: freshTeammate.id,
-              },
-            });
-          } else if (teammateMembership.clubId !== freshOwnerMembership.clubId) {
-            jsonError('This teammate already belongs to another club.', 409);
-          }
-        }
-      } else {
-        await assertPlayerFreeForEvent(tx, eventId, teammate.id, true);
+      // Re-read the teammate under the lock: acceptance, disqualification and club
+      // can all have moved since the checks above.
+      const freshTeammate = await tx.user.findUnique({
+        where: { id: teammateAccount.id },
+        include: { clubMemberships: { take: 1 } },
+      });
+      if (!freshTeammate) jsonError('Teammate not found.', 404);
+      if (isDisqualified(freshTeammate)) {
+        jsonError('This teammate is currently disqualified.', 403);
+      }
+      const teammate = requireActiveTeammate(freshTeammate);
+      const freshTeammateClubId = teammate.clubMemberships[0]?.clubId;
+      if (!freshTeammateClubId) {
+        jsonError('This teammate must join a club before being registered.', 403);
+      }
+      if (freshTeammateClubId !== freshOwnerMembership.clubId) {
+        jsonError('Teammates must belong to the same club.', 403);
       }
 
-      if (!existingTeammate || teammate.status === UserStatus.INVITED) {
-        inviteToken = createInviteToken();
-        await tx.inviteToken.create({
-          data: {
-            userId: teammate.id,
-            tokenHash: hashToken(inviteToken),
-            expiresAt: addDays(14),
-          },
-        });
-      }
+      await assertPlayerFreeForEvent(tx, eventId, teammate.id, true);
 
       return tx.eventRegistration.create({
         data: {
@@ -235,15 +204,9 @@ export async function createRegistration(input: CreateRegistrationInput) {
       });
     });
 
-    if (inviteToken) {
-      await sendRegistrationNotification(() =>
-        sendTeammateInviteEmail(teammateEmail, owner, registration.event, inviteToken),
-      );
-    } else {
-      await sendRegistrationNotification(() =>
-        sendTeammateAddedEmail(registration.teammate, owner, registration.event),
-      );
-    }
+    await sendRegistrationNotification(() =>
+      sendTeammateAddedEmail(registration.teammate, owner, registration.event),
+    );
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       const message = error instanceof Error ? error.message : '';

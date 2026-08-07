@@ -8,11 +8,12 @@ import {
   EmptyState,
   FeedbackBanner,
   FilterChip,
-  SectionHeading,
   softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
+import { SkeletonCards } from '@/components/shared/dashboard/Feedback';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { usePlayerDashboard } from '@/hooks/usePlayerDashboard';
+import { tournamentCopy } from '@/lib/i18n/tournament';
 import { cn } from '@/lib/utils';
 import type { PublicUser } from '@/types/auth';
 import type { DashboardData, RegistrationDto, StatusFilter } from '@/types/dashboard';
@@ -27,7 +28,7 @@ export function PlayerEntriesClient({
   initialUser: PublicUser;
   initialData?: DashboardData | null;
 }) {
-  const { dictionary, t } = useI18n();
+  const { dictionary, locale } = useI18n();
   const player = dictionary.dashboard.player;
   const api = usePlayerDashboard(initialUser, initialData);
   const {
@@ -37,6 +38,7 @@ export function PlayerEntriesClient({
     clubMembershipRole,
     registrationCounts,
     loading,
+    loadFailed,
     message,
     error,
     setMessage,
@@ -57,11 +59,28 @@ export function PlayerEntriesClient({
   return (
     <PlayerShell
       user={user}
-      pendingCount={registrationCounts.pending}
       eyebrow={player.pages.entriesEyebrow}
       title={player.pages.entriesTitle}
       description={player.pages.entriesDescription}
     >
+      {loadFailed ? (
+        <FeedbackBanner
+          kind="error"
+          actions={
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={cn(softButtonClassName, 'rounded-md')}
+              onClick={() => void loadDashboard()}
+            >
+              {tournamentCopy[locale].playerHome.retry}
+            </Button>
+          }
+        >
+          {tournamentCopy[locale].playerHome.loadFailed}
+        </FeedbackBanner>
+      ) : null}
       {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
       {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
 
@@ -69,6 +88,17 @@ export function PlayerEntriesClient({
         <FilterChip active={statusFilter === 'ALL'} count={registrationCounts.all} onClick={() => setStatusFilter('ALL')}>
           {player.filters.all}
         </FilterChip>
+        {/* Entries waiting on the player come first — they are the only ones
+            the player can actually move. Hidden when there are none. */}
+        {registrationCounts.attention > 0 ? (
+          <FilterChip
+            active={statusFilter === 'NEEDS_CHANGES'}
+            count={registrationCounts.attention}
+            onClick={() => setStatusFilter('NEEDS_CHANGES')}
+          >
+            {player.mini.attention}
+          </FilterChip>
+        ) : null}
         <FilterChip
           active={statusFilter === 'PENDING'}
           count={registrationCounts.pending}
@@ -83,6 +113,15 @@ export function PlayerEntriesClient({
         >
           {player.mini.approved}
         </FilterChip>
+        {registrationCounts.waitlisted > 0 ? (
+          <FilterChip
+            active={statusFilter === 'WAITLISTED'}
+            count={registrationCounts.waitlisted}
+            onClick={() => setStatusFilter('WAITLISTED')}
+          >
+            {player.mini.waitlisted}
+          </FilterChip>
+        ) : null}
         <FilterChip
           active={statusFilter === 'DECLINED'}
           count={registrationCounts.declined}
@@ -92,13 +131,10 @@ export function PlayerEntriesClient({
         </FilterChip>
       </div>
 
-      <SectionHeading
-        title={player.sections.statusTitle}
-        description={t('dashboard.player.sections.statusDescription', { count: registrations.length })}
-      />
-
       <div className="mt-4 grid gap-3">
-        {loading ? <EmptyState title={player.sections.loadingTitle} icon={ListChecks} /> : null}
+        {loading ? (
+          <SkeletonCards count={3} columns={2} label={player.sections.loadingTitle} />
+        ) : null}
         {!loading && !registrations.length ? (
           <EmptyState
             title={player.sections.noTeamsTitle}

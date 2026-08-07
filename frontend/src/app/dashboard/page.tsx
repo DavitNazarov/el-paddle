@@ -13,7 +13,8 @@ export default async function DashboardPage() {
   if (!data) redirect('/login?next=/dashboard');
   const user = data.user;
   if (user.role === 'ADMIN' || user.role === 'ORGANISER') redirect('/admin');
-  if (user.role === 'JUDGE') redirect('/judge');
+  // The judge role has no player dashboard and no judge workspace; send it to the public site.
+  if (user.role === 'JUDGE') redirect('/');
   if (!user.club) redirect('/complete-club');
 
   return <PlayerOverviewClient initialUser={user} initialData={data} />;

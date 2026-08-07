@@ -1,6 +1,6 @@
 # El Padel
 
-El Padel is a full-stack padel club and tournament platform for the Georgian padel community. Clubs — not individuals — are the unit of competition: players belong to one club, each club fields one two-person team per event, and tournaments run from registration through opponent requests, single-elimination brackets, court scheduling, judged live scoring, and published results.
+El Padel is a full-stack padel club and tournament platform for the Georgian padel community. Clubs — not individuals — are the unit of competition: players belong to one club, each club fields one two-person team per event, and tournaments run from registration through opponent requests, single-elimination brackets, court scheduling, live scoring, and published results.
 
 See [docs/BUSINESS_OVERVIEW.md](docs/BUSINESS_OVERVIEW.md) for the full product story.
 
@@ -77,10 +77,9 @@ After seeding, every account uses the password `Password123!`:
 | Role | Email |
 | --- | --- |
 | Administrator | `admin@example.com` |
-| Judge | `judge1@example.com` … `judge5@example.com` |
 | Player | `athlete001@example.com` … `athlete036@example.com` |
 
-Players are distributed two per club across the seeded clubs. Additional judges can be created from Admin → Users.
+Players are distributed two per club across the seeded clubs.
 
 ## Main workflows
 
@@ -91,7 +90,7 @@ Players are distributed two per club across the seeded clubs. Additional judges 
 3. Publish the approved roster, close registration, and open per-category opponent-request windows.
 4. Approve accepted pairings, reject them, or override refusals.
 5. Generate, review, lock, and publish each category bracket (2–16 entries; bracket sized 2/4/8/16 with byes).
-6. Create courts, assign judges to time windows, queue matches, and publish the schedule.
+6. Create courts, queue matches, and publish the schedule.
 7. Move the event to ongoing, optionally enable public live scoring, and monitor scores and deliveries.
 8. Complete the event and publish final results; reopen explicitly if a correction is needed.
 
@@ -110,14 +109,14 @@ Players are distributed two per club across the seeded clubs. Additional judges 
 3. Replace a registered player when needed (entry returns to review).
 4. Resolve affected registrations before removing a member.
 
-### Judge
+### Match control (admin & organiser)
 
-1. Open assigned courts during the assigned time window.
-2. Process the court queue strictly in order.
-3. Start the next ready match. Starting it freezes the match's slot format.
-4. After each slot, press the button for the side that won it and confirm in the dialog. The match completes automatically once a side reaches the required slot wins.
-5. Use "Undo last slot" to withdraw the most recent slot while the match is still in progress; reopening a completed match is an administrator action.
-6. Or record a walkover/withdrawal/disqualification with a reason.
+1. Open **Match control** for the event: every match with its court, its planned time, both pairs and their clubs, in draw order.
+2. Set or adjust a planned start time in place, until the match starts.
+3. Start the next ready match on a court — earlier queue positions must be finished first. Starting it freezes the match's set format. Several courts can run at once.
+4. After each set, press the button for the side that won it and confirm in the dialog. The match completes automatically once a side reaches the required set wins, and the winner moves into the next round.
+5. Use "Finish early" for a walkover or a retirement, with a reason.
+6. To correct a set recorded for the wrong side, reopen the match from the bracket page (administrators only).
 
 ## Commands
 

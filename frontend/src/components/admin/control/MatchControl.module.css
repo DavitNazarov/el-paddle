@@ -1,0 +1,406 @@
+/*
+ * Match control. One page for the whole event day: a summary strip, the matches
+ * that can be acted on right now, then the full draw in bracket order. Cards are
+ * identical in both places so an operator learns one card, not two.
+ *
+ * Neutral surfaces throughout; state is carried by a label and a border weight,
+ * never by colour alone.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ---- Summary strip ---- */
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (min-width: 48rem) {
+  .summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--dash-border, #e6e0dd);
+  border-radius: 0.75rem;
+  background: var(--dash-surface, #fff);
+}
+
+.metric[data-tone='live'] {
+  border-color: #b8a49f;
+  border-left-width: 3px;
+}
+
+.metricValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--dash-text, #2b2321);
+  font-variant-numeric: tabular-nums;
+}
+
+.metricLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dash-muted, #7a6c69);
+}
+
+/* ---- Card grids ---- */
+
+.nowGrid {
+  display: grid;
+  gap: 0.875rem;
+  padding: 1rem;
+}
+
+@media (min-width: 60rem) {
+  .nowGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.draws {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1rem;
+}
+
+.drawName {
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dash-muted, #7a6c69);
+  margin-bottom: 0.75rem;
+}
+
+/* Rounds read left to right on a wide screen and stack on a phone, so the page
+   never scrolls sideways. */
+.rounds {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 60rem) {
+  .rounds {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(17rem, 1fr);
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+}
+
+.round {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.roundName {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dash-muted, #7a6c69);
+}
+
+/* ---- One match ---- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.875rem;
+  border: 1px solid var(--dash-border, #e6e0dd);
+  border-radius: 0.75rem;
+  background: var(--dash-surface, #fff);
+  min-width: 0;
+}
+
+.card[data-live='true'] {
+  border-left-width: 3px;
+  border-left-color: #8c7a75;
+}
+
+.card[data-complete='true'] {
+  background: #fbfaf9;
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cardNumber {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dash-muted, #7a6c69);
+}
+
+.cardWhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--dash-text, #2b2321);
+}
+
+.cardCourt,
+.cardTime {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.cardCourt svg,
+.cardTime svg,
+.cardTimeEdit svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: none;
+}
+
+.cardCourt[data-missing='true'],
+.cardTime[data-missing='true'] {
+  color: var(--dash-muted, #7a6c69);
+  font-style: italic;
+}
+
+.cardTimeEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.timeInput {
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--dash-border, #e6e0dd);
+  border-radius: 0.5rem;
+  background: #fff;
+  font-size: 0.8125rem;
+  color: inherit;
+  max-width: 100%;
+}
+
+.timeInput:focus-visible {
+  outline: 2px solid #8c7a75;
+  outline-offset: 1px;
+}
+
+/* ---- The two pairs: the largest type on the card ---- */
+
+.sides {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.side {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'marker names tally' 'marker club tally';
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  background: #faf8f7;
+}
+
+/* Anchors the letter the result fields are labelled with to the pair it belongs to. */
+.sideMarker {
+  grid-area: marker;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--dash-muted, #7a6c69);
+}
+
+.side[data-winner='true'] {
+  background: #f2efec;
+  box-shadow: inset 2px 0 0 #8c7a75;
+}
+
+.sideNames {
+  grid-area: names;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--dash-text, #2b2321);
+  overflow-wrap: anywhere;
+}
+
+.sideClub {
+  grid-area: club;
+  font-size: 0.75rem;
+  color: var(--dash-muted, #7a6c69);
+  overflow-wrap: anywhere;
+}
+
+.sideTally {
+  grid-area: tally;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--dash-text, #2b2321);
+}
+
+/* ---- Sets ---- */
+
+.setsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--dash-muted, #7a6c69);
+}
+
+.setsLabel {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.setsFormat {
+  margin-left: auto;
+}
+
+/* ---- Controls ---- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.actionButton {
+  min-height: 2.75rem;
+  flex: 1 1 10rem;
+}
+
+.actionGhost {
+  min-height: 2.75rem;
+  flex: 0 0 auto;
+}
+
+/* ---- Result entry ---- */
+
+.resultForm {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.resultRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.resultField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  padding: 0 0.375rem 0 0.625rem;
+  border: 1px solid var(--dash-border, #e6e0dd);
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.resultSide {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--dash-muted, #7a6c69);
+}
+
+.resultInput {
+  width: 2.75rem;
+  min-height: 2.5rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--dash-text, #2b2321);
+  appearance: textfield;
+}
+
+.resultInput::-webkit-outer-spin-button,
+.resultInput::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.resultInput:focus-visible {
+  outline: 2px solid #8c7a75;
+  outline-offset: 2px;
+}
+
+.resultSubmit {
+  min-height: 2.75rem;
+  flex: 1 1 9rem;
+}
+
+.resultHint {
+  font-size: 0.8125rem;
+  color: var(--dash-muted, #7a6c69);
+}
+
+.actionHint,
+.actionDone {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--dash-muted, #7a6c69);
+}
+
+.actionDone svg,
+.actionHint svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* ---- Confirmation ---- */
+
+.confirmBody {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--dash-text, #2b2321);
+}
+
+.confirmScore {
+  margin-top: 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--dash-text, #2b2321);
+}

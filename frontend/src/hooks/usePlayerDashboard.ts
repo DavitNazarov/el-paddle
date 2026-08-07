@@ -48,6 +48,7 @@ export function usePlayerDashboard(
   const [bankByEvent, setBankByEvent] = useState<
     Record<string, { bankAccountReceiver: string; bankAccountIban: string }>
   >({});
+  const [bankStatus, setBankStatus] = useState<Record<string, 'loading' | 'ready' | 'error'>>({});
 
   const user = data?.user ?? initialUser;
   const events = useMemo(() => data?.events ?? [], [data?.events]);
@@ -68,6 +69,9 @@ export function usePlayerDashboard(
       pending: registrations.filter((item) => item.status === 'PENDING').length,
       approved: registrations.filter((item) => item.status === 'APPROVED').length,
       declined: registrations.filter((item) => item.status === 'DECLINED').length,
+      waitlisted: registrations.filter((item) => item.status === 'WAITLISTED').length,
+      /** Entries waiting on the player, not on an organiser. */
+      attention: registrations.filter((item) => item.status === 'NEEDS_CHANGES').length,
       all: registrations.length,
     }),
     [registrations],
@@ -78,12 +82,19 @@ export function usePlayerDashboard(
     [registrations],
   );
 
-  /** A club can submit one team per event, regardless of which members participate. */
+  /**
+   * A club can submit one team per event. Any existing row — including a
+   * declined one — still occupies the unique club+event slot, so the UI must
+   * not offer a second registration.
+   */
   const registeredEventIds = useMemo(
     () => new Set(registrations.map((item) => item.event.id)),
     [registrations],
   );
 
+  // Club mates who have not accepted their invitation stay in the list but cannot
+  // be picked: registration refuses them, so hiding them would leave the captain
+  // hunting for a mate who looks absent from their own club.
   const savedTeammates = useMemo(
     () =>
       clubMembers.map((member) => ({
@@ -91,28 +102,53 @@ export function usePlayerDashboard(
         email: member.email,
         fullName: member.fullName || member.email,
         phone: member.phone,
+        selectable: member.status === 'ACTIVE',
       })),
     [clubMembers],
   );
 
-  const nextEvent = events[0] ?? null;
+  // "Next up" must be something still ahead, so a finished event is never it.
+  // Completion is the server's call: the clock cannot be read here without
+  // making the render impure, and every other status is still in play.
+  const nextEvent = useMemo(
+    () => events.find((event) => event.status !== 'COMPLETED') ?? null,
+    [events],
+  );
+  const nextMatch = data?.nextMatch ?? null;
+  const receivedRequests = useMemo(() => data?.receivedRequests ?? [], [data?.receivedRequests]);
+  const sentRequests = useMemo(() => data?.sentRequests ?? [], [data?.sentRequests]);
+  const requestWindows = useMemo(() => data?.requestWindows ?? [], [data?.requestWindows]);
   const registerEventBank = registerEvent ? bankByEvent[registerEvent.id] ?? null : null;
+  const registerEventBankStatus = registerEvent
+    ? (bankStatus[registerEvent.id] ?? (registerEventBank ? 'ready' : 'idle'))
+    : 'idle';
   const winRate =
     user.stats.matchesPlayed > 0
       ? Math.round((user.stats.wins / user.stats.matchesPlayed) * 100)
       : null;
 
+  // A failed load must say so: a silent catch here used to leave the page
+  // blank, which reads as "you have nothing" rather than "we could not check".
+  const [loadFailed, setLoadFailed] = useState(false);
+
   const loadDashboard = useCallback(
     async (showLoading = true) => {
       if (showLoading) setLoading(true);
-      const response = await apiFetch('/api/dashboard', { cache: 'no-store' });
-      if (response.status === 401) {
-        router.push('/login?next=/dashboard');
-        return;
+      setLoadFailed(false);
+      try {
+        const response = await apiFetch('/api/dashboard', { cache: 'no-store' });
+        if (response.status === 401) {
+          router.push('/login?next=/dashboard');
+          return;
+        }
+        if (!response.ok) throw new Error(`dashboard load failed: ${response.status}`);
+        const nextData = (await response.json()) as DashboardData;
+        setData(nextData);
+      } catch {
+        setLoadFailed(true);
+      } finally {
+        setLoading(false);
       }
-      const nextData = (await response.json()) as DashboardData;
-      setData(nextData);
-      setLoading(false);
     },
     [router],
   );
@@ -146,7 +182,8 @@ export function usePlayerDashboard(
   }
 
   function selectSavedTeammate(eventId: string, teammateId: string) {
-    const teammate = teammateId ? savedTeammates.find((item) => item.id === teammateId) : null;
+    const found = teammateId ? savedTeammates.find((item) => item.id === teammateId) : null;
+    const teammate = found?.selectable ? found : null;
     setForms((current) => ({
       ...current,
       [eventId]: {
@@ -173,12 +210,22 @@ export function usePlayerDashboard(
   }
 
   function loadEventBankDetails(eventId: string) {
-    if (bankByEvent[eventId]) return;
+    if (bankStatus[eventId] === 'loading') return;
+    if (bankByEvent[eventId] && bankStatus[eventId] === 'ready') return;
+    setBankStatus((current) => ({ ...current, [eventId]: 'loading' }));
     void apiFetch(`/api/events/${eventId}`, { cache: 'no-store' })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { event?: { bankAccountReceiver?: string; bankAccountIban?: string } } | null) => {
-        const bank = data?.event;
-        if (!bank?.bankAccountIban) return;
+      .then((response) => {
+        if (!response.ok) throw new Error(`bank ${response.status}`);
+        return response.json() as Promise<{
+          event?: { bankAccountReceiver?: string; bankAccountIban?: string };
+        }>;
+      })
+      .then((payload) => {
+        const bank = payload.event;
+        if (!bank?.bankAccountIban) {
+          setBankStatus((current) => ({ ...current, [eventId]: 'error' }));
+          return;
+        }
         setBankByEvent((current) => ({
           ...current,
           [eventId]: {
@@ -186,8 +233,11 @@ export function usePlayerDashboard(
             bankAccountIban: bank.bankAccountIban ?? '',
           },
         }));
+        setBankStatus((current) => ({ ...current, [eventId]: 'ready' }));
       })
-      .catch(() => {});
+      .catch(() => {
+        setBankStatus((current) => ({ ...current, [eventId]: 'error' }));
+      });
   }
 
   function openRegister(event: EventDto) {
@@ -264,14 +314,21 @@ export function usePlayerDashboard(
     clubMembers,
     clubMembershipRole,
     nextEvent,
+    nextMatch,
+    receivedRequests,
+    sentRequests,
+    requestWindows,
     winRate,
     loading,
+    loadFailed,
     message,
     error,
     setMessage,
     setError,
     registerEvent,
     registerEventBank,
+    registerEventBankStatus,
+    reloadEventBank: loadEventBankDetails,
     setRegisterEvent,
     savingEventId,
     eventForm,

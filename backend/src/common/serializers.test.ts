@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { UserStatus } from '../generated/prisma/client.js';
 import type { RegistrationFull } from './serializers.js';
 import {
   serializeEvent,
@@ -158,19 +159,41 @@ describe('serializeMatchList (F4)', () => {
 });
 
 describe('serializeTeammateOption (F7)', () => {
-  it('emits only the four dropdown fields, not a full profile', () => {
+  it('emits only the five dropdown fields, not a full profile', () => {
     const option = serializeTeammateOption({
       id: 'user-1',
       email: 'teammate@example.com',
       name: 'Nino',
       surname: 'Beridze',
       phone: '+995500000003',
+      status: UserStatus.ACTIVE,
     });
     expect(option).toEqual({
       id: 'user-1',
       email: 'teammate@example.com',
       fullName: 'Nino Beridze',
       phone: '+995500000003',
+      status: UserStatus.ACTIVE,
+    });
+  });
+
+  // The picker disables a mate who has not accepted, so the status has to reach
+  // the client — without dragging the rest of the profile along with it.
+  it('carries a pending invitation through to the dropdown', () => {
+    const option = serializeTeammateOption({
+      id: 'user-2',
+      email: 'pending@example.com',
+      name: null,
+      surname: null,
+      phone: null,
+      status: UserStatus.INVITED,
+    });
+    expect(option).toEqual({
+      id: 'user-2',
+      email: 'pending@example.com',
+      fullName: 'pending@example.com',
+      phone: '',
+      status: UserStatus.INVITED,
     });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CheckCircle2, Info, TriangleAlert, X, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/shared/I18nProvider';
@@ -67,31 +67,64 @@ export function Notice({
   );
 }
 
+/** How long a success confirmation stays before leaving on its own. */
+const SUCCESS_AUTO_DISMISS_MS = 6000;
+
 /**
  * The result of the last thing the user did, reported at the top of a screen.
  * It scrolls itself into view because the action that produced it is often
  * further down the page than the banner is.
+ *
+ * Every banner is dismissible, and success confirmations also leave on their
+ * own: once the outcome is acknowledged the message is done, while errors and
+ * warnings stay until the reader closes them — they describe something still
+ * true. A new message re-arms both the banner and the timer.
  */
 export function PageNotice({
   tone,
   title,
   children,
+  actions,
   onDismiss,
 }: {
   tone: NoticeTone;
   title?: string;
   children: ReactNode;
+  actions?: ReactNode;
   onDismiss?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // A new message identity re-arms the banner; dismissing hides this identity
+  // until the message (or tone) changes. Avoids an effect that only sets state.
+  const messageKey = `${tone}:${typeof children === 'string' ? children : ''}:${title ?? ''}`;
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const hidden = dismissedKey === messageKey;
 
   useEffect(() => {
+    if (hidden) return;
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [children, tone]);
+  }, [messageKey, hidden]);
+
+  useEffect(() => {
+    if (tone !== 'success' || hidden) return;
+    const timer = window.setTimeout(() => setDismissedKey(messageKey), SUCCESS_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [messageKey, tone, hidden]);
+
+  if (hidden) return null;
 
   return (
     <div ref={ref}>
-      <Notice tone={tone} title={title} className={styles.banner} onDismiss={onDismiss}>
+      <Notice
+        tone={tone}
+        title={title}
+        className={styles.banner}
+        actions={actions}
+        onDismiss={() => {
+          setDismissedKey(messageKey);
+          onDismiss?.();
+        }}
+      >
         {children}
       </Notice>
     </div>

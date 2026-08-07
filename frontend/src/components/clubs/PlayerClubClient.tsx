@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowRightLeft,
   Building2,
@@ -9,6 +10,7 @@ import {
   CircleAlert,
   Clock3,
   Crown,
+  ExternalLink,
   LoaderCircle,
   ShieldCheck,
   UserMinus,
@@ -110,27 +112,22 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
   const [removalResolutions, setRemovalResolutions] = useState<Record<string, RemovalResolution>>({});
   const [removalError, setRemovalError] = useState('');
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const response = await apiFetch('/api/account/club-details');
-        const data = await readApiJson<{ club?: PlayerClub; error?: string }>(response, {});
-        if (!response.ok || !data.club) throw new Error(data.error || copy.loadError);
-        if (active) setClub(data.club);
-      } catch (loadError) {
-        if (active) {
-          setError(loadError instanceof Error ? loadError.message : copy.loadError);
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    void load();
-    return () => {
-      active = false;
-    };
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await apiFetch('/api/account/club-details');
+      const data = await readApiJson<{ club?: PlayerClub; error?: string }>(response, {});
+      if (!response.ok || !data.club) throw new Error(data.error || copy.loadError);
+      setClub(data.club);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : copy.loadError);
+    } finally {
+      setLoading(false);
+    }
   }, [copy.loadError]);
+
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
 
   function replacementCandidates(registration: RemovalImpactRegistration) {
     if (!removalImpact) return [];
@@ -235,6 +232,10 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
     }
   };
 
+  // Approving is additive and easy to reverse (remove the member); rejecting
+  // throws the request away, so only rejection asks for confirmation.
+  const [rejectTarget, setRejectTarget] = useState<ClubJoinRequest | null>(null);
+
   const reviewRequest = async (requestId: string, decision: 'approve' | 'reject') => {
     setBusyAction(`${decision}:${requestId}`);
     setError('');
@@ -251,6 +252,7 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
       }
       setClub(data.club);
       setFeedback(decision === 'approve' ? copy.approvedSuccess : copy.rejectedSuccess);
+      setRejectTarget(null);
     } catch {
       setError(copy.actionError);
     } finally {
@@ -281,13 +283,32 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
       description={club?.description || copy.description}
     >
       <div aria-live="polite">
-        {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
+        {error ? (
+          <FeedbackBanner
+            kind="error"
+            actions={
+              // A failed load is recoverable — offer the way back instead of a
+              // dead page that looks like the player has no club.
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={cn(softButtonClassName, 'rounded-md')}
+                onClick={() => void load()}
+              >
+                {copy.retry}
+              </Button>
+            }
+          >
+            {error}
+          </FeedbackBanner>
+        ) : null}
         {feedback ? <FeedbackBanner kind="success">{feedback}</FeedbackBanner> : null}
       </div>
 
       {loading ? (
         <SurfaceCard className="p-5">
-          <div className="flex min-h-28 items-center gap-3 text-[rgba(213,201,177,0.58)]">
+          <div className="flex min-h-28 items-center gap-3 text-[var(--dash-muted)]">
             <Clock3 className="h-5 w-5 animate-pulse" />
             {t('common.loading')}
           </div>
@@ -299,29 +320,45 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
           <section className="grid gap-4 sm:grid-cols-3" aria-label={copy.description}>
             <SurfaceCard className="p-5 sm:col-span-2">
               <div className="flex items-start gap-4">
-                <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[rgba(213,201,177,0.16)] bg-[rgba(213,201,177,0.06)]">
-                  <Building2 className="h-5 w-5 text-[var(--padel-gold)]" />
-                </span>
+                {club.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={club.logoUrl}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-lg border border-[var(--dash-border)] object-cover"
+                  />
+                ) : (
+                  <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[var(--dash-border)] bg-[var(--dash-tint)]">
+                    <Building2 className="h-5 w-5 text-[var(--dash-primary)]" />
+                  </span>
+                )}
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(213,201,177,0.42)]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dash-faint)]">
                     {copy.title}
                   </p>
-                  <h2 className="mt-1 text-xl font-semibold text-[var(--padel-ivory)]">{club.name}</h2>
-                  <p className="mt-2 text-sm leading-6 text-[rgba(213,201,177,0.56)]">
+                  <h2 className="mt-1 text-xl font-semibold text-[var(--dash-text)]">{club.name}</h2>
+                  <p className="mt-2 text-sm leading-6 text-[var(--dash-muted)]">
                     {club.description || copy.description}
                   </p>
+                  <Link
+                    href={`/clubs/${club.slug}`}
+                    className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[var(--dash-primary)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
+                  >
+                    {copy.publicPage}
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                  </Link>
                 </div>
               </div>
             </SurfaceCard>
             <SurfaceCard className="p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[rgba(213,201,177,0.42)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dash-faint)]">
                 {copy.membersTitle}
               </p>
-              <p className="mt-3 font-display text-4xl font-semibold text-[var(--padel-ivory)]">
+              <p className="mt-3 font-display text-4xl font-semibold text-[var(--dash-text)]">
                 {club.members.length}
               </p>
-              <p className="mt-2 flex items-center gap-2 text-sm text-[rgba(213,201,177,0.52)]">
-                {isLeader ? <Crown className="h-4 w-4 text-[var(--padel-gold)]" /> : <ShieldCheck className="h-4 w-4" />}
+              <p className="mt-2 flex items-center gap-2 text-sm text-[var(--dash-muted)]">
+                {isLeader ? <Crown className="h-4 w-4 text-[#a86712]" /> : <ShieldCheck className="h-4 w-4" />}
                 {isLeader ? copy.leader : copy.member}
               </p>
             </SurfaceCard>
@@ -344,23 +381,23 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                 return (
                   <SurfaceCard key={member.id} className="p-4">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[rgba(213,201,177,0.14)] bg-[rgba(213,201,177,0.05)]">
+                      <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--dash-border)] bg-[var(--dash-tint)]">
                         {member.membershipRole === 'LEADER' ? (
-                          <Crown className="h-4 w-4 text-[var(--padel-gold)]" />
+                          <Crown className="h-4 w-4 text-[#a86712]" />
                         ) : (
-                          <UserRound className="h-4 w-4 text-[rgba(213,201,177,0.58)]" />
+                          <UserRound className="h-4 w-4 text-[var(--dash-muted)]" />
                         )}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-[var(--padel-ivory)]">
+                        <p className="truncate font-medium text-[var(--dash-text)]">
                           {member.user.fullName}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <Badge variant="gold">
+                          <Badge className="border-[var(--dash-border)] bg-[var(--dash-tint)] text-[var(--dash-muted)]">
                             {member.membershipRole === 'LEADER' ? copy.leader : copy.member}
                           </Badge>
                           {member.roleTitle ? (
-                            <span className="text-xs text-[rgba(213,201,177,0.46)]">{member.roleTitle}</span>
+                            <span className="text-xs text-[var(--dash-faint)]">{member.roleTitle}</span>
                           ) : null}
                         </div>
                       </div>
@@ -373,7 +410,7 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                           className="min-h-11 shrink-0 border-[#d7a3a1] bg-[#fff7f6] text-[#9f302b] shadow-none hover:border-[#c2413b] hover:bg-[#fbe9e8] hover:text-[#812622] focus-visible:ring-[#c2413b]/30"
                         >
                           <UserMinus className="h-4 w-4" />
-                          <span className="hidden sm:inline">{copy.remove}</span>
+                          {copy.remove}
                         </Button>
                       ) : null}
                     </div>
@@ -382,7 +419,7 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
               })}
             </div>
             {!isLeader ? (
-              <p className="mt-3 flex items-center gap-2 text-sm text-[rgba(213,201,177,0.48)]">
+              <p className="mt-3 flex items-center gap-2 text-sm text-[var(--dash-muted)]">
                 <ShieldCheck className="h-4 w-4" />
                 {copy.leaderOnly}
               </p>
@@ -401,14 +438,14 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                   <SurfaceCard key={request.id} className="p-4">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                       <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[rgba(213,201,177,0.14)] bg-[rgba(213,201,177,0.05)]">
-                          <Users className="h-4 w-4 text-[rgba(213,201,177,0.58)]" />
+                        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--dash-border)] bg-[var(--dash-tint)]">
+                          <Users className="h-4 w-4 text-[var(--dash-muted)]" />
                         </span>
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-[var(--padel-ivory)]">
+                          <p className="truncate font-medium text-[var(--dash-text)]">
                             {request.user.fullName}
                           </p>
-                          <p className="mt-1 text-xs text-[rgba(213,201,177,0.44)]">
+                          <p className="mt-1 text-xs text-[var(--dash-faint)]">
                             {formatDate(request.createdAt, { dateStyle: 'medium' })}
                           </p>
                         </div>
@@ -418,7 +455,7 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                           type="button"
                           variant="outline"
                           disabled={Boolean(busyAction)}
-                          onClick={() => reviewRequest(request.id, 'reject')}
+                          onClick={() => setRejectTarget(request)}
                           className={cn(softButtonClassName, 'min-h-11 flex-1 sm:flex-none')}
                         >
                           <X className="h-4 w-4" />
@@ -445,6 +482,41 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
           ) : null}
         </div>
       ) : null}
+
+      <DashboardModal
+        open={Boolean(rejectTarget)}
+        onOpenChange={(open) => {
+          if (!open && !busyAction) setRejectTarget(null);
+        }}
+        title={t('dashboard.player.clubPage.rejectTitle', { name: rejectTarget?.user.fullName ?? '' })}
+        description={copy.rejectDescription}
+        size="md"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={Boolean(busyAction)}
+              onClick={() => setRejectTarget(null)}
+              className={modalSoftButtonClassName}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={Boolean(busyAction)}
+              onClick={() => rejectTarget && void reviewRequest(rejectTarget.id, 'reject')}
+              className="border border-[#ad3632] bg-[#b83b36] text-white shadow-none hover:bg-[#9f302b] focus-visible:ring-[#c2413b]/35"
+            >
+              <X className="h-4 w-4" />
+              {busyAction.startsWith('reject:') ? copy.reviewing : copy.reject}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-6 text-[#6d5f5c]">{copy.rejectDescription}</p>
+      </DashboardModal>
 
       <DashboardModal
         open={Boolean(kickTarget)}

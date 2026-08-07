@@ -4,7 +4,7 @@ import { requireUser } from '../auth/auth.service.js';
 import { requireCapability } from '../../common/capabilities.js';
 import { asyncHandler } from '../../common/http.js';
 import { serializeEvent, serializeRegistration, serializeTeammateOption } from '../../common/serializers.js';
-import { getAdminSummary, getEventOperations, getPlayerDashboard } from './dashboard.service.js';
+import { getAdminSummary, getEventOperations, getPlayerDashboard, getPlayerStats, getPlayerSummary } from './dashboard.service.js';
 import { getPlatformStats } from './dashboard.stats.service.js';
 
 export const dashboardRouter = Router();
@@ -56,13 +56,49 @@ dashboardRouter.get('/api/dashboard', asyncHandler(async (request, response) => 
     return;
   }
 
-  const { events, registrations, clubMembers, clubMembershipRole } = await getPlayerDashboard(user.id);
+  const {
+    events,
+    registrations,
+    clubMembers,
+    clubMembershipRole,
+    inDrawEntryIds,
+    teamCounts,
+    nextMatch,
+    receivedRequests,
+    sentRequests,
+    requestWindows,
+  } = await getPlayerDashboard(user.id);
 
   response.json({
     user,
-    events: events.map((event) => serializeEvent(event)),
-    registrations: registrations.map(serializeRegistration),
+    events: events.map((event) => ({
+      ...serializeEvent(event),
+      teamsIn: teamCounts.get(event.id) ?? 0,
+    })),
+    registrations: registrations.map((registration) => ({
+      ...serializeRegistration(registration),
+      inDraw: inDrawEntryIds.has(registration.id),
+    })),
     clubMembers: clubMembers.map(serializeTeammateOption),
     clubMembershipRole,
+    nextMatch,
+    receivedRequests,
+    sentRequests,
+    requestWindows,
   });
+}));
+
+// The counts the player shell shows on every page — bell and entries badge.
+// Judges and admins have no registrations, so they simply get zero back.
+dashboardRouter.get('/api/me/summary', asyncHandler(async (request, response) => {
+  const user = await requireUser(request);
+  response.json(await getPlayerSummary(user.id));
+}));
+
+// The reader's own competitive record — streaks, best finish, partner records.
+// Read-only and always scoped to the signed-in user; there is nothing here
+// another player could not eventually see on a public profile.
+dashboardRouter.get('/api/me/stats', asyncHandler(async (request, response) => {
+  const user = await requireUser(request);
+  response.json({ stats: await getPlayerStats(user.id) });
 }));

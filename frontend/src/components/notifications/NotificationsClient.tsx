@@ -6,7 +6,6 @@ import type { NotificationDto } from '@/types/tournament';
 import { apiFetch } from '@/lib/api';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { PlayerShell } from '@/components/dashboard/PlayerShell';
-import { JudgeShell } from '@/components/judge/JudgeShell';
 import {
   CommandButton,
   EmptyTournamentState,
@@ -52,14 +51,29 @@ export function NotificationsClient({ user }: { user: PublicUser }) {
 
   async function markRead(notification: NotificationDto) {
     if (notification.readAt) return;
-    await apiFetch(`/api/notifications/${notification.id}/read`, { method: 'PATCH' });
-    void load();
+    const response = await apiFetch(`/api/notifications/${notification.id}/read`, { method: 'PATCH' });
+    if (!response.ok) {
+      setError(copy.markReadError);
+      return;
+    }
+    setError('');
+    setNotifications((current) =>
+      current.map((item) =>
+        item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item,
+      ),
+    );
+    setUnreadCount((current) => (current === null ? current : Math.max(0, current - 1)));
   }
 
   async function markAll() {
     setBusy(true);
-    await apiFetch('/api/notifications/read-all', { method: 'POST' });
+    const response = await apiFetch('/api/notifications/read-all', { method: 'POST' });
     setBusy(false);
+    if (!response.ok) {
+      setError(copy.markReadError);
+      return;
+    }
+    setError('');
     void load();
   }
 
@@ -94,8 +108,21 @@ export function NotificationsClient({ user }: { user: PublicUser }) {
                 </div>
               ) : null}
 
-              {unread.length ? <NotificationQueue notifications={unread} onOpen={markRead} /> : null}
-              {read.length ? <NotificationQueue notifications={read} onOpen={markRead} /> : null}
+              {unread.length ? (
+                <NotificationQueue
+                  notifications={unread}
+                  sectionTitle={copy.unreadSection}
+                  onOpen={markRead}
+                  onMarkRead={markRead}
+                />
+              ) : null}
+              {read.length ? (
+                <NotificationQueue
+                  notifications={read}
+                  sectionTitle={copy.readSection}
+                  onOpen={markRead}
+                />
+              ) : null}
             </>
           ) : (
             <EmptyTournamentState title={copy.empty} detail={copy.emptyDescription} />
@@ -105,7 +132,10 @@ export function NotificationsClient({ user }: { user: PublicUser }) {
     </>
   );
 
-  if (user.role === 'ADMIN') return <AdminShell title={copy.title} description={copy.adminDescription} eyebrow={copy.account}>{content}</AdminShell>;
-  if (user.role === 'JUDGE') return <JudgeShell user={user} title={copy.title} description={copy.judgeDescription}>{content}</JudgeShell>;
-  return <PlayerShell user={user} title={copy.title} description={copy.playerDescription}>{content}</PlayerShell>;
+  if (user.role === 'ADMIN' || user.role === 'ORGANISER') {
+    return <AdminShell title={copy.title} description={copy.adminDescription} eyebrow={copy.account}>{content}</AdminShell>;
+  }
+  // Judges land on the same player shell for notifications — the judge workspace
+  // pages were removed; the inbox is role-agnostic content inside a member shell.
+  return <PlayerShell user={user} title={copy.title} description={user.role === 'JUDGE' ? copy.judgeDescription : copy.playerDescription}>{content}</PlayerShell>;
 }

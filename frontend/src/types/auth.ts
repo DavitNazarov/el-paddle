@@ -5,6 +5,7 @@ export type UserClub = {
   id: string;
   name: string;
   slug: string;
+  logoUrl?: string | null;
 };
 
 export type PublicUser = {
@@ -47,6 +48,13 @@ export type ClubApplication = {
   mateSurname: string;
   matePhone: string;
   submittedAt: string | null;
+  /**
+   * Approving this request will create an administrator, because the address is
+   * listed in the server's `ADMIN_EMAILS`. Present only on the admin review
+   * endpoints — the applicant's own view never carries it, since that would
+   * disclose who is on the list.
+   */
+  grantsAdmin?: boolean;
 };
 
 export type ClubApplicationMessage = {

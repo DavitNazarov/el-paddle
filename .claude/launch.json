@@ -6,6 +6,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "frontend"],
       "port": 3000
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "backend"],
+      "port": 4000
+    },
+    {
+      "name": "frontend-prod",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start", "--workspace", "frontend"],
+      "port": 3000
     }
   ]
 }

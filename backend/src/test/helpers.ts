@@ -10,15 +10,20 @@ import {
   type Event,
   type User,
 } from '../generated/prisma/client.js';
+import { config } from '../config/env.js';
 import { prisma } from '../database/prisma.js';
 import { createSessionToken, SESSION_COOKIE } from '../modules/auth/auth.service.js';
 import { CSRF_COOKIE } from '../common/csrf.js';
+import { resetRateLimits } from '../common/rateLimit.js';
 
 /**
  * Truncate every application table between tests. Guarded so it can only ever
  * run against a database whose name contains "test".
  */
 export async function resetDb() {
+  // Rate-limit windows outlive a truncate, so a test that spends an allowance
+  // would otherwise 429 the next one. Cleared with the database, not separately.
+  resetRateLimits();
   const url = process.env.DATABASE_URL ?? '';
   if (!/test/i.test(url)) {
     throw new Error(`Refusing to reset a database whose URL does not look like a test DB: ${url}`);
@@ -111,8 +116,17 @@ export async function registerTeam(
 
 // --- HTTP auth helpers (real session JWT + CSRF double-submit) ---
 
-export function sessionCookie(user: Pick<User, 'id' | 'sessionVersion'>) {
-  return `${SESSION_COOKIE}=${createSessionToken(user)}`;
+/**
+ * A cookie for a real signed-in device. The session row has to exist: the read
+ * path checks it, so a token naming no session is refused exactly as a
+ * logged-out one is.
+ */
+export async function sessionCookie(user: Pick<User, 'id' | 'sessionVersion'>) {
+  const session = await prisma.session.create({
+    data: { userId: user.id, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+    select: { id: true },
+  });
+  return `${SESSION_COOKIE}=${createSessionToken(user, session.id)}`;
 }
 
 /** Fetch a fresh CSRF token + cookie pair from the running app. */
@@ -124,10 +138,17 @@ export async function getCsrf(app: Express) {
 }
 
 /** GET with an authenticated session cookie. */
-export function authedGet(app: Express, path: string, user?: Pick<User, 'id' | 'sessionVersion'>) {
+export async function authedGet(app: Express, path: string, user?: Pick<User, 'id' | 'sessionVersion'>) {
   const req = request(app).get(path);
-  return user ? req.set('Cookie', sessionCookie(user)) : req;
+  return user ? req.set('Cookie', await sessionCookie(user)) : req;
 }
+
+/**
+ * The site origin the CSRF guard accepts. A browser attaches `Origin` to every
+ * unsafe request, so a test that omits it is not modelling a real client — and
+ * since the guard now requires it, omitting it only ever produces a 403.
+ */
+export const allowedOrigin = () => config.frontendUrls[0];
 
 /** Unsafe method with a valid CSRF double-submit and optional session cookie. */
 export async function authedSend(
@@ -138,6 +159,10 @@ export async function authedSend(
   body: Record<string, unknown> = {},
 ) {
   const csrf = await getCsrf(app);
-  const cookies = [csrf.cookie, ...(user ? [sessionCookie(user)] : [])].join('; ');
-  return request(app)[method](path).set('Cookie', cookies).set('x-csrf-token', csrf.token).send(body);
+  const cookies = [csrf.cookie, ...(user ? [await sessionCookie(user)] : [])].join('; ');
+  return request(app)[method](path)
+    .set('Cookie', cookies)
+    .set('Origin', allowedOrigin())
+    .set('x-csrf-token', csrf.token)
+    .send(body);
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { CalendarClock, Check, MapPin, X } from 'lucide-react';
 import type { OpponentRequestDto } from '@/types/tournament';
 import {
@@ -83,6 +84,11 @@ export function RequestPanel({
                     </StatusLabel>
                   </div>
                   {reason ? <p className={styles.requestReason}>{reason}</p> : null}
+                  {/* What the status means for the reader, in one sentence —
+                      "accepted by opponent" alone does not say who acts next. */}
+                  {copy.requestNext[request.status] ? (
+                    <p className={styles.requestReason}>{copy.requestNext[request.status]}</p>
+                  ) : null}
                 </div>
                 <div className={styles.requestActions}>
                   {side === 'received' && canRespond(request) ? (
@@ -120,18 +126,18 @@ export function RequestPanel({
  * The reader's own matches, running one first. Their own pair is marked so they
  * do not have to work out which side they are.
  */
-export function PlayerMatchPanel({ matches, emptyTitle, emptyDetail }: { matches: PlayerMatch[]; emptyTitle: string; emptyDetail: string }) {
+export function PlayerMatchPanel({ matches, emptyTitle, emptyDetail, actions }: { matches: PlayerMatch[]; emptyTitle: string; emptyDetail: string; actions?: React.ReactNode }) {
   const { locale, formatDate } = useI18n();
   const copy = tournamentCopy[locale];
   const player = copy.playerEvent;
 
   return (
     <TournamentPanel>
-      <TournamentSectionHeader title={player.yourMatches} description={player.yourMatchesDescription} />
+      <TournamentSectionHeader title={player.yourMatches} description={player.yourMatchesDescription} actions={actions} />
       {matches.length ? (
         <ul className={styles.matchList}>
           {matches.map((entry) => {
-            const { match, side } = entry;
+            const { match, side, scheduleStatus } = entry;
             const won = didWin(entry);
             const mine = side === 'A' ? match.participantA : match.participantB;
             const theirs = side === 'A' ? match.participantB : match.participantA;
@@ -140,47 +146,55 @@ export function PlayerMatchPanel({ matches, emptyTitle, emptyDetail }: { matches
 
             return (
               <li key={match.id} className={styles.matchRow} data-live={match.status === 'IN_PROGRESS'}>
-                <div className={styles.matchMain}>
-                  <p className={styles.matchRound}>
-                    {tournamentRound(locale, match.round)} · {copy.common.match} {match.matchNumber}
-                  </p>
-                  <p className={styles.matchPair}>
-                    <span className={styles.you}>{mine ? pairText(mine) : copy.common.tbd}</span>
-                    {' '}
-                    {copy.common.versus}
-                    {' '}
-                    {theirs ? pairText(theirs) : copy.common.tbd}
-                  </p>
-                  <p className={styles.matchWhen}>
-                    <span>
-                      <CalendarClock aria-hidden="true" />
-                      {entry.plannedStartAt
-                        ? formatDate(entry.plannedStartAt, { dateStyle: 'medium', timeStyle: 'short' })
-                        : player.timeNotSet}
-                    </span>
-                    {entry.courtName ? (
-                      <span>
-                        <MapPin aria-hidden="true" />
-                        {entry.courtName}
-                      </span>
-                    ) : null}
-                  </p>
-                </div>
-                <div className={styles.matchAside}>
-                  {hasScore(match) ? (
-                    <p className={styles.score}>
-                      {myScore}<span aria-hidden="true">–</span>{theirScore}
+                <Link
+                  href={`/matches/${match.id}`}
+                  className={styles.matchLink}
+                >
+                  <div className={styles.matchMain}>
+                    <p className={styles.matchRound}>
+                      {tournamentRound(locale, match.round)} · {copy.common.match} {match.matchNumber}
                     </p>
-                  ) : (
-                    <StatusLabel>{tournamentStatus(locale, match.status)}</StatusLabel>
-                  )}
-                  {won === null ? null : (
-                    <span className={styles.outcome} data-won={won}>
-                      {won ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
-                      {won ? player.youWon : player.youLost}
-                    </span>
-                  )}
-                </div>
+                    <p className={styles.matchPair}>
+                      <span className={styles.you}>{mine ? pairText(mine) : copy.common.tbd}</span>
+                      {' '}
+                      {copy.common.versus}
+                      {' '}
+                      {theirs ? pairText(theirs) : copy.common.tbd}
+                    </p>
+                    <p className={styles.matchWhen}>
+                      <span>
+                        <CalendarClock aria-hidden="true" />
+                        {entry.plannedStartAt
+                          ? formatDate(entry.plannedStartAt, { dateStyle: 'medium', timeStyle: 'short' })
+                          : player.timeNotSet}
+                      </span>
+                      {entry.courtName ? (
+                        <span>
+                          <MapPin aria-hidden="true" />
+                          {entry.courtName}
+                        </span>
+                      ) : null}
+                      {scheduleStatus ? (
+                        <StatusLabel>{tournamentStatus(locale, scheduleStatus)}</StatusLabel>
+                      ) : null}
+                    </p>
+                  </div>
+                  <div className={styles.matchAside}>
+                    {hasScore(match) ? (
+                      <p className={styles.score}>
+                        {myScore}<span aria-hidden="true">–</span>{theirScore}
+                      </p>
+                    ) : (
+                      <StatusLabel>{tournamentStatus(locale, match.status)}</StatusLabel>
+                    )}
+                    {won === null ? null : (
+                      <span className={styles.outcome} data-won={won}>
+                        {won ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
+                        {won ? player.youWon : player.youLost}
+                      </span>
+                    )}
+                  </div>
+                </Link>
               </li>
             );
           })}

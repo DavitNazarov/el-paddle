@@ -1496,11 +1496,11 @@ export function PadelHomeStyles() {
           position: relative;
           z-index: 2;
           display: grid;
-          grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.16fr) minmax(0, 0.86fr);
+          grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.16fr);
           grid-template-rows: 1fr;
           align-items: end;
           gap: 0.75rem;
-          max-width: 65rem;
+          max-width: 48rem;
           margin: 0 auto;
           padding-top: 3.75rem;
         }
@@ -1516,11 +1516,6 @@ export function PadelHomeStyles() {
 
         .prize-podium__item--2 {
           grid-column: 1;
-          grid-row: 1;
-        }
-
-        .prize-podium__item--3 {
-          grid-column: 3;
           grid-row: 1;
         }
 
@@ -2501,10 +2496,6 @@ export function PadelHomeStyles() {
 
           .prize-podium__item--2 {
             order: 2;
-          }
-
-          .prize-podium__item--3 {
-            order: 3;
           }
 
           .prize-podium__halo {

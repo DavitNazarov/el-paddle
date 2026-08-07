@@ -10,7 +10,7 @@ import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { useI18n } from '@/components/shared/I18nProvider';
 
 type AuthShellProps = {
-  variant: 'register' | 'login' | 'invite' | 'completeClub';
+  variant: 'register' | 'login' | 'invite' | 'completeClub' | 'resetPassword';
   children: ReactNode;
 };
 

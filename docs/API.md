@@ -6,7 +6,7 @@ This document lists the HTTP API surface by audience. The route source under `ba
 
 - API base URL: `http://localhost:4000` in local development.
 - JSON requests use `Content-Type: application/json`. The body parser rejects payloads above 100 KB.
-- Authentication uses an HTTP-only session cookie (`elpadel_session`) containing a signed JWT. The token embeds the user's `sessionVersion`; logout, password change, disqualification, and judge deactivation bump the version and invalidate outstanding sessions.
+- Authentication uses an HTTP-only session cookie (`elpadel_session`) containing a signed JWT. The token names a `Session` row, so signing out revokes that one device. It also embeds the user's `sessionVersion`; a password change, a password reset, disqualification, judge deactivation, and an explicit "log out of all devices" bump the version and invalidate every outstanding token at once. The session row is read as part of the existing user lookup, so per-device revocation costs no extra query.
 - When the site and API use sibling hosts (for example `elpadell.com` and `api.elpadell.com`), the cookie `Domain` is the shared parent so Next.js SSR and browser requests share the session.
 - Unsafe requests (POST/PATCH/DELETE) require a CSRF cookie plus a matching `x-csrf-token` header and an allowed `Origin`.
 - Tournament commands commonly require a client-generated `commandId` (idempotency) and `expectedVersion` (optimistic concurrency).
@@ -40,17 +40,18 @@ The frontend `apiFetch` helper handles this automatically.
 | --- | --- | --- |
 | GET | `/health` | Process health |
 | GET | `/api/auth/csrf` | Issue CSRF cookie and token |
-| POST | `/api/auth/register` | Legacy direct registration; superseded by `/api/applications` for new signups |
-| POST | `/api/auth/verify` | Verify the emailed code and create a session |
 | POST | `/api/auth/login` | Create a session |
-| POST | `/api/auth/logout` | Clear the session and revoke outstanding tokens |
+| POST | `/api/auth/logout` | Sign out this device only; revokes its `Session` row |
+| POST | `/api/auth/logout-all` | Sign out every device, including this one; bumps `sessionVersion` |
+| POST | `/api/auth/password-reset` | Request a reset link; the response never reveals whether the address has an account |
+| POST | `/api/auth/password-reset/complete` | Redeem a single-use link and set a new password; signs every device out |
 | GET | `/api/auth/me` | Current user (or `null`) |
 | POST | `/api/auth/invite/complete` | Complete a teammate/club-mate/admin-created invitation (token, profile, password, club when required) |
 | GET | `/api/auth/google` | Start Google OAuth (requires prior legal consent cookie) |
 | GET | `/api/auth/google/callback` | Complete Google OAuth |
 | POST | `/api/admin/bootstrap` | Create the first production admin; requires the `x-bootstrap-token` header matching `FIRST_ADMIN_BOOTSTRAP_TOKEN` |
 
-Registration and invite completion record versioned acceptance of the Terms of Use, Privacy Policy, and age-eligibility confirmation. `ADMIN_EMAILS` elevation is applied only after the email address is verified.
+There is no direct registration endpoint. Every new signup goes through the reviewed club-application flow below, and the only other ways an account comes into existence are an invitation and the first-admin bootstrap. Application and invite completion record versioned acceptance of the Terms of Use, Privacy Policy, and age-eligibility confirmation. `ADMIN_EMAILS` elevation is applied only after the email address is verified.
 
 ## Club applications
 
@@ -62,6 +63,7 @@ Applicant endpoints need no session. After the emailed code is verified, a short
 | --- | --- | --- |
 | POST | `/api/applications` | Start a request (name, surname, phone, email, password, legal + eligibility consent); emails a verification code |
 | POST | `/api/applications/verify` | Verify the emailed code and issue the application cookie |
+| POST | `/api/applications/resend-code` | Re-send the verification code (one send per address every 30 seconds) |
 | GET | `/api/applications/current` | Status of the request this browser is filling in (or `null`) |
 | PATCH | `/api/applications/current` | Save the club details and the optional group mate |
 | POST | `/api/applications/current/submit` | Hand the finished request to the admins |
@@ -122,14 +124,16 @@ No session required. Public routes only ever return explicitly published data.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/dashboard` | Player dashboard: visible events, every registration owned by the player's club, club members, and membership role |
+| GET | `/api/dashboard` | Player dashboard: visible events (with `teamsIn` active-team counts), club registrations (each with `inDraw` when the entry appears in a published draw), club members, membership role, `nextMatch` (live or next scheduled), pending received opponent requests, `sentRequests` (the reader's own still-live requests), and `requestWindows` (whether their entries' categories accept requests right now) |
+| GET | `/api/me/summary` | Shell badges: unread notification count and entries in `NEEDS_CHANGES` (waiting on the player) |
+| GET | `/api/me/stats` | Personal record: streak, best finish, partner records, completed-match list (byes excluded) |
 | GET | `/api/events` | Published upcoming events (`?scope=admin` returns all events for admins) |
 | GET | `/api/events/:id` | Event detail visible to the current user |
-| POST | `/api/registrations` | Enter one club team (owner + teammate) in an event category; requires participation, refund, and risk consent; `409` when the club already has an entry |
+| POST | `/api/registrations` | Enter one club team (owner + teammate) in an event category; requires participation, refund, and risk consent; the teammate must already be an active account in the same club, so `403` when they are unknown, still invited, or unverified; `409` when the club already has an entry |
 | PATCH | `/api/registrations/:id/lineup` | Replace one registered player with another eligible club member; club leader only; resets the entry to `PENDING` |
-| GET | `/api/events/:eventId/brackets` | Player-visible bracket state |
+| GET | `/api/events/:eventId/brackets` | Published brackets only (same publication gate as the public route) |
 | GET | `/api/events/:eventId/opponent-request-state` | Own requests for the event |
-| GET | `/api/events/:eventId/eligible-opponents?requestingEntryId=…` | Eligible target entries in the same category |
+| GET | `/api/events/:eventId/eligible-opponents?requestingEntryId=…` | Eligible target entries in the same category; `409` naming the blocking player when the requesting entry is itself ineligible |
 | POST | `/api/events/:eventId/opponent-requests` | Create a request |
 | PATCH | `/api/events/:eventId/opponent-requests/:requestId` | Retarget or edit a pending request |
 | DELETE | `/api/events/:eventId/opponent-requests/:requestId` | Withdraw a pending or accepted request |
@@ -141,7 +145,12 @@ No session required. Public routes only ever return explicitly published data.
 | PATCH | `/api/notifications/:id/read` | Mark one notification read |
 | POST | `/api/notifications/read-all` | Mark all notifications read |
 
-## Judge endpoints
+## Scoring endpoints
+
+> These paths keep the `/api/judge` prefix. The `JUDGE` role still exists and these
+> endpoints still serve it, but the judge role has no frontend surface: admins and
+> organisers drive these same endpoints from the match control console
+> (`/admin/events/:eventId/control`).
 
 Judges see only courts with an active, unrevoked assignment covering the current time.
 
@@ -153,27 +162,45 @@ Admins and the event's organiser reach the same endpoints and are authorized per
 | GET | `/api/judge/events/:eventId/courts/:courtId/queue` | Ordered court queue |
 | GET | `/api/judge/matches/:matchId` | Assigned match detail |
 | POST | `/api/judge/matches/:matchId/start` | Start the next ready match in the queue |
-| POST | `/api/judge/matches/:matchId/slots` | Record the winner of the next slot |
-| POST | `/api/judge/matches/:matchId/slots/undo` | Withdraw the last slot while the match is in progress |
+| POST | `/api/judge/matches/:matchId/sets` | Record the winner of the next set |
+| POST | `/api/judge/matches/:matchId/result` | Record the whole result as a set tally, completing the match |
+| POST | `/api/judge/matches/:matchId/sets/undo` | Withdraw the last set while the match is in progress |
 | POST | `/api/judge/matches/:matchId/score` | Legacy point scoring, only for historical `POINTS` matches (0–6; reaching 6 completes the match) |
 | POST | `/api/judge/matches/:matchId/complete` | Record a walkover, withdrawal, or disqualification with a reason |
 
-Slot command example. `slotNumber` must be the next undecided slot, so a stale retry fails with
-409 instead of silently recording the following slot:
+Set command example. `setNumber` must be the next undecided set, so a stale retry fails with
+409 instead of silently recording the following set:
 
 ```json
 {
-  "slotNumber": 2,
+  "setNumber": 2,
   "winnerSide": "A",
   "expectedVersion": 4,
   "commandId": "c3eb31ed-91d5-4e44-8d0a-1ec8c61e5fd6"
 }
 ```
 
-A match is decided by a race to `slotCount` slot wins: 1 → first to 1 (one slot), 2 → first to 2
-(up to three slots), 3 → first to 3 (up to five slots). Reaching the required wins completes the
-match and advances the winner. `MatchDto` carries `scoringMode`, `slotCount`, `slotsToWin`,
-`maxSlots`, and the decided `slots`; for slot matches `scoreA` / `scoreB` are the slot tallies,
+Result command example. This is how the match control console scores: two numbers, one command,
+one completed match.
+
+```json
+{
+  "setsA": 1,
+  "setsB": 2,
+  "expectedVersion": 4,
+  "commandId": "9f1c0b6e-2a55-4b0c-9c4a-0f21c9f3f2ab"
+}
+```
+
+The tally must be a finished result for the match's frozen `setCount` — the winner exactly at
+`setsToWin`, the loser below it — and may not fall below sets already recorded, which is an undo
+rather than a result. The `MatchSet` rows the tally is made of are derived: the loser's sets come
+first, so the decider belongs to the winner. One command writes one `SetEvent` row.
+
+A match is decided by a race to `setCount` set wins: 1 → first to 1 (one set), 2 → first to 2
+(up to three sets), 3 → first to 3 (up to five sets). Reaching the required wins completes the
+match and advances the winner. `MatchDto` carries `scoringMode`, `setCount`, `setsToWin`,
+`maxSets`, and the decided `sets`; for set matches `scoreA` / `scoreB` are the set tallies,
 not points. Historical matches keep `scoringMode: "POINTS"` and their 0–6 scores.
 
 ## Administrator endpoints
@@ -232,7 +259,7 @@ Event create/update payloads include the participation fee in GEL, a Georgian IB
 | POST | `/api/admin/events/:eventId/brackets` | `BRACKET_MANAGE` (one draft/locked bracket per event category) |
 | POST | `/api/admin/events/:eventId/brackets/:bracketId/generate` | `BRACKET_MANAGE` (accepts approved pairing `requestIds`) |
 | POST | `/api/admin/events/:eventId/brackets/:bracketId/lock` | `BRACKET_MANAGE` (snapshots participants, applies byes) |
-| PUT | `/api/admin/events/:eventId/brackets/:bracketId/slot-defaults` | `BRACKET_MANAGE` (full per-round map of slot counts, 1–3) |
+| PUT | `/api/admin/events/:eventId/brackets/:bracketId/set-defaults` | `BRACKET_MANAGE` (full per-round map of set counts, 1–3) |
 | POST | `/api/admin/events/:eventId/brackets/:bracketId/placements` | `BRACKET_MANAGE` (move or swap a first-round entry; draft brackets only) |
 | PATCH | `/api/admin/events/:eventId/brackets/:bracketId/publication` | `BRACKET_PUBLISH` |
 | GET | `/api/admin/events/:eventId/brackets` | `BRACKET_MANAGE` |
@@ -252,7 +279,7 @@ Event create/update payloads include the participation fee in GEL, a Georgian IB
 | POST | `/api/admin/events/:eventId/schedule/reorder` | `SCHEDULE_MANAGE` (full queue list per court as `items: [{id, version}]`, plus `commandId`) |
 | PATCH | `/api/admin/events/:eventId/schedule/publication` | `SCHEDULE_PUBLISH` |
 
-Every row above is **event-scoped**. Assigning a judge to a court or a schedule item requires that judge to be in the event's pool; an admin holding global `JUDGE_MANAGE` has the link created automatically, while an organiser is confined to the pool they built. `judgeId` stays optional everywhere — a court or schedule item may be left without a judge.
+Every row above is **event-scoped**. Assigning a judge to a court or a schedule item requires that judge to be in the event's pool; an admin holding global `JUDGE_MANAGE` has the link created automatically, while an organiser is confined to the pool they built. `judgeId` stays optional everywhere — a court or schedule item may be left without a judge. Nothing in the frontend assigns a judge any more, so in practice these arrive unset; the endpoints remain for API clients and are still enforced.
 
 ### Event judges
 
@@ -268,8 +295,8 @@ Every row above is **event-scoped**. Assigning a judge to a court or a schedule 
 | --- | --- | --- |
 | POST | `/api/admin/matches/:matchId/complete` | `MATCH_RESULT_ADMIN` (walkover/withdrawal/disqualification/admin decision with reason) |
 | POST | `/api/admin/matches/:matchId/corrections` | `MATCH_RESULT_CORRECT` (blocked once a downstream match has started) |
-| POST | `/api/admin/matches/:matchId/slots/undo` | `MATCH_RESULT_CORRECT` (reason required; reopens a completed slot match) |
-| PATCH | `/api/admin/matches/:matchId/slot-config` | `BRACKET_MANAGE` (per-match slot override; locked once the match starts) |
+| POST | `/api/admin/matches/:matchId/sets/undo` | `MATCH_RESULT_CORRECT` (reason required; reopens a completed set match) |
+| PATCH | `/api/admin/matches/:matchId/set-config` | `BRACKET_MANAGE` (per-match set override; locked once the match starts) |
 
 ### Users, judges, clubs, categories
 
@@ -285,6 +312,8 @@ Every row above is **event-scoped**. Assigning a judge to a court or a schedule 
 | POST | `/api/admin/judges/:id/deactivate` | `JUDGE_MANAGE` (blocked while the judge has an active match) |
 | GET | `/api/admin/clubs` | `CLUB_MANAGE` |
 | POST | `/api/admin/clubs` | `CLUB_MANAGE` |
+| PATCH | `/api/admin/clubs/:id` | `CLUB_MANAGE` (name, slug, description, logo; audited) |
+| DELETE | `/api/admin/clubs/:id` | `CLUB_MANAGE` (refused while a team is entered in an unfinished event) |
 | POST | `/api/admin/clubs/:id/members` | `CLUB_MANAGE` (first member becomes leader) |
 | POST | `/api/categories` | `CATEGORY_MANAGE` |
 | PATCH | `/api/categories/:id` | `CATEGORY_MANAGE` |
@@ -309,4 +338,13 @@ Client events:
 
 Authorization mirrors the HTTP publication rules: public viewers join event rooms only for published events, and match rooms only when the match is publicly listed and live scoring is enabled. Private access requires an administrator, a registered participant, or an actively assigned judge. Sockets are rate limited and capped at 40 room subscriptions.
 
-Outbox-driven topics include `event.status.updated`, `event.publication.updated`, `registration.status.updated`, `registration.lineup.replaced`, `registration-roster.publication.updated`, `opponent-request.*`, `bracket.generated` / `bracket.locked` / `bracket.published`, `schedule.updated` / `schedule.published`, `court.queue.updated`, `court.assignment.updated`, `match.started`, `match.score.updated`, `match.slot.decided`, `match.slot.undone`, `match.reopened`, `match.config.updated`, `bracket.updated`, `match.completed`, and `match.corrected`. Clients should treat any event as an invalidation signal and refetch the authoritative API record.
+`subscribe:event` picks the room from the subscriber's authorization; the caller cannot ask for one:
+
+| Room | Who joins | Payload |
+| --- | --- | --- |
+| `event-staff:<id>` | Admin, an organiser of this event, a judge holding a live court assignment on it | Full — the only place unpublished scores, winners and registration decisions are broadcast |
+| `event:<id>` | Everyone else who may listen: anyone on a published event, a registered participant on an unpublished one | Stripped to `{ eventId }` |
+
+Nobody joins both, so a topic is never delivered twice to one socket. The public room is deliberately coarse: an anonymous socket clears it on `isPublished` alone, which is a far weaker gate than the per-match publication and redaction rules the REST reads apply, so the payload there carries no data of its own. Per-match detail continues to flow on `match:<id>`, which is gated on `publicLiveScoringEnabled` plus bracket or schedule publication.
+
+Outbox-driven topics include `event.status.updated`, `event.publication.updated`, `registration.status.updated`, `registration.lineup.replaced`, `registration-roster.publication.updated`, `opponent-request.*`, `bracket.generated` / `bracket.locked` / `bracket.published`, `schedule.updated` / `schedule.published`, `court.queue.updated`, `court.assignment.updated`, `match.started`, `match.score.updated`, `match.set.decided`, `match.set.undone`, `match.reopened`, `match.config.updated`, `bracket.updated`, `match.completed`, and `match.corrected`. Clients should treat any event as an invalidation signal and refetch the authoritative API record.

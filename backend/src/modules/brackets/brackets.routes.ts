@@ -4,7 +4,7 @@ import { requireEventCapability } from '../../common/capabilities.js';
 import { requireCommandId } from '../../common/commands.js';
 import { asyncHandler, cleanString, jsonError, requireParamId, setPublicCache } from '../../common/http.js';
 import { serializeBracket } from '../../common/serializers.js';
-import { createBracket, generateBracket, listBrackets, lockBracket, placeBracketEntry, publishBracket, setBracketSlotDefaults } from './brackets.service.js';
+import { createBracket, generateBracket, listBrackets, lockBracket, placeBracketEntry, publishBracket, setBracketSetDefaults } from './brackets.service.js';
 
 export const bracketsRouter = Router();
 
@@ -48,13 +48,13 @@ bracketsRouter.post('/api/admin/events/:eventId/brackets/:bracketId/placements',
   response.json({ bracket: serializeBracket(result.bracket), revertedRequestIds: result.revertedRequestIds });
 }));
 
-bracketsRouter.put('/api/admin/events/:eventId/brackets/:bracketId/slot-defaults', asyncHandler(async (request, response) => {
+bracketsRouter.put('/api/admin/events/:eventId/brackets/:bracketId/set-defaults', asyncHandler(async (request, response) => {
   const eventId = requireParamId(request.params.eventId);
   const admin = await requireEventCapability(request, eventId, Capability.BRACKET_MANAGE);
   const body = (request.body.defaults ?? {}) as Record<string, unknown>;
   const defaults: Partial<Record<MatchRound, number>> = {};
   for (const round of Object.values(MatchRound)) if (body[round] !== undefined && body[round] !== null) defaults[round] = Number(body[round]);
-  const bracket = await setBracketSlotDefaults({ eventId, bracketId: requireParamId(request.params.bracketId), actorId: admin.id, defaults, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) });
+  const bracket = await setBracketSetDefaults({ eventId, bracketId: requireParamId(request.params.bracketId), actorId: admin.id, defaults, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) });
   response.json({ bracket: serializeBracket(bracket) });
 }));
 

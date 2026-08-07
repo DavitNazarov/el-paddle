@@ -4,9 +4,11 @@ import {
   RegistrationStatus,
   UserStatus,
   type Prisma,
+  type User,
 } from '../../generated/prisma/client.js';
 import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
+import { isDisqualified } from '../../common/disqualification.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { entryUserSelect } from '../../common/includes.js';
@@ -109,9 +111,12 @@ function canonicalPair(a: string, b: string) {
   return [a, b].sort().join(':');
 }
 
+function playerName(user: Pick<User, 'name' | 'surname' | 'email'>) {
+  return [user.name, user.surname].filter(Boolean).join(' ') || user.email;
+}
+
 function entryLabel(entry: OpponentRequestGraph['requestingEntry']) {
-  const name = (user: typeof entry.owner) => [user.name, user.surname].filter(Boolean).join(' ') || user.email;
-  return `${name(entry.owner)} / ${name(entry.teammate)}`;
+  return `${playerName(entry.owner)} / ${playerName(entry.teammate)}`;
 }
 
 /**
@@ -155,15 +160,80 @@ async function requireOpenWindow(tx: Prisma.TransactionClient, eventId: string, 
   return link;
 }
 
-async function assertEligibleEntry(tx: Prisma.TransactionClient, entryId: string, eventId: string, categoryId: string) {
+/**
+ * The read-only twin of `requireOpenWindow`: the same conditions asked rather
+ * than enforced, without the per-cause message a write path owes its caller.
+ * The player dashboard reads it to decide whether to offer the "ask a team to
+ * play" action at all — offering a button the write path then refuses with a
+ * 409 is how a competitor reached a filled-in form and an error.
+ */
+export function opponentRequestWindowOpen(
+  link: { opponentRequestsOpenedAt: Date | null; opponentRequestsClosedAt: Date | null; opponentRequestDeadline: Date | null },
+  bracketLocked: boolean,
+  now = new Date(),
+) {
+  if (!link.opponentRequestsOpenedAt || link.opponentRequestsClosedAt) return false;
+  if (link.opponentRequestDeadline && link.opponentRequestDeadline < now) return false;
+  return !bracketLocked;
+}
+
+/**
+ * What makes a registration usable as either side of an opponent request: it is
+ * approved in this category and both of its players can actually take the court.
+ * The picker and the write paths share this one predicate — when they drifted,
+ * an entry whose teammate had not yet accepted their invitation was offered as
+ * an opponent and then refused on submit.
+ */
+function eligibleEntryWhere(eventId: string, categoryId: string): Prisma.EventRegistrationWhereInput {
+  const canPlay: Prisma.UserWhereInput = {
+    status: UserStatus.ACTIVE,
+    OR: [{ disqualifiedUntil: null }, { disqualifiedUntil: { lte: new Date() } }],
+  };
+  return { eventId, categoryId, status: RegistrationStatus.APPROVED, owner: canPlay, teammate: canPlay };
+}
+
+/**
+ * Which player is holding an entry back, phrased for their own team. Cosmetic
+ * only: `eligibleEntryWhere` is what decides, so a gap here degrades to the bare
+ * sentence rather than letting an ineligible entry through.
+ */
+function describeBlocker(entry: { owner: User; teammate: User }) {
+  for (const player of [entry.owner, entry.teammate]) {
+    if (player.status === UserStatus.INVITED) return `${playerName(player)} has not accepted their invitation yet.`;
+    if (player.status !== UserStatus.ACTIVE) return `${playerName(player)} does not have an active account.`;
+    if (isDisqualified(player)) return `${playerName(player)} is disqualified until ${player.disqualifiedUntil!.toISOString().slice(0, 10)}.`;
+  }
+  return null;
+}
+
+async function assertEligibleEntry(
+  tx: Prisma.TransactionClient,
+  entryId: string,
+  eventId: string,
+  categoryId: string,
+  side: 'own' | 'target' = 'target',
+) {
   const entry = await tx.eventRegistration.findFirst({
-    where: { id: entryId, eventId, categoryId, status: RegistrationStatus.APPROVED },
+    where: { id: entryId, ...eligibleEntryWhere(eventId, categoryId) },
     include: { owner: true, teammate: true },
   });
-  if (!entry || entry.owner.status !== UserStatus.ACTIVE || entry.teammate.status !== UserStatus.ACTIVE) jsonError('Entry is not eligible.', 409);
-  const now = Date.now();
-  if ((entry.owner.disqualifiedUntil?.getTime() ?? 0) > now || (entry.teammate.disqualifiedUntil?.getTime() ?? 0) > now) jsonError('Entry is not eligible.', 409);
-  return entry;
+  if (entry) return entry;
+  // Another team's account states are not this player's business, and the picker
+  // already filters those out — so only the race is reported, without detail.
+  if (side === 'target') jsonError('That entry is no longer eligible for opponent requests.', 409);
+  // Its own team, though, has to be told what to fix. A bare "not eligible" left
+  // a captain whose teammate never accepted the invite with nothing to act on.
+  const blocked = await tx.eventRegistration.findFirst({
+    where: { id: entryId, eventId, categoryId },
+    include: { owner: true, teammate: true },
+  });
+  const blocker = blocked && describeBlocker(blocked);
+  jsonError(
+    blocker
+      ? `Your entry cannot request an opponent. ${blocker}`
+      : 'Your entry is no longer eligible for opponent requests.',
+    409,
+  );
 }
 
 async function notifyEntry(
@@ -221,9 +291,14 @@ export async function setOpponentRequestWindow(input: { eventId: string; categor
 export async function listEligibleOpponents(userId: string, eventId: string, requestingEntryId: string) {
   const own = await requireEntryContact(userId, requestingEntryId, eventId);
   if (own.status !== RegistrationStatus.APPROVED) jsonError('Entry is not approved.', 409);
-  await requireOpenWindow(prisma as unknown as Prisma.TransactionClient, eventId, own.categoryId);
+  const tx = prisma as unknown as Prisma.TransactionClient;
+  await requireOpenWindow(tx, eventId, own.categoryId);
+  // The requesting side is gated here, not only on submit. Listing opponents for
+  // an entry that can never send one is how a captain reached a filled-in form
+  // and a 409 instead of being told to chase their teammate.
+  await assertEligibleEntry(tx, own.id, eventId, own.categoryId, 'own');
   const entries = await prisma.eventRegistration.findMany({
-    where: { eventId, categoryId: own.categoryId, status: RegistrationStatus.APPROVED, id: { not: own.id } },
+    where: { ...eligibleEntryWhere(eventId, own.categoryId), id: { not: own.id } },
     include: { owner: true, teammate: true },
     orderBy: { createdAt: 'asc' },
   });
@@ -238,8 +313,8 @@ export async function createOpponentRequest(input: { userId: string; eventId: st
     const replay = await findCommandReceipt(tx, input.userId, 'opponent.create', input.commandId, hash);
     if (replay) return tx.opponentRequest.findFirstOrThrow({ where: { requestingEntryId: input.requestingEntryId, canonicalPairKey: canonicalPair(input.requestingEntryId, input.targetEntryId) }, include: opponentRequestInclude });
     const link = await requireOpenWindow(tx, input.eventId, own.categoryId);
-    const requester = await assertEligibleEntry(tx, own.id, input.eventId, own.categoryId);
-    const target = await assertEligibleEntry(tx, input.targetEntryId, input.eventId, own.categoryId);
+    const requester = await assertEligibleEntry(tx, own.id, input.eventId, own.categoryId, 'own');
+    const target = await assertEligibleEntry(tx, input.targetEntryId, input.eventId, own.categoryId, 'target');
     const pairKey = canonicalPair(requester.id, target.id);
     const existingPair = await tx.opponentRequest.findFirst({ where: { eventId: input.eventId, categoryId: own.categoryId, canonicalPairKey: pairKey, status: { in: [...activeStatuses] } }, include: opponentRequestInclude });
     if (existingPair) return existingPair;

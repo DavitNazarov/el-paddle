@@ -7,7 +7,7 @@ import {
   jsonError,
   requireParamId,
 } from '../../common/http.js';
-import { rateLimit } from '../../common/rateLimit.js';
+import { consumeLimit, rateLimit } from '../../common/rateLimit.js';
 import { requireCapability } from '../../common/capabilities.js';
 import { parseListRange } from '../../common/pagination.js';
 import { auditLog, requestIp } from '../../common/audit.js';
@@ -23,9 +23,11 @@ import {
   messageApplicant,
   rejectApplication,
   requireSubmittedApplication,
+  resendApplicationVerificationCode,
   startApplication,
   submitApplication,
   toApplicantView,
+  toReviewerView,
   updateApplicationDraft,
   verifyApplicationEmail,
 } from './club-applications.service.js';
@@ -65,12 +67,29 @@ clubApplicationsRouter.post('/api/applications', applicationBurstLimit, asyncHan
 }));
 
 clubApplicationsRouter.post('/api/applications/verify', applicationStrictLimit, asyncHandler(async (request, response) => {
+  const email = cleanEmail(request.body.email);
+  // A six-digit code is a 900k space, and an address-keyed limiter counts an
+  // attacker's addresses rather than their guesses at one address. Ten tries per
+  // window against a given application is the bound that makes the code's size
+  // mean something; a real applicant needs one or two.
+  consumeLimit({ windowMs: 15 * 60 * 1000, max: 10, keyPrefix: 'application-verify', subject: email });
+
   const application = await verifyApplicationEmail(
-    cleanEmail(request.body.email),
+    email,
     cleanString(request.body.code),
   );
   setApplicationCookie(response, application.id);
   response.json({ application: toApplicantView(application) });
+}));
+
+clubApplicationsRouter.post('/api/applications/resend-code', applicationStrictLimit, asyncHandler(async (request, response) => {
+  const email = cleanEmail(request.body.email);
+  // One code every 30 seconds per address. The UI countdown mirrors this; the
+  // subject-keyed limiter is what stops a script from burning the mailbox.
+  consumeLimit({ windowMs: 30_000, max: 1, keyPrefix: 'application-resend', subject: email });
+
+  await resendApplicationVerificationCode(email);
+  response.json({ ok: true, email, message: 'Verification code sent.' });
 }));
 
 clubApplicationsRouter.get('/api/applications/current', asyncHandler(async (request, response) => {
@@ -110,7 +129,7 @@ clubApplicationsRouter.get('/api/admin/club-applications', asyncHandler(async (r
   await requireCapability(request, Capability.CLUB_APPLICATION_REVIEW);
   const page = await listSubmittedApplications(parseListRange(request.query));
   response.json({
-    applications: page.items.map(toApplicantView),
+    applications: page.items.map(toReviewerView),
     nextCursor: page.nextCursor,
   });
 }));
@@ -119,7 +138,7 @@ clubApplicationsRouter.get('/api/admin/club-applications/:id', asyncHandler(asyn
   await requireCapability(request, Capability.CLUB_APPLICATION_REVIEW);
   const application = await requireSubmittedApplication(requireParamId(request.params.id));
   response.json({
-    application: toApplicantView(application),
+    application: toReviewerView(application),
     messages: application.messages.map(serializeMessage),
   });
 }));

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import type { RegistrationDto } from '@/types/admin';
 import type { BracketDto, CourtDto, OpponentRequestDto } from '@/types/tournament';
+import { buildControlSummary } from '@/components/admin/control/controlModel';
 
 /**
  * Live counts the event workspace prints on each stage card. A null section
@@ -15,6 +16,8 @@ export type EventWorkspaceSignals = {
   requests: { awaiting: number; total: number } | null;
   brackets: { locked: number; published: number; total: number } | null;
   schedule: { courts: number; queued: number } | null;
+  /** Derived from the same bracket read, so match control costs no extra request. */
+  control: { live: number; ready: number } | null;
 };
 
 const emptySignals: EventWorkspaceSignals = {
@@ -22,6 +25,7 @@ const emptySignals: EventWorkspaceSignals = {
   requests: null,
   brackets: null,
   schedule: null,
+  control: null,
 };
 
 /** Opponent-request states that still sit in the administrator's decision queue. */
@@ -78,6 +82,9 @@ export function useEventWorkspaceSignals(eventId: string) {
               courts: schedule.courts.length,
               queued: schedule.courts.reduce((total, court) => total + court.scheduleItems.length, 0),
             }
+          : null,
+        control: brackets
+          ? (({ live, ready }) => ({ live, ready }))(buildControlSummary(brackets.brackets))
           : null,
       });
       setLoading(false);

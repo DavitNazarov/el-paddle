@@ -14,6 +14,7 @@ type LoginPageProps = {
   searchParams: Promise<{
     next?: string;
     error?: string;
+    reset?: string;
   }>;
 };
 
@@ -25,12 +26,12 @@ function safeNextPath(value?: string) {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const user = await getCurrentUser();
-  if (user) redirect(user.role === 'ADMIN' || user.role === 'ORGANISER' ? '/admin' : user.role === 'JUDGE' ? '/judge' : '/dashboard');
+  if (user) redirect(user.role === 'ADMIN' || user.role === 'ORGANISER' ? '/admin' : user.role === 'JUDGE' ? '/' : '/dashboard');
   const nextPath = safeNextPath(params.next);
 
   return (
     <AuthShell variant="login">
-      <LoginForm nextPath={nextPath} oauthError={params.error} />
+      <LoginForm nextPath={nextPath} oauthError={params.error} passwordWasReset={params.reset === 'done'} />
     </AuthShell>
   );
 }

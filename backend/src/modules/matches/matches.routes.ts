@@ -5,7 +5,7 @@ import { requireCommandId } from '../../common/commands.js';
 import { asyncHandler, cleanString, jsonError, requireParamId } from '../../common/http.js';
 import { serializeMatch, serializeMatchDetail, serializeMatchList } from '../../common/serializers.js';
 import { getCurrentUser, requireUser } from '../auth/auth.service.js';
-import { completeMatchByDecision, correctCompletedMatch, decideSlot, getJudgeMatch, getMatchDetail, listMatchHistory, requireScoringRole, scoreMatch, setMatchSlotConfig, startMatch, undoLastSlot } from './matches.service.js';
+import { completeMatchByDecision, correctCompletedMatch, decideSet, getJudgeMatch, getMatchDetail, listMatchHistory, recordSetResult, requireScoringRole, scoreMatch, setMatchSetConfig, startMatch, undoLastSet } from './matches.service.js';
 
 export const matchesRouter = Router();
 
@@ -30,24 +30,33 @@ matchesRouter.post('/api/judge/matches/:matchId/score', asyncHandler(async (requ
   response.json({ match: serializeMatch(await scoreMatch({ judgeId: judge.id, judgeRole: judge.role, matchId: requireParamId(request.params.matchId), side, action, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) })) });
 }));
 
-matchesRouter.post('/api/judge/matches/:matchId/slots', asyncHandler(async (request, response) => {
+matchesRouter.post('/api/judge/matches/:matchId/sets', asyncHandler(async (request, response) => {
   const judge = await requireUser(request);
   requireScoringRole(judge.role);
   const winnerSide = cleanString(request.body.winnerSide).toUpperCase() as MatchSide;
-  const slotNumber = Number(request.body.slotNumber);
-  if (!Object.values(MatchSide).includes(winnerSide) || !Number.isInteger(slotNumber) || slotNumber < 1) jsonError('Invalid slot command.');
-  response.json({ match: serializeMatch(await decideSlot({ judgeId: judge.id, judgeRole: judge.role, matchId: requireParamId(request.params.matchId), slotNumber, winnerSide, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) })) });
+  const setNumber = Number(request.body.setNumber);
+  if (!Object.values(MatchSide).includes(winnerSide) || !Number.isInteger(setNumber) || setNumber < 1) jsonError('Invalid set command.');
+  response.json({ match: serializeMatch(await decideSet({ judgeId: judge.id, judgeRole: judge.role, matchId: requireParamId(request.params.matchId), setNumber, winnerSide, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) })) });
 }));
 
-matchesRouter.post('/api/judge/matches/:matchId/slots/undo', asyncHandler(async (request, response) => {
+matchesRouter.post('/api/judge/matches/:matchId/result', asyncHandler(async (request, response) => {
+  const actor = await requireUser(request);
+  requireScoringRole(actor.role);
+  const setsA = Number(request.body.setsA);
+  const setsB = Number(request.body.setsB);
+  if (![setsA, setsB].every((value) => Number.isInteger(value) && value >= 0)) jsonError('Set wins must be whole numbers.');
+  response.json({ match: serializeMatch(await recordSetResult({ actorId: actor.id, actorRole: actor.role, matchId: requireParamId(request.params.matchId), setsA, setsB, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) })) });
+}));
+
+matchesRouter.post('/api/judge/matches/:matchId/sets/undo', asyncHandler(async (request, response) => {
   const judge = await requireUser(request);
   requireScoringRole(judge.role);
-  response.json({ match: serializeMatch(await undoLastSlot({ actorId: judge.id, actorRole: judge.role, matchId: requireParamId(request.params.matchId), expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId), judgeMode: true })) });
+  response.json({ match: serializeMatch(await undoLastSet({ actorId: judge.id, actorRole: judge.role, matchId: requireParamId(request.params.matchId), expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId), judgeMode: true })) });
 }));
 
-matchesRouter.post('/api/admin/matches/:matchId/slots/undo', asyncHandler(async (request, response) => {
+matchesRouter.post('/api/admin/matches/:matchId/sets/undo', asyncHandler(async (request, response) => {
   const admin = await requireCapability(request, Capability.MATCH_RESULT_CORRECT);
-  response.json({ match: serializeMatch(await undoLastSlot({ actorId: admin.id, actorRole: admin.role, matchId: requireParamId(request.params.matchId), reason: cleanString(request.body.reason), expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId), judgeMode: false })) });
+  response.json({ match: serializeMatch(await undoLastSet({ actorId: admin.id, actorRole: admin.role, matchId: requireParamId(request.params.matchId), reason: cleanString(request.body.reason), expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId), judgeMode: false })) });
 }));
 
 matchesRouter.post('/api/judge/matches/:matchId/complete', asyncHandler(async (request, response) => {
@@ -65,11 +74,11 @@ matchesRouter.post('/api/admin/matches/:matchId/complete', asyncHandler(async (r
   response.json({ match: serializeMatch(await completeMatchByDecision({ actorId: admin.id, actorRole: admin.role, matchId: requireParamId(request.params.matchId), winnerEntryId: requireParamId(request.body.winnerEntryId), resultType, reason: cleanString(request.body.reason), expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId), judgeMode: false })) });
 }));
 
-matchesRouter.patch('/api/admin/matches/:matchId/slot-config', asyncHandler(async (request, response) => {
+matchesRouter.patch('/api/admin/matches/:matchId/set-config', asyncHandler(async (request, response) => {
   const admin = await requireCapability(request, Capability.BRACKET_MANAGE);
-  const raw = request.body.slotCountOverride;
-  const slotCountOverride = raw === null || raw === undefined || raw === '' ? null : Number(raw);
-  response.json({ match: serializeMatch(await setMatchSlotConfig({ actorId: admin.id, matchId: requireParamId(request.params.matchId), slotCountOverride, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) })) });
+  const raw = request.body.setCountOverride;
+  const setCountOverride = raw === null || raw === undefined || raw === '' ? null : Number(raw);
+  response.json({ match: serializeMatch(await setMatchSetConfig({ actorId: admin.id, matchId: requireParamId(request.params.matchId), setCountOverride, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) })) });
 }));
 
 matchesRouter.post('/api/admin/matches/:matchId/corrections', asyncHandler(async (request, response) => {

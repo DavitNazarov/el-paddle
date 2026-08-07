@@ -1,18 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import {
-  BadgeCheck,
-  Building2,
   Check,
   Circle,
   Eye,
   EyeOff,
   KeyRound,
   Languages,
-  Mail,
+  LogOut,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -30,7 +28,6 @@ import {
   SurfaceCard,
   formControlClassName,
   selectControlClassName,
-  softButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
 import { Field } from '@/components/shared/dashboard/DashboardForm';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
@@ -39,16 +36,13 @@ import { tournamentCopy } from '@/lib/i18n/tournament';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { apiFetch, readApiJson } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { PublicUser, UserRole } from '@/types/auth';
+import type { PublicUser } from '@/types/auth';
+import { AccountIdentityCard, AccountProfileForm, useOwnAccount } from './AccountProfile';
 import {
   emptyPasswordForm,
   hasErrors,
-  initialsOf,
   passwordRules,
-  sameProfile,
   validatePassword,
-  validateProfile,
-  type ProfileForm,
 } from './accountModel';
 
 /**
@@ -69,20 +63,7 @@ export type AccountDangerCopy = {
   deleteFailed: string;
 };
 
-type AccountProfile = {
-  email: string;
-  name: string;
-  surname: string;
-  phone: string;
-  hasPassword: boolean;
-};
-
-const SECTION_KEYS = ['profile', 'security', 'preferences', 'danger'] as const;
-type SectionKey = (typeof SECTION_KEYS)[number];
-
-function isSectionKey(value: string): value is SectionKey {
-  return (SECTION_KEYS as readonly string[]).includes(value);
-}
+type SectionKey = 'profile' | 'security' | 'preferences' | 'danger';
 
 /** Password field with a reveal toggle sized for touch. */
 function SecretInput({
@@ -152,65 +133,69 @@ function PasswordRule({ met, label, metLabel, unmetLabel }: { met: boolean; labe
 }
 
 /**
- * The whole account workspace — identity, profile, security, and irreversible
+ * The account workspace — identity, security, preferences, and irreversible
  * actions — shared by every signed-in role. The server decides what each field
  * may become; this only decides how it reads.
+ *
+ * The profile pane is optional because a workspace may give the profile a page
+ * of its own instead, as the player dashboard does. When it is dropped, the
+ * `#profile` deep link no longer resolves and settings opens on Security.
  */
-export function AccountSettings({ user, danger }: { user: PublicUser; danger: AccountDangerCopy }) {
+export function AccountSettings({
+  user,
+  danger,
+  includeProfile = true,
+}: {
+  user: PublicUser;
+  danger: AccountDangerCopy;
+  includeProfile?: boolean;
+}) {
   const router = useRouter();
   const { dictionary, locale } = useI18n();
   const copy = dictionary.dashboard.account;
 
-  const [section, setSection] = useState<SectionKey>('profile');
+  const { account: ownAccount, error: ownAccountError, setAccount: setOwnAccount } = useOwnAccount();
+  const hasPassword = ownAccount?.hasPassword ?? true;
 
-  const [saved, setSaved] = useState<ProfileForm>({ name: user.name, surname: user.surname, phone: user.phone });
-  const [profile, setProfile] = useState<ProfileForm>(saved);
-  const [hasPassword, setHasPassword] = useState(true);
-  const [profileBusy, setProfileBusy] = useState(false);
-  const [profileError, setProfileError] = useState('');
-  const [profileSaved, setProfileSaved] = useState(false);
-  const [profileTried, setProfileTried] = useState(false);
+  const [section, setSection] = useState<SectionKey>(includeProfile ? 'profile' : 'security');
 
   const [passwordForm, setPasswordForm] = useState(emptyPasswordForm);
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [passwordTried, setPasswordTried] = useState(false);
+  const [signOutAllBusy, setSignOutAllBusy] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  const load = useCallback(async () => {
-    const response = await apiFetch('/api/account/profile', { cache: 'no-store' });
-    const data = await readApiJson<{ profile?: AccountProfile }>(response, {});
-    if (!response.ok || !data.profile) {
-      setProfileError(copy.loadFailed);
-      return;
-    }
-    const next = { name: data.profile.name, surname: data.profile.surname, phone: data.profile.phone };
-    setSaved(next);
-    setProfile(next);
-    setHasPassword(data.profile.hasPassword);
-  }, [copy.loadFailed]);
+  const sections: { key: SectionKey; label: string; icon: LucideIcon }[] = [
+    ...(includeProfile ? [{ key: 'profile' as const, label: copy.sectionProfile, icon: UserRound }] : []),
+    { key: 'security', label: copy.sectionSecurity, icon: ShieldCheck },
+    { key: 'preferences', label: tournamentCopy[locale].account.sectionPreferences, icon: Languages },
+    { key: 'danger', label: copy.sectionDanger, icon: TriangleAlert },
+  ];
 
   // The header profile menu deep-links to a section, so the hash drives the
-  // open pane even when the page itself does not remount.
+  // open pane even when the page itself does not remount. A hash naming a pane
+  // this workspace does not show is ignored rather than opening an empty one.
   useEffect(() => {
     const applyHash = () => {
       const key = window.location.hash.slice(1);
-      if (isSectionKey(key)) setSection(key);
+      const known = sections.find((item) => item.key === key);
+      if (known) setSection(known.key);
     };
-    const timer = window.setTimeout(() => {
-      applyHash();
-      void load();
-    }, 0);
+    const timer = window.setTimeout(applyHash, 0);
     window.addEventListener('hashchange', applyHash);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('hashchange', applyHash);
     };
-  }, [load]);
+    // The pane list is stable for the life of the screen; only its wording
+    // changes with the locale, and that must not reopen a pane.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeProfile]);
 
   function selectSection(key: SectionKey) {
     setSection(key);
@@ -218,40 +203,26 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
   }
 
   const account = tournamentCopy[locale].account;
-  const dirty = !sameProfile(profile, saved);
-  const profileErrors = validateProfile(profile, user.role === 'USER');
   const passwordErrors = validatePassword(passwordForm, hasPassword);
   const { lengthMet, matchMet } = passwordRules(passwordForm);
-  const profileErrorFor = (field: keyof ProfileForm) => {
-    const code = profileTried ? profileErrors[field] : undefined;
-    return code ? account.errors[code] : undefined;
-  };
   const passwordErrorFor = (field: keyof typeof passwordForm) => {
     const code = passwordTried ? passwordErrors[field] : undefined;
     return code ? account.errors[code] : undefined;
   };
 
-  async function saveProfile(event: React.FormEvent) {
-    event.preventDefault();
-    setProfileError('');
-    setProfileSaved(false);
-    setProfileTried(true);
-    if (hasErrors(profileErrors)) return;
-    setProfileBusy(true);
-    const response = await apiFetch('/api/account/profile', {
-      method: 'PATCH',
-      body: JSON.stringify(profile),
-    });
-    const data = await readApiJson<{ error?: string }>(response, {});
-    setProfileBusy(false);
-    if (!response.ok) {
-      setProfileError(data.error ?? copy.profileFailed);
-      return;
+  /**
+   * Revoke every session, this one included, and land on the login page. The
+   * server bumps sessionVersion, so any other browser is signed out at once
+   * rather than at its next refresh.
+   */
+  async function signOutEverywhere() {
+    setSignOutAllBusy(true);
+    try {
+      await apiFetch('/api/auth/logout-all', { method: 'POST' });
+    } finally {
+      router.push('/login');
+      router.refresh();
     }
-    setSaved(profile);
-    setProfileSaved(true);
-    // The shell header and sidebar render the name from the server session.
-    router.refresh();
   }
 
   async function savePassword(event: React.FormEvent) {
@@ -275,7 +246,7 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
       return;
     }
     setPasswordForm(emptyPasswordForm);
-    setHasPassword(true);
+    setOwnAccount((current) => (current ? { ...current, hasPassword: true } : current));
     setPasswordSaved(true);
     setPasswordTried(false);
   }
@@ -295,56 +266,9 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
     router.refresh();
   }
 
-  const roleLabels: Record<UserRole, string> = {
-    USER: copy.rolePlayer,
-    JUDGE: copy.roleJudge,
-    ORGANISER: copy.roleOrganiser,
-    ADMIN: copy.roleAdmin,
-  };
-
-  const sections: { key: SectionKey; label: string; icon: LucideIcon }[] = [
-    { key: 'profile', label: copy.sectionProfile, icon: UserRound },
-    { key: 'security', label: copy.sectionSecurity, icon: ShieldCheck },
-    { key: 'preferences', label: account.sectionPreferences, icon: Languages },
-    { key: 'danger', label: copy.sectionDanger, icon: TriangleAlert },
-  ];
-
   return (
     <>
-      <SurfaceCard>
-        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-5">
-          <span
-            aria-hidden
-            className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-[rgba(164,22,26,0.2)] bg-[var(--dash-primary-soft)] font-display text-lg font-semibold text-[var(--dash-primary)]"
-          >
-            {initialsOf(user)}
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold tracking-normal text-[var(--dash-text)]">{user.fullName}</h2>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--dash-muted)]">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--dash-faint)]" aria-hidden />
-                <span className="truncate">{user.email}</span>
-              </span>
-              {user.club ? (
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5 shrink-0 text-[var(--dash-faint)]" aria-hidden />
-                  <span className="truncate">{user.club.name}</span>
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <InfoChip icon={UserRound}>{roleLabels[user.role]}</InfoChip>
-            <InfoChip
-              icon={user.isVerified ? BadgeCheck : ShieldAlert}
-              tone={user.isVerified ? 'positive' : 'warning'}
-            >
-              {user.isVerified ? copy.verified : copy.unverified}
-            </InfoChip>
-          </div>
-        </div>
-      </SurfaceCard>
+      <AccountIdentityCard user={user} />
 
       <div className="mt-6 grid gap-5 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">
         <div className="lg:hidden">
@@ -390,86 +314,9 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                 title={copy.profileTitle}
                 description={copy.profileDescription}
               />
-              <SurfaceCard className="mt-4 overflow-hidden">
-                <form onSubmit={saveProfile}>
-                  <div className="grid gap-4 p-5">
-                    {profileError ? <FeedbackBanner kind="error">{profileError}</FeedbackBanner> : null}
-                    {profileSaved && !dirty ? (
-                      <FeedbackBanner kind="success">{copy.profileSaved}</FeedbackBanner>
-                    ) : null}
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field id="account-name" label={copy.name} error={profileErrorFor('name')}>
-                        {(control) => (
-                          <Input
-                            {...control}
-                            autoComplete="given-name"
-                            value={profile.name}
-                            onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))}
-                            className={formControlClassName}
-                          />
-                        )}
-                      </Field>
-                      <Field id="account-surname" label={copy.surname} error={profileErrorFor('surname')}>
-                        {(control) => (
-                          <Input
-                            {...control}
-                            autoComplete="family-name"
-                            value={profile.surname}
-                            onChange={(event) => setProfile((current) => ({ ...current, surname: event.target.value }))}
-                            className={formControlClassName}
-                          />
-                        )}
-                      </Field>
-                    </div>
-
-                    <Field id="account-phone" label={copy.phone} hint={copy.phoneHint} error={profileErrorFor('phone')}>
-                      {(control) => (
-                        <Input
-                          {...control}
-                          type="tel"
-                          inputMode="tel"
-                          autoComplete="tel"
-                          value={profile.phone}
-                          onChange={(event) => setProfile((current) => ({ ...current, phone: event.target.value }))}
-                          className={formControlClassName}
-                        />
-                      )}
-                    </Field>
-
-                    <DashboardField id="account-email" label={copy.email} hint={copy.emailHint}>
-                      <Input
-                        id="account-email"
-                        type="email"
-                        value={user.email}
-                        readOnly
-                        disabled
-                        className={cn(formControlClassName, 'bg-[var(--dash-tint)] text-[var(--dash-muted)]')}
-                      />
-                    </DashboardField>
-                  </div>
-
-                  <div className="flex flex-col gap-3 border-t border-[var(--dash-border)] bg-[var(--dash-tint)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-xs leading-5 text-[var(--dash-muted)]" role="status">
-                      {dirty ? copy.unsavedChanges : copy.allSaved}
-                    </p>
-                    <div className="flex flex-wrap gap-2 sm:justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={!dirty || profileBusy}
-                        onClick={() => setProfile(saved)}
-                        className={cn(softButtonClassName, 'min-h-11 rounded-md px-4')}
-                      >
-                        {copy.discard}
-                      </Button>
-                      <Button type="submit" disabled={profileBusy} className="min-h-11 rounded-md px-4">
-                        {profileBusy ? copy.saving : copy.save}
-                      </Button>
-                    </div>
-                  </div>
-                </form>
-              </SurfaceCard>
+              <div className="mt-4">
+                <AccountProfileForm user={user} account={ownAccount} loadError={ownAccountError} />
+              </div>
             </section>
           ) : null}
 
@@ -480,6 +327,15 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                 title={copy.passwordTitle}
                 description={hasPassword ? copy.passwordDescription : copy.setPasswordDescription}
               />
+
+              {/* The sign-in method below is read from the account record. Say
+                  so when it could not be read, rather than letting the default
+                  pass for fact. */}
+              {ownAccountError ? (
+                <div className="mt-4">
+                  <FeedbackBanner kind="error">{ownAccountError}</FeedbackBanner>
+                </div>
+              ) : null}
 
               <SurfaceCard className="mt-4">
                 <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -572,6 +428,32 @@ export function AccountSettings({ user, danger }: { user: PublicUser; danger: Ac
                     </Button>
                   </div>
                 </form>
+              </SurfaceCard>
+
+              {/* Signing out on this device no longer signs the account out
+                  everywhere, so the account-wide version needs its own control —
+                  it is what you reach for when a device is lost. */}
+              <SurfaceCard className="mt-4">
+                <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[var(--dash-border)] bg-[var(--dash-tint)] text-[var(--dash-muted)]">
+                      <LogOut className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--dash-ink)]">{copy.signOutEverywhereTitle}</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--dash-muted)]">{copy.signOutEverywhereDescription}</p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={signOutAllBusy}
+                    onClick={signOutEverywhere}
+                    className="min-h-11 rounded-md px-4 sm:shrink-0"
+                  >
+                    {signOutAllBusy ? copy.signingOutEverywhere : copy.signOutEverywhere}
+                  </Button>
+                </div>
               </SurfaceCard>
             </section>
           ) : null}

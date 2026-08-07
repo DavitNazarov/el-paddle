@@ -1,7 +1,7 @@
 import { jsonError } from './http.js';
 
-export const ACCOUNT_TERMS_VERSION = '2026-07-17';
-export const PRIVACY_POLICY_VERSION = '2026-07-17';
+export const ACCOUNT_TERMS_VERSION = '2026-08-06';
+export const PRIVACY_POLICY_VERSION = '2026-08-06';
 export const PARTICIPATION_TERMS_VERSION = '2026-07-17';
 export const REFUND_POLICY_VERSION = '2026-07-17';
 

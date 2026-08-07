@@ -1,7 +1,7 @@
 # Dashboard design system
 
 This is the design brief for El Padel's authenticated screens — admin, organiser,
-judge, and player. It exists so anyone picking up the redesign can continue it
+and player. It exists so anyone picking up the redesign can continue it
 without re-deriving the reasoning, and so the remaining screens end up feeling
 like the ones already done rather than like a second product bolted on.
 
@@ -41,34 +41,65 @@ different shapes, and the screens should too.
 A competitor on a phone, usually between other things. They check the app maybe
 twice a week, and for about twenty seconds.
 
-- **Leads with:** the next event, a countdown in days, and *their own entry
-  inside that same card*. Two questions, one object. Never split them into two
-  cards the reader has to mentally join.
+- **Leads with:** whatever answers today's question. Before the event: countdown
+  plus their entry path inside the same card. On match day: court, time, and
+  opponent (`nextMatch`) outrank the countdown. After: the result.
+- **For you strip:** anything waiting on the *player* — needs-changes entries,
+  opponent requests to answer — sits at the top of home and disappears when
+  empty. Silence is not "all clear"; an empty strip is.
 - **Then:** their record as a slim four-number strip. It is context, not the
   headline — it must not compete with the event.
-- **Then:** their entries, each showing the path to playing (Entry submitted →
-  Approved → In the draw) rather than a bare status word.
+- **Then:** their club's entries, each showing the path to playing (Entry
+  submitted → Approved → In the draw) rather than a bare status word. The third
+  stop is honest: it lights only when the entry appears in a *published* draw.
+- **Draw page** (`/dashboard/events/[eventId]/draw`): published brackets only,
+  with the player's own team marked so they can trace their path.
+- **My matches:** personal record (streaks, best finish, partners, milestones)
+  above the match list; cards say "You won" / "You lost", never Side A / Side B.
 - **Never:** operational vocabulary. A player does not know what a "bracket
   generation" or a "schedule item" is. Say "the draw", "your match".
 - **Honesty rule:** entries that left the path — declined, withdrawn, cancelled —
   get **no rail**. A rail implies progress toward a place they do not have. Show
-  the badge, tint the card border, and state the reason plainly.
+  the badge, tint the card border, and state the reason plainly. Waiting states
+  say who acts next ("nothing needed from you" vs "open the event to see the
+  note").
+- **My profile:** everything the platform holds about the reader on one page —
+  identity, the details they may edit, role and account state, club standing,
+  and their record. Settings keeps only what is not *about* them: password,
+  language, deletion. The record here is the four counters; streaks, best
+  finish, and partners stay on My matches beside the matches they are read
+  from, so neither page repeats the other. Shape is **Console**: a player card
+  carrying identity *and* record as one object (monogram on a padel court, club
+  crest worn on it, name, club, contact, win-rate ring, then a Matches/Won/Lost
+  band), then the recorded details *stated* with an Edit button that opens the
+  form in a modal, then the three supporting panels. See the profile notes
+  in §8.
+- **Shell:** Home / Events / My entries / My matches, then My profile / My club /
+  Notifications / Settings. The bell and the entries badge show counts that mean
+  "you are being asked for something" — unread notifications and
+  `NEEDS_CHANGES` only.
 
-### Judge — "which match is in front of me right now?"
+### Match control — "what is happening on which court, and where does the winner go?"
 
-Standing at a court, on a phone, often in sunlight, frequently interrupted. The
-highest-stress reader in the product and the one previously served worst.
+Standing at a court, on a phone, often in sunlight, frequently interrupted, and
+responsible for the whole event rather than one match. The highest-stress reader
+in the product. (This replaced a separate judge console; the judge role still
+exists server-side but has no screens.)
 
-- **Leads with:** the one match they can open. Not a list of assignments — the
-  console decides, because exactly one match is ever openable across every court
-  a judge holds (the running one, else the first ready one).
-- **Both pairs get the largest type on the page.** These names get checked
-  against the actual people walking onto the court. Nothing outranks them.
-- **Then:** each court's queue as a progress meter — "4 of 11 played".
-- **Freshness matters.** Scores land from other devices. The judge console
-  refreshes on a timer *and* on tab focus, and stays quiet while hidden.
-- **Never** offer a second openable match. The server refuses out-of-order
-  starts; offering the action invites a failure the judge will read as a bug.
+- **Leads with:** the matches that can be acted on now — what is running, then
+  what can start — ahead of the full draw.
+- **Both pairs get the largest type on the card,** with their club beneath.
+  These names get checked against the four people walking onto the court.
+  Nothing outranks them.
+- **One card, two places.** The same match card renders in the "on now" list and
+  in the draw, so there is one card to learn rather than two screens to reconcile.
+- **Court, time, players, sets, controls — in that order,** because that is the
+  order the question is asked in.
+- **Freshness matters.** Scores land from other devices; the console refetches on
+  every realtime topic that can change a match.
+- **Never offer an action the server would refuse.** A match with no court says
+  so instead of showing a Start button; a started match shows its time as text
+  rather than an input the API would reject.
 
 ### Organiser — "which of my events needs me?"
 
@@ -116,7 +147,7 @@ seventh without a reason.
 
 | Archetype | Question | Shape | Built |
 |---|---|---|---|
-| **Console** | "what do I do *right now*?" | One hero object + supporting meters | Judge home, judge queue |
+| **Console** | "what do I do *right now*?" | One hero object + supporting meters | Match control |
 | **Board** | "where does everything stand?" | Rows, one per entity, each with position + pending work | Admin/organiser home, event pickers, court board |
 | **Queue** | "what is waiting on my decision?" | Progress meter + spined rows + only-available actions | Registration review, opponent requests |
 | **Workspace** | "how do I drive this one thing forward?" | Lifecycle hero + stage cards + state board | Event workspace |
@@ -277,7 +308,7 @@ There is no local database, so screens cannot be driven with real data.
 4. **Delete the throwaway route** before finishing.
 
 This forces presentational components to be extractable and prop-driven, which
-is why `JudgeNowCard`, `JudgeQueueList`, `AdminEventBoard`, `PlayerEntryCard`,
+is why `MatchControlCard`, `AdminEventBoard`, `PlayerEntryCard`,
 `AdminRegistrationCard`, `BracketDrawStrip`, `BracketTree`, `CourtBoard`,
 `CourtDetail`, `AdminAttentionQueue` and `UnscheduledPool` are separate files.
 Keep doing that.
@@ -301,7 +332,7 @@ Then: `npm run lint && npm test && npm run build && git diff --check`.
 ## 8. Status
 
 ### Done
-Event workspace · admin & organiser home · judge home · judge court queue ·
+Event workspace · admin & organiser home · match control ·
 player home · player entries · the four event-picker routes · registration
 review · opponent requests · bracket · courts & schedule · users, clubs,
 categories and club requests · platform statistics on the admin home ·
@@ -338,7 +369,7 @@ players can see any of it. Then a **board over a detail**, because a column per
 court grew with its queue and an eight-court event ran to four screens before
 the first question — *which court needs me?* — could be answered. `CourtBoard`
 is one fixed-height tile per court: state word (`courtState`: done · live ·
-unstaffed · idle · ready), judge, a progress bar, and the only two matches
+idle · ready), a progress bar, and the only two matches
 worth naming (`courtFocus` — what is on court, what is next); the rest is a
 count. The two states that mean *you* are being asked for something —
 `unstaffed`, `idle` — carry the amber spine, and the board heading totals them.
@@ -424,15 +455,22 @@ It has no save button, and says so: the switch applies at once and is stored on
 the device, not the account. Faking a save there would be exactly the silent
 autosave the archetype forbids.
 
-**Judge match** notes. The one screen where a UI mistake corrupts a result. Both
-pair names are now the largest type on the page — 36px against the score's 28px
-— because they are what a judge checks against the two people walking onto the
-court; the old screen had that inverted, with a 7xl score above 16px names. A
-slot band carries the slot number as a headline plus a dot per possible slot, so
-an interrupted judge finds their place instantly. `matchModel.ts` decides what
-the console may *offer*: `canRecordSlot` and `canUndo` mirror the server, so a
-judge is never shown a control that would be refused, and `previewSlot` phrases
-the confirmation differently when the slot would end the match.
+**Match control** notes. The one screen where a UI mistake corrupts a result.
+Both pair names carry the largest type on the card, above the set tally, because
+they are what the operator checks against the four people walking onto the court;
+each carries its club beneath, since two clubs can field similar names. The card
+is deliberately identical in the "on now" list and in the draw — an operator
+under pressure should not have to re-read a second layout.
+
+The logic is split so each piece has one reason to change: `setEngine.ts` mirrors
+the server's set race, `matchModel.ts` decides what the console may *offer*
+(`canStart`, `canRecordSet`, `canFinishEarly` mirror the server, so a control that
+would be refused is never shown, and `previewSet` phrases the confirmation
+differently when the set would end the match), and `controlModel.ts` turns a
+bracket into the court/time reading and the "act on me" ordering.
+
+There is no undo here. Correcting a recorded set is an administrator act with a
+reason, on the bracket page — deliberately slower than recording one.
 
 **Player event** notes. Ordered as the competitor asks: am I in
 (`PlayerEntryCard`, the same entry path as the player home), who am I playing
@@ -441,6 +479,44 @@ the confirmation differently when the slot would end the match.
 attaches the court and time; the old page rendered every match in every draw,
 which is the tournament's view of the event rather than the competitor's.
 Unknown court or time stays `null` rather than becoming a placeholder.
+
+**My profile** notes. It was five equally-weighted panels in one column, which
+meant the reader's own name was set at the same size as their phone number and
+their record sat last on the page. It is now a **player card** —
+`profile/ProfilePassport.tsx` — carrying identity and record as one object,
+because on this screen the record *is* part of identity rather than context
+beside an event.
+
+Three decisions worth keeping. **The ring is decoration; the band is the data.**
+The win-rate ring is `aria-hidden`, its percentage is ordinary DOM text in the
+hole rather than SVG `<text>` (selectable, unscaled by the viewBox, read as a
+sentence), and the counts it is drawn from are stated underneath — with a dot
+tying "Won" and "Lost" to their arc, so the colour is never the signal.
+`recordArcs` derives the losing share from what is left rather than from
+`losses`, so the ring always closes. **The card carries at most one exception
+chip:** a pending account and an unverified address are two readings of the same
+fact, and the account panel states both anyway. **A link is offered only where it
+resolves** — `/players/:id` serves active players only, so `hasPublicPlayerPage`
+gates the public-profile link rather than opening a doorway into a 404.
+
+Below the card, the recorded details are **stated, not laid out as a form**. The
+page is read far more often than it is edited, so four permanently-open inputs
+made every visit look like unfinished paperwork; now `ProfileDetailsPanel` shows
+the values with an Edit button that opens them in a `DashboardModal`. Two rules
+keep that honest: the card behind the modal renders `editor.saved`, never what is
+currently typed, so cancelling by any route (button, Escape, overlay) leaves no
+trace; and a value the platform actually needs and does not have — a player
+without a phone number — carries the amber spine rather than sitting as a blank
+cell. The save itself lives in `useProfileEditor` in `shared/account/
+AccountProfile.tsx`, shared with the always-open settings card, so the modal and
+that screen cannot drift apart.
+
+Then three supporting panels laid out by available room rather than a breakpoint
+list (`repeat(auto-fit, minmax(17.5rem, 1fr))`): account standing (three stated
+facts, amber spine on the ones asking something of the reader), the club, and
+*The rest of your account* — two doorways to My matches and Settings, which is
+what killed the orphan button that used to end the page. Pure reading lives in
+`profile/profileModel.ts` with its own test.
 
 **Notifications** notes. Unread rows are lifted out of the timeline entirely
 rather than tinted where they sit — something from three days ago that still

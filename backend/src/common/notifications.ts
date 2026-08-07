@@ -9,6 +9,28 @@ function displayName(user: Pick<User, 'name' | 'surname' | 'email'>) {
   return escapeHtml(userDisplayName(user));
 }
 
+/**
+ * The reset link is the only place the raw token ever exists outside the
+ * requester's inbox — the database holds a sha256 of it. The copy names the
+ * lifetime and says plainly what to do if the request was not theirs, because
+ * this is the one email an attacker can cause a stranger to receive.
+ */
+export async function sendPasswordResetEmail(email: string, token: string, lifetimeMinutes: number) {
+  const url = appUrl(`/reset-password?token=${encodeURIComponent(token)}`);
+  await sendEmail({
+    to: email,
+    subject: 'Reset your El Padel password',
+    text: `Reset your password\n\nOpen this link to choose a new password:\n${url}\n\nThe link works once and expires in ${lifetimeMinutes} minutes. If you did not ask for it, ignore this email — your password has not changed.`,
+    html: emailLayout(
+      'Reset your password',
+      `<p style="margin:0 0 16px">Choose a new password for your El Padel account.</p>
+       ${emailButton('Choose a new password', url)}
+       <p style="margin:16px 0 0;color:#766e67;font-size:14px;line-height:22px">The link works once and expires in ${lifetimeMinutes} minutes. If you did not ask to reset your password, you can ignore this email — nothing has changed.</p>`,
+      { eyebrow: 'Account security', preheader: `Reset your El Padel password. The link expires in ${lifetimeMinutes} minutes.` },
+    ),
+  });
+}
+
 export async function sendVerificationCodeEmail(email: string, code: string) {
   const safeCode = escapeHtml(code);
   await sendEmail({
@@ -48,33 +70,6 @@ export async function sendTeammateAddedEmail(
   });
 }
 
-export async function sendTeammateInviteEmail(
-  email: string,
-  owner: User,
-  event: Event,
-  token: string,
-) {
-  const ownerLabel = displayName(owner);
-  const ownerName = userDisplayName(owner);
-  const inviteUrl = appUrl(`/invite?token=${encodeURIComponent(token)}`);
-  const privacyUrl = appUrl('/legal/privacy');
-  await sendEmail({
-    to: email,
-    subject: `Complete your registration for ${event.title}`,
-    text: `Complete your El Padel account\n\n${ownerName} provided your email address and registered you as their teammate for ${event.title}. We use it to manage this invitation and tournament entry.\n\nCreate your password and complete your profile: ${inviteUrl}\n\nPrivacy Policy: ${privacyUrl}`,
-    html: emailLayout(
-      'Complete your El Padel account',
-      `<p style="margin:0">${ownerLabel} registered you as their teammate in an El Padel tournament.</p>
-       ${emailDetails([{ label: 'Tournament', value: event.title }, { label: 'Invited by', value: ownerName }])}
-       <p style="margin:0">Create your password and complete your player profile to join the team entry.</p>
-       ${emailButton('Complete account setup', inviteUrl)}
-       <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">${ownerLabel} provided your email address for this invitation. See how we use your data in our <a href="${privacyUrl}" style="color:#86000c;font-weight:700">Privacy Policy</a>.</p>
-       <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">If you were not expecting this invitation, you can ignore this email.</p>`,
-      { eyebrow: 'Teammate invitation', preheader: `${ownerName} registered you for ${event.title}.` },
-    ),
-  });
-}
-
 export async function sendAccountInviteEmail(
   email: string,
   token: string,
@@ -90,13 +85,14 @@ export async function sendAccountInviteEmail(
   await sendEmail({
     to: email,
     subject: `Set up your El Padel ${roleLabel} account`,
-    text: `Welcome to El Padel\n\nAn El Padel administrator provided your email address to create a ${roleLabel} account. Set your password to finish setup: ${inviteUrl}\n\nPrivacy Policy: ${privacyUrl}`,
+    text: `Welcome to El Padel\n\nAn El Padel administrator provided your email address to create a ${roleLabel} account. Set your password to finish setup: ${inviteUrl}${role === 'USER' ? '\n\nUntil you finish setup, a club cannot enter you in a tournament — a team can only be registered with players who have activated their account.' : ''}\n\nPrivacy Policy: ${privacyUrl}`,
     html: emailLayout(
       'Welcome to El Padel',
       `<p style="margin:0">Your El Padel account has been created and is ready for you to activate.</p>
        ${emailDetails([{ label: 'Account type', value: roleLabel.charAt(0).toUpperCase() + roleLabel.slice(1) }])}
        <p style="margin:0">Create a secure password to finish setup and sign in.</p>
        ${emailButton('Set up my account', inviteUrl)}
+       ${role === 'USER' ? '<p style="margin:18px 0 0">Until you finish setup, a club cannot enter you in a tournament. A team can only be registered with players who have activated their account.</p>' : ''}
        <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">An El Padel administrator provided your email for this invitation. Read our <a href="${privacyUrl}" style="color:#86000c;font-weight:700">Privacy Policy</a>.</p>
        <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">If you were not expecting this invitation, you can ignore this email.</p>`,
       { eyebrow: 'Account invitation', preheader: `Your El Padel ${roleLabel} account is ready to set up.` },
@@ -243,13 +239,14 @@ export async function sendClubMateInviteEmail(
   await sendEmail({
     to: email,
     subject: `You’re invited to join ${clubName} on El Padel`,
-    text: `Join ${clubName} on El Padel\n\n${inviterName} provided your email address and invited you to join ${clubName}. Set your password to accept the invitation: ${inviteUrl}\n\nPrivacy Policy: ${privacyUrl}`,
+    text: `Join ${clubName} on El Padel\n\n${inviterName} provided your email address and invited you to join ${clubName}. Set your password to accept the invitation: ${inviteUrl}\n\nUntil you accept, ${clubName} cannot enter you in a tournament — a team can only be registered with players who have accepted their invitation.\n\nPrivacy Policy: ${privacyUrl}`,
     html: emailLayout(
       `Join ${clubName} on El Padel`,
       `<p style="margin:0">You have been invited to join a club on El Padel.</p>
        ${emailDetails([{ label: 'Club', value: clubName }, { label: 'Invited by', value: inviterName }])}
        <p style="margin:0">Create your password to accept the invitation and access the club dashboard.</p>
        ${emailButton('Accept invitation', inviteUrl)}
+       <p style="margin:18px 0 0">Until you accept, ${escapeHtml(clubName)} cannot enter you in a tournament. A team can only be registered with players who have accepted their invitation.</p>
        <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">${escapeHtml(inviterName)} provided your email for this invitation. Read our <a href="${privacyUrl}" style="color:#86000c;font-weight:700">Privacy Policy</a>.</p>
        <p style="margin:18px 0 0;color:#766e67;font-size:13px;line-height:21px">If you were not expecting this invitation, you can ignore this email.</p>`,
       { eyebrow: 'Club invitation', preheader: `${inviterName} invited you to join ${clubName}.` },
