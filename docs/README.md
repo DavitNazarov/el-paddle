@@ -17,7 +17,7 @@ Use this directory as the technical and operational documentation entry point.
 
 These are point-in-time artifacts kept for reference. They describe the system as planned or as audited on their stated dates, not necessarily the current implementation.
 
-- [Feature implementation plan](../FEATURE_IMPLEMENTATION_PLAN.md): the original tournament-feature design. Several details evolved during implementation (for example, brackets now size dynamically to 2–16 entries and registration is club-based).
+- [Feature implementation plan](../FEATURE_IMPLEMENTATION_PLAN.md): the original tournament-feature design. Several details evolved during implementation (for example, brackets now size dynamically to 2–32 entries and registration is club-based).
 - [Security report](../SECURITY_REPORT.md): production security audit and hardening pass.
 - [API performance audit](PRODUCTION_API_PERFORMANCE_AUDIT.md): API usage and payload audit dated 2026-07-17; several findings (such as DTO serialization) have since been addressed.
 

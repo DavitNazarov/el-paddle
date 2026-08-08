@@ -46,7 +46,7 @@ A club leader can replace one player in the team while the entry is still editab
 
 When the approved list is ready, publish the registered teams from the event Registrations page. The public roster contains only player names, club, and category; contact and review details remain private. This publication control is independent from the event page, bracket, schedule, live scoring, and results.
 
-Each bracket category needs 2–16 approved entries. The bracket size adapts to the entry count (2, 4, 8, or 16 slots), so byes only appear when the count is between the two nearest sizes.
+Each bracket category needs 2–32 approved entries. The bracket size adapts to the entry count (2, 4, 8, 16, or 32 slots), so byes only appear when the count is between the two nearest sizes. A 32-slot draw opens with a round of 32 and runs 31 matches over five rounds; plan court time accordingly.
 
 ### Handing the event to an organiser
 
@@ -120,21 +120,39 @@ Publish the schedule independently from the bracket.
 
 Move the event to ongoing only when at least one bracket is locked and operational scheduling is ready. Optionally enable public live scoring (available only while the event is ongoing).
 
-This is what **Match control** (`/admin/events/:eventId/control`) is for. It is the one screen the event is run from, and it answers the only question that matters on the day: what is happening on which court, between whom, and where does the winner go. Each match card carries its court, its planned time, both pairs with their clubs, the set tally, and the controls — the same card in the "on now and up next" list and in the draw below it, so there is one card to learn rather than two screens to reconcile.
+This is what **Match control** (`/admin/events/:eventId/control`) is for. It is the one screen the event is run from, and it is organised the way the day is: by court.
+
+**The strip at the top is the day in five numbers** — playing now, ready to start, courts free, behind schedule, played — and every one of them is a way in. Pressing a number narrows the screen to the matches behind it.
+
+**Three layouts over the same matches**, chosen from the bar beneath:
+
+| Layout | Answers |
+| --- | --- |
+| **Courts** (default) | "Court 3 just finished — what goes on next?" One lane per court: what is on it, what it starts next, the queue behind that, and what it has already played. A lane with nothing on it says so, because a free court is the thing that needs you. Matches with no court at all gather in a lane of their own. |
+| **Run order** | "What happens next, anywhere?" Every match in the order it is due to be played, grouped by planned time, across all courts and categories. |
+| **Draw** | "Who plays the winner of match 12?" Each category's rounds left to right. |
+
+**Filter and search sit above all three.** Court, category, round and state are four dropdowns; the search box takes a player name, a club, or a match number. What you have chosen shows as removable chips, and the filter survives a change of layout — so "the women's quarter-finals on Court 2" stays asked while you look at it three ways.
+
+**Every match reads the same everywhere and is acted on in one place.** A row is read-only: state, court and time, both pairs with their set tallies, and a flag if it is running late. Selecting it opens the match sheet, which is where every command lives — start, record the result, finish early, set the planned time. The only exception is **Start** on the up-next row of a lane, because a court waiting to be told to go should not need a second tap.
+
+**A single court has its own screen** at `/admin/events/:eventId/control/courts/:courtId`, reachable from each lane's "Open court" link — the same lane given the full width, for a tablet parked at the desk or carried to the court, with the neighbouring courts one tap away.
 
 Bracket and Courts & schedule remain the setup tools: seeding, generating and locking draws, creating courts, and building queues. Match control changes only what moves on the day.
+
+**Time and order stay the schedule's.** Match control reflects them, so a planned start changed on Courts & schedule reorders this screen at once, and a time changed in the match sheet is the same change the schedule board makes. A match that has started or finished is pinned: it shows a lock instead of the up/down nudges, and its time is read-only. A match still waiting more than five minutes past its planned start is flagged as late, on its row, on its court's lane, and in the "behind schedule" count — which is also a filter, so the day's problem list is one press away.
 
 Whoever runs the event processes each court queue strictly from top to bottom:
 
 1. Confirm the displayed players, clubs and match number against the four people on court.
-2. Start the match (earlier queue positions must be finished first, and the match must be on a court). Starting the match freezes its set format.
-3. When the match finishes, write the result: the sets each side won, in the two number fields marked A and B — the same letters that mark the two pairs on the card. "Record result" stays off until the two numbers form a finished tally, and the dialog names the winning pair before the result is written.
+2. Start the match from the court's "up next" row, or from the match sheet (earlier queue positions must be finished first, and the match must be on a court). Starting the match freezes its set format.
+3. When the match finishes, open it and write the result: the sets each side won, in the two number fields marked A and B — the same letters that mark the two pairs. "Record result" stays off until the two numbers form a finished tally, and the dialog names the winning pair before the result is written.
 4. Recording the result completes the match and moves the winner into the next round.
 5. For a walkover or a retirement, use "Finish early", choose the side that advances, and give a reason.
 
 Several matches can run at once, one per court: administrators and organisers are not bound to a single match the way a judge is.
 
-Planned start times are editable in place on each card, until the match starts — a started or finished match keeps the time it was played at.
+To reorder a court on the day, use the up/down controls on its queued rows; they send the same command the schedule board does, and they stop at the last started or finished match, which cannot be moved.
 
 There is no undo on this screen. To correct a result recorded the wrong way round, reopen the match from the bracket page (see §7); that requires `MATCH_RESULT_CORRECT`, which organisers do not hold.
 

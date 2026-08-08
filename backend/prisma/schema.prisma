@@ -88,7 +88,10 @@ enum BracketStatus {
   COMPLETED
 }
 
+/// Declared in the order the rounds are played, so the enum's own sort order
+/// matches a tournament's progression.
 enum MatchRound {
+  ROUND_OF_32
   ROUND_OF_16
   QUARTERFINAL
   SEMIFINAL

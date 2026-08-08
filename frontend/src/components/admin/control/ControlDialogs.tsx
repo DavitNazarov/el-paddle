@@ -7,7 +7,69 @@ import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { useResetOnOpen } from '@/hooks/useResetOnOpen';
 import { tournamentCopy } from '@/lib/i18n/tournament';
+import { fillTemplate } from '@/lib/i18n/tournament';
 import { SIDES, pairName, participantOf, type Side } from './matchModel';
+import styles from './MatchControl.module.css';
+
+/**
+ * A result completes a match and pushes a winner into the next round, so it is
+ * read back in full before it is sent — named pair, named score — rather than
+ * landing the moment two digits are typed.
+ */
+export function ConfirmResultDialog({
+  busy,
+  match,
+  onCancel,
+  onConfirm,
+  setsA,
+  setsB,
+}: {
+  busy: boolean;
+  match: MatchDto | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+  setsA: number;
+  setsB: number;
+}) {
+  const { locale } = useI18n();
+  const copy = tournamentCopy[locale];
+  const control = copy.admin.control;
+  const winner: Side = setsA > setsB ? 'A' : 'B';
+
+  return (
+    <DashboardModal
+      open={Boolean(match)}
+      onOpenChange={(open) => { if (!open && !busy) onCancel(); }}
+      title={control.confirmTitle}
+      size="md"
+      footer={(
+        <ModalFormFooter
+          onCancel={onCancel}
+          cancelLabel={copy.common.cancel}
+          submitType="button"
+          onSubmitClick={onConfirm}
+          busy={busy}
+          submitLabel={busy ? control.recording : control.confirmSubmit}
+        />
+      )}
+    >
+      {match ? (
+        <>
+          <p className={styles.confirmBody}>
+            {fillTemplate(control.confirmBody, {
+              pair: pairName(participantOf(match, winner), copy.common.tbd),
+              a: setsA,
+              b: setsB,
+            })}
+          </p>
+          <p className={styles.confirmScore}>
+            {copy.common.sideA} {setsA} · {copy.common.sideB} {setsB}
+          </p>
+        </>
+      ) : null}
+    </DashboardModal>
+  );
+}
 
 export type FinishForm = {
   side: Side;

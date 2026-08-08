@@ -1,269 +1,1070 @@
 /*
- * Match control. One page for the whole event day: a summary strip, the matches
- * that can be acted on right now, then the full draw in bracket order. Cards are
- * identical in both places so an operator learns one card, not two.
+ * Match control. The screen an event is run from, so it is built around the
+ * thing an event is actually run on: courts. A summary strip that doubles as
+ * the filter, one narrowing bar, then one of three layouts over the same rows —
+ * court lanes, the run order, the draw.
  *
- * Neutral surfaces throughout; state is carried by a label and a border weight,
- * never by colour alone.
+ * Every match is the same row everywhere, and every command lives in the sheet
+ * that row opens. Lanes wrap rather than scroll sideways, so a ten-court event
+ * grows downwards and the page itself never scrolls horizontally.
+ *
+ * Neutral surfaces throughout; state is carried by an icon and a word, and only
+ * then by a tint.
  */
 
 .page {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: var(--space-4);
 }
 
-/* ---- Summary strip ---- */
+.panelBody {
+  padding: var(--space-4);
+}
+
+.inlineLink,
+.sheetLink {
+  color: var(--dash-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* ---- Summary strip: five numbers, each one a way in ---- */
 
 .summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: var(--space-2);
 }
 
-@media (min-width: 48rem) {
+@media (min-width: 40rem) {
   .summary {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .summary {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
 .metric {
   display: flex;
+  min-height: 3.75rem;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.875rem 1rem;
-  border: 1px solid var(--dash-border, #e6e0dd);
-  border-radius: 0.75rem;
-  background: var(--dash-surface, #fff);
+  gap: 0.15rem;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: var(--dash-surface-strong);
+  text-align: left;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.metric:hover {
+  border-color: var(--dash-border-strong);
+}
+
+.metric:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
 }
 
 .metric[data-tone='live'] {
-  border-color: #b8a49f;
-  border-left-width: 3px;
+  border-left: 3px solid var(--dash-coral);
+}
+
+.metric[data-tone='attention'] {
+  border-left: 3px solid var(--dash-amber);
+}
+
+.metric[data-active='true'] {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-primary-soft);
 }
 
 .metricValue {
+  color: var(--dash-text);
   font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
   line-height: 1.1;
-  color: var(--dash-text, #2b2321);
-  font-variant-numeric: tabular-nums;
 }
 
 .metricLabel {
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  color: var(--dash-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--dash-muted, #7a6c69);
 }
 
-/* ---- Card grids ---- */
+/* ---- The narrowing bar ---- */
 
-.nowGrid {
+.bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: var(--dash-surface-strong);
+}
+
+.barTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.search {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1 1 16rem;
+  align-items: center;
+}
+
+.search svg {
+  position: absolute;
+  left: 0.7rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  color: var(--dash-faint);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.75rem 0 2.25rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: inherit;
+  font-size: 0.875rem;
+}
+
+.searchInput:focus-visible {
+  border-color: var(--dash-border-strong);
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.views {
+  display: inline-flex;
+  padding: 0.2rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-pill);
+  background: var(--dash-tint);
+}
+
+.view {
+  min-height: 2.35rem;
+  padding: 0 0.85rem;
+  border-radius: var(--radius-pill);
+  color: var(--dash-muted);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.view[data-active='true'] {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(43, 26, 24, 0.09);
+  color: var(--dash-text);
+}
+
+.view:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.selects {
   display: grid;
-  gap: 0.875rem;
-  padding: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+@media (min-width: 56rem) {
+  .selects {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.selectField {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.selectLabel {
+  color: var(--dash-faint);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.select {
+  min-height: 2.75rem;
+  max-width: 100%;
+  padding: 0 0.6rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: inherit;
+  font-size: 0.8125rem;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.barFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.count {
+  color: var(--dash-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chip {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--dash-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--dash-primary-soft);
+  color: var(--dash-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.chip svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.chip:focus-visible,
+.clearAll:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.clearAll {
+  min-height: 2rem;
+  padding: 0 0.4rem;
+  color: var(--dash-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/* ---- One match row, used by every view ---- */
+
+.line {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-tile);
+  background: #fff;
+}
+
+.line:hover {
+  border-color: var(--dash-border-strong);
+}
+
+.line[data-emphasis='now'] {
+  border-left: 3px solid var(--dash-coral);
+  background: linear-gradient(180deg, rgba(194, 65, 59, 0.05), rgba(255, 255, 255, 0) 60%);
+}
+
+.line[data-emphasis='next'] {
+  border-left: 3px solid var(--dash-teal);
+}
+
+.line[data-band='done'] {
+  background: var(--dash-tint);
+}
+
+.lineOpen {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 0.3rem;
+  padding: 0.6rem 0.7rem;
+  text-align: left;
+}
+
+/* Stretched hit area: the whole row opens the match, while anything beside it
+   stays its own control rather than a button inside a button. */
+.lineOpen::after {
+  content: '';
+  position: absolute;
+  border-radius: inherit;
+  inset: 0;
+}
+
+.lineOpen:focus-visible {
+  outline: none;
+}
+
+.lineOpen:focus-visible::after {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
+}
+
+.lineHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.lineBand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--dash-muted);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lineBand svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.line[data-band='live'] .lineBand {
+  color: var(--dash-coral);
+}
+
+.line[data-band='ready'] .lineBand {
+  color: var(--dash-teal);
+}
+
+.line[data-band='done'] .lineBand {
+  color: var(--dash-faint);
+}
+
+.lineNumber {
+  color: var(--dash-faint);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.linePairs {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.linePair {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.linePairName {
+  min-width: 0;
+  color: var(--dash-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.line[data-emphasis='now'] .linePairName {
+  font-size: 1rem;
+}
+
+.linePair[data-winner='true'] .linePairName {
+  font-weight: 750;
+}
+
+.linePair[data-winner='true']::before {
+  content: '';
+  width: 3px;
+  align-self: stretch;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: var(--dash-teal);
+}
+
+.linePairScore {
+  flex: 0 0 auto;
+  color: var(--dash-text);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.lineMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.6rem;
+  color: var(--dash-muted);
+  font-size: 0.75rem;
+}
+
+.lineMetaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.lineMetaItem svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: var(--dash-faint);
+}
+
+.lineLate,
+.laneLate,
+.sheetLate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--dash-amber);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.lineLate svg,
+.laneLate svg,
+.sheetLate svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.lineActions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+}
+
+/* ---- Court lanes ---- */
+
+.lanes {
+  display: grid;
+  gap: var(--space-4);
 }
 
 @media (min-width: 60rem) {
-  .nowGrid {
+  .lanes {
+    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+    align-items: start;
+  }
+}
+
+.lane {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: var(--dash-surface-strong);
+  box-shadow: 0 1px 3px rgba(43, 26, 24, 0.04);
+}
+
+.lane[data-state='live'] {
+  border-top: 3px solid var(--dash-coral);
+}
+
+.lane[data-state='open'] {
+  border-top: 3px solid var(--dash-amber);
+}
+
+.lane[data-state='done'] {
+  background: var(--dash-tint);
+}
+
+.lane[data-state='waiting'] {
+  border-style: dashed;
+}
+
+.laneHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.laneIdentity {
+  min-width: 0;
+}
+
+.laneName {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.laneState {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0;
+  color: var(--dash-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.laneState svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  color: var(--dash-coral);
+}
+
+.lane[data-state='open'] > .laneHead .laneState {
+  color: var(--dash-amber);
+}
+
+.laneProgress {
+  color: var(--dash-faint);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.laneProgress::before {
+  content: '· ';
+}
+
+.laneLink {
+  display: inline-flex;
+  min-height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-control);
+  color: var(--dash-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.laneLink svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.laneLink:hover {
+  background: var(--dash-primary-soft);
+}
+
+.laneEmpty {
+  margin: 0;
+  padding: var(--space-3) 0;
+  color: var(--dash-faint);
+  font-size: 0.8125rem;
+}
+
+.laneGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.laneGroupTitle {
+  margin: 0;
+  color: var(--dash-faint);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.laneList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A long queue is capped rather than pushing the next court off the screen. */
+.laneList[data-scroll='true'] {
+  max-height: 24rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.laneStart {
+  min-height: 2.75rem;
+}
+
+.lanePlayed {
+  border-top: 1px solid var(--dash-border);
+  padding-top: var(--space-3);
+}
+
+/* Kept as a list-item so the native disclosure marker survives; the padding is
+   what makes it a comfortable target rather than a fixed height. */
+.lanePlayed > summary {
+  padding: 0.6rem 0;
+  color: var(--dash-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lanePlayed > summary:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 2px;
+}
+
+.lanePlayed[open] > summary {
+  margin-bottom: 0.4rem;
+}
+
+/* ---- Queue order: the schedule's order, and where it is settled ---- */
+
+.queueMoves {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.queueMove {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: var(--dash-muted);
+}
+
+.queueMove svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.queueMove:hover:not(:disabled) {
+  border-color: var(--dash-border-strong);
+  color: var(--dash-primary);
+}
+
+.queueMove:disabled {
+  color: var(--dash-faint);
+  opacity: 0.45;
+}
+
+.queueMove:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.queueLock {
+  display: inline-flex;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--dash-faint);
+}
+
+.queueLock svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+/* ---- Run order ---- */
+
+.runOrder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.runGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.runTime {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.runTime::after {
+  content: '';
+  height: 1px;
+  flex: 1 1 auto;
+  background: var(--dash-border);
+}
+
+.runList {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 72rem) {
+  .runList {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+/* ---- Draw ---- */
+
 .draws {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding: 1rem;
+  gap: var(--space-5);
+}
+
+.draw {
+  min-width: 0;
+}
+
+.drawHead {
+  margin-bottom: var(--space-3);
 }
 
 .drawName {
-  font-size: 0.875rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--dash-muted, #7a6c69);
-  margin-bottom: 0.75rem;
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.9375rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.drawHint {
+  margin: 0.15rem 0 0;
+  color: var(--dash-muted);
+  font-size: 0.75rem;
 }
 
 /* Rounds read left to right on a wide screen and stack on a phone, so the page
-   never scrolls sideways. */
+   itself never scrolls sideways — only this strip does. */
 .rounds {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 @media (min-width: 60rem) {
   .rounds {
+    grid-auto-columns: minmax(18rem, 1fr);
     grid-auto-flow: column;
-    grid-auto-columns: minmax(17rem, 1fr);
     overflow-x: auto;
-    padding-bottom: 0.5rem;
+    padding-bottom: var(--space-2);
   }
 }
 
 .round {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
   min-width: 0;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .roundName {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  margin: 0;
+  color: var(--dash-faint);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--dash-muted, #7a6c69);
 }
 
-/* ---- One match ---- */
-
-.card {
+.roundList {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
-  padding: 0.875rem;
-  border: 1px solid var(--dash-border, #e6e0dd);
-  border-radius: 0.75rem;
-  background: var(--dash-surface, #fff);
-  min-width: 0;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.card[data-live='true'] {
-  border-left-width: 3px;
-  border-left-color: #8c7a75;
-}
+/* ---- One court on its own screen ---- */
 
-.card[data-complete='true'] {
-  background: #fbfaf9;
-}
-
-.cardHead {
+.courtSwitch {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
-.cardNumber {
+/* A court may be named "Centre Court North"; two of them plus the position
+   label must still fit a 375px screen without pushing the page sideways. */
+.courtStep {
+  display: inline-flex;
+  min-height: 2.75rem;
+  max-width: 45%;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  padding: 0 0.75rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--dash-text);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.courtStep svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--dash-faint);
+}
+
+.courtStep:hover {
+  border-color: var(--dash-border-strong);
+}
+
+.courtPosition {
+  color: var(--dash-faint);
   font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--dash-muted, #7a6c69);
 }
 
-.cardWhere {
+.focusLane {
+  display: grid;
+}
+
+@media (min-width: 60rem) {
+  .focusLane .laneList {
+    gap: 0.5rem;
+  }
+
+  .focusLane .laneName {
+    font-size: 1.25rem;
+  }
+}
+
+/* ---- The match sheet: the one place a match is acted on ---- */
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sheetStatus {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 0.8125rem;
-  color: var(--dash-text, #2b2321);
+  gap: var(--space-2);
 }
 
-.cardCourt,
-.cardTime {
+.sheetSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sheetTitle {
+  margin: 0;
+  color: var(--dash-faint);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.sheetWhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.875rem;
+}
+
+.sheetFact {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.35rem;
+  font-weight: 600;
 }
 
-.cardCourt svg,
-.cardTime svg,
-.cardTimeEdit svg {
-  width: 0.875rem;
-  height: 0.875rem;
-  flex: none;
+.sheetFact svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--dash-faint);
 }
 
-.cardCourt[data-missing='true'],
-.cardTime[data-missing='true'] {
-  color: var(--dash-muted, #7a6c69);
+.sheetFact[data-missing='true'] {
+  color: var(--dash-muted);
   font-style: italic;
 }
 
-.cardTimeEdit {
-  display: inline-flex;
+.sheetHint {
+  display: flex;
   align-items: center;
-  gap: 0.375rem;
-}
-
-.timeInput {
-  min-height: 2.75rem;
-  padding: 0 0.5rem;
-  border: 1px solid var(--dash-border, #e6e0dd);
-  border-radius: 0.5rem;
-  background: #fff;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--dash-muted);
   font-size: 0.8125rem;
-  color: inherit;
-  max-width: 100%;
 }
 
-.timeInput:focus-visible {
-  outline: 2px solid #8c7a75;
-  outline-offset: 1px;
+.sheetHint svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex: 0 0 auto;
 }
 
-/* ---- The two pairs: the largest type on the card ---- */
+.sheetFlow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.sheetFlow svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--dash-amber);
+}
+
+.sheetActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-card);
+  background: var(--dash-tint);
+}
+
+.sheetPrimary {
+  min-height: 3rem;
+  width: 100%;
+}
+
+.sheetGhost {
+  min-height: 2.75rem;
+  align-self: flex-start;
+}
+
+/* ---- The two pairs, in the sheet ---- */
 
 .sides {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .side {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas: 'marker names tally' 'marker club tally';
   align-items: center;
-  column-gap: 0.75rem;
-  padding: 0.5rem 0.625rem;
-  border-radius: 0.5rem;
-  background: #faf8f7;
-}
-
-/* Anchors the letter the result fields are labelled with to the pair it belongs to. */
-.sideMarker {
-  grid-area: marker;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--dash-muted, #7a6c69);
+  column-gap: var(--space-3);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-tile);
+  background: #fff;
+  grid-template-areas: 'marker names tally' 'marker club tally';
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .side[data-winner='true'] {
-  background: #f2efec;
-  box-shadow: inset 2px 0 0 #8c7a75;
+  border-color: rgba(22, 128, 106, 0.3);
+  background: var(--dash-teal-soft);
+}
+
+.sideMarker {
+  grid-area: marker;
+  color: var(--dash-faint);
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
 }
 
 .sideNames {
   grid-area: names;
-  font-size: 0.9375rem;
-  font-weight: 600;
+  color: var(--dash-text);
+  font-size: 1rem;
+  font-weight: 650;
   line-height: 1.3;
-  color: var(--dash-text, #2b2321);
   overflow-wrap: anywhere;
 }
 
 .sideClub {
   grid-area: club;
+  color: var(--dash-muted);
   font-size: 0.75rem;
-  color: var(--dash-muted, #7a6c69);
   overflow-wrap: anywhere;
 }
 
 .sideTally {
   grid-area: tally;
-  font-size: 1.25rem;
-  font-weight: 700;
+  color: var(--dash-text);
+  font-size: 1.375rem;
   font-variant-numeric: tabular-nums;
-  color: var(--dash-text, #2b2321);
+  font-weight: 750;
 }
 
 /* ---- Sets ---- */
@@ -272,84 +1073,93 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem 0.6rem;
+  color: var(--dash-muted);
   font-size: 0.75rem;
-  color: var(--dash-muted, #7a6c69);
 }
 
 .setsLabel {
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 750;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.setChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setChip {
+  display: inline-flex;
+  min-height: 1.6rem;
+  align-items: center;
+  padding: 0 0.5rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--dash-text);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.setChipEmpty {
+  color: var(--dash-faint);
+  font-style: italic;
 }
 
 .setsFormat {
   margin-left: auto;
+  color: var(--dash-faint);
 }
 
-/* ---- Controls ---- */
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.actionButton {
-  min-height: 2.75rem;
-  flex: 1 1 10rem;
-}
-
-.actionGhost {
-  min-height: 2.75rem;
-  flex: 0 0 auto;
-}
-
-/* ---- Result entry ---- */
+/* ---- Recording a result ---- */
 
 .resultForm {
   display: flex;
-  flex: 1 1 100%;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 0.4rem;
 }
 
 .resultRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .resultField {
   display: inline-flex;
+  min-height: 3rem;
   align-items: center;
-  gap: 0.375rem;
-  min-height: 2.75rem;
-  padding: 0 0.375rem 0 0.625rem;
-  border: 1px solid var(--dash-border, #e6e0dd);
-  border-radius: 0.5rem;
+  gap: 0.4rem;
+  padding: 0 0.4rem 0 0.7rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
   background: #fff;
 }
 
 .resultSide {
+  color: var(--dash-faint);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 750;
   letter-spacing: 0.08em;
-  color: var(--dash-muted, #7a6c69);
 }
 
 .resultInput {
-  width: 2.75rem;
-  min-height: 2.5rem;
+  width: 3rem;
+  min-height: 2.75rem;
   border: 0;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-control);
   background: transparent;
-  font-size: 1.125rem;
-  font-weight: 700;
+  color: var(--dash-text);
+  font-size: 1.25rem;
   font-variant-numeric: tabular-nums;
+  font-weight: 750;
   text-align: center;
-  color: var(--dash-text, #2b2321);
   appearance: textfield;
 }
 
@@ -360,47 +1170,72 @@
 }
 
 .resultInput:focus-visible {
-  outline: 2px solid #8c7a75;
+  outline: 2px solid var(--dash-primary);
   outline-offset: 2px;
 }
 
 .resultSubmit {
-  min-height: 2.75rem;
+  min-height: 3rem;
   flex: 1 1 9rem;
 }
 
 .resultHint {
+  margin: 0;
+  color: var(--dash-muted);
   font-size: 0.8125rem;
-  color: var(--dash-muted, #7a6c69);
 }
 
-.actionHint,
-.actionDone {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.8125rem;
-  color: var(--dash-muted, #7a6c69);
+/* ---- Planned start ---- */
+
+.timeEdit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
 }
 
-.actionDone svg,
-.actionHint svg {
-  width: 0.875rem;
-  height: 0.875rem;
+.timeLabel {
+  flex: 1 1 100%;
+  color: var(--dash-faint);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.timeInput {
+  min-height: 2.75rem;
+  max-width: 100%;
+  flex: 1 1 12rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: inherit;
+  font-size: 0.875rem;
+}
+
+.timeInput:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.timeSave {
+  min-height: 2.75rem;
 }
 
 /* ---- Confirmation ---- */
 
 .confirmBody {
+  color: var(--dash-text);
   font-size: 1rem;
   line-height: 1.5;
-  color: var(--dash-text, #2b2321);
 }
 
 .confirmScore {
-  margin-top: 0.75rem;
+  margin-top: var(--space-3);
+  color: var(--dash-text);
   font-size: 1.125rem;
-  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--dash-text, #2b2321);
+  font-weight: 700;
 }

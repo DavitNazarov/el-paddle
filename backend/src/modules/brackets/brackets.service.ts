@@ -76,15 +76,22 @@ type MatchNode = { id: string; round: MatchRound; position: number };
 
 export function bracketSizeForEntryCount(entryCount: number) {
   if (entryCount < 2) jsonError('At least 2 approved entries are required to generate a bracket.', 409);
-  if (entryCount > 16) jsonError('Brackets support up to 16 approved entries.', 409);
+  if (entryCount > 32) jsonError('Brackets support up to 32 approved entries.', 409);
   if (entryCount <= 2) return 2;
   if (entryCount <= 4) return 4;
   if (entryCount <= 8) return 8;
-  return 16;
+  if (entryCount <= 16) return 16;
+  return 32;
 }
 
-function roundPlan(size: number) {
+/**
+ * The rounds a draw of this size is made of, largest first, each with how many
+ * matches it holds and the number the first of them carries. Match numbers run
+ * straight through the draw, so the final is always the highest.
+ */
+export function roundPlan(size: number) {
   const rounds = [
+    { size: 32, round: MatchRound.ROUND_OF_32 },
     { size: 16, round: MatchRound.ROUND_OF_16 },
     { size: 8, round: MatchRound.QUARTERFINAL },
     { size: 4, round: MatchRound.SEMIFINAL },

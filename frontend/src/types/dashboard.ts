@@ -53,7 +53,7 @@ export type NextMatchDto = {
   id: string;
   eventId: string;
   eventTitle: string;
-  round: 'ROUND_OF_16' | 'QUARTERFINAL' | 'SEMIFINAL' | 'FINAL';
+  round: 'ROUND_OF_32' | 'ROUND_OF_16' | 'QUARTERFINAL' | 'SEMIFINAL' | 'FINAL';
   status: 'PENDING' | 'READY' | 'IN_PROGRESS';
   scoreA: number;
   scoreB: number;

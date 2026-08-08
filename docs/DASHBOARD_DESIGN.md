@@ -86,20 +86,32 @@ responsible for the whole event rather than one match. The highest-stress reader
 in the product. (This replaced a separate judge console; the judge role still
 exists server-side but has no screens.)
 
-- **Leads with:** the matches that can be acted on now — what is running, then
-  what can start — ahead of the full draw.
-- **Both pairs get the largest type on the card,** with their club beneath.
-  These names get checked against the four people walking onto the court.
-  Nothing outranks them.
-- **One card, two places.** The same match card renders in the "on now" list and
-  in the draw, so there is one card to learn rather than two screens to reconcile.
-- **Court, time, players, sets, controls — in that order,** because that is the
-  order the question is asked in.
+- **Leads with:** the courts. A tournament day is not a bracket; it is a handful
+  of surfaces each working through a queue. One lane per court — what is on it,
+  what it starts next, the queue behind that, what it has played — is the layout
+  a sixteen-entry draw across three categories survives and a wall of forty-five
+  cards does not.
+- **Three layouts, one set of rows.** Courts, run order (everything in the order
+  it is due to be played) and draw (where each winner goes) are three questions
+  about the same matches; switching layout never loses the filter.
+- **Filtering is a first-class control, not a nicety.** Court, category, round,
+  state and a free-text search over players, clubs and match numbers — the five
+  ways a desk gets interrupted. What is chosen becomes a removable chip, so the
+  current question is always one line.
+- **Counts are navigation.** Each tile in the summary strip narrows the console
+  to the matches behind it, because a number an operator cannot act on is a
+  number they have to translate into a search.
+- **One row everywhere, one place to act.** Every view is read-only; the row
+  opens a sheet, and the sheet is the only surface carrying commands. Eight
+  courts must not mean eight open score forms.
+- **Both pairs carry the largest type,** with their club beneath. These names get
+  checked against the four people walking onto the court. Nothing outranks them.
 - **Freshness matters.** Scores land from other devices; the console refetches on
-  every realtime topic that can change a match.
+  every realtime topic that can change a match, and re-reads lateness on a clock
+  of its own.
 - **Never offer an action the server would refuse.** A match with no court says
-  so instead of showing a Start button; a started match shows its time as text
-  rather than an input the API would reject.
+  so instead of showing a Start button; a started match's time and its place in
+  the queue read as locked rather than as inputs the API would reject.
 
 ### Organiser — "which of my events needs me?"
 
@@ -308,9 +320,10 @@ There is no local database, so screens cannot be driven with real data.
 4. **Delete the throwaway route** before finishing.
 
 This forces presentational components to be extractable and prop-driven, which
-is why `MatchControlCard`, `AdminEventBoard`, `PlayerEntryCard`,
-`AdminRegistrationCard`, `BracketDrawStrip`, `BracketTree`, `CourtBoard`,
-`CourtDetail`, `AdminAttentionQueue` and `UnscheduledPool` are separate files.
+is why `MatchLine`, `MatchSheet`, `CourtLane`, `AdminEventBoard`,
+`PlayerEntryCard`, `AdminRegistrationCard`, `BracketDrawStrip`, `BracketTree`,
+`CourtBoard`, `CourtDetail`, `AdminAttentionQueue` and `UnscheduledPool` are
+separate files.
 Keep doing that.
 
 One caveat learned from `AdminAttentionQueue`: its item type carries React values
@@ -456,21 +469,36 @@ the device, not the account. Faking a save there would be exactly the silent
 autosave the archetype forbids.
 
 **Match control** notes. The one screen where a UI mistake corrupts a result.
-Both pair names carry the largest type on the card, above the set tally, because
-they are what the operator checks against the four people walking onto the court;
-each carries its club beneath, since two clubs can field similar names. The card
-is deliberately identical in the "on now" list and in the draw — an operator
-under pressure should not have to re-read a second layout.
+Both pair names carry the largest type, above the set tally, because they are
+what the operator checks against the four people walking onto the court; each
+carries its club beneath, since two clubs can field similar names.
+
+The screen is built court-first. `MatchLine` is the only match row in the
+product's match-day surfaces and it is read-only everywhere; `MatchSheet` is the
+only place a match is commanded. That split is what keeps a big draw usable: a
+console that put a score form on every card would put eight of them on screen at
+a four-court event and forty-five in a three-category draw.
 
 The logic is split so each piece has one reason to change: `setEngine.ts` mirrors
 the server's set race, `matchModel.ts` decides what the console may *offer*
-(`canStart`, `canRecordSet`, `canFinishEarly` mirror the server, so a control that
-would be refused is never shown, and `previewSet` phrases the confirmation
-differently when the set would end the match), and `controlModel.ts` turns a
-bracket into the court/time reading and the "act on me" ordering.
+(`canStart`, `canRecordResult`, `canFinishEarly` mirror the server, so a control
+that would be refused is never shown), `controlModel.ts` reads one match's court,
+time and lateness, `runBoard.ts` turns brackets plus courts into lanes and the
+day's numbers, and `controlFilters.ts` is the whole narrowing vocabulary.
+`useControlConsole.ts` holds the fetch and every command, so the console and the
+single-court screen (`/admin/events/:eventId/control/courts/:courtId`, a lane
+given the whole width for a tablet parked at the desk) share one of each.
 
-There is no undo here. Correcting a recorded set is an administrator act with a
-reason, on the bracket page — deliberately slower than recording one.
+**Order is the schedule's, never the console's.** Lanes are drawn in
+`queuePosition` order and the run order sorts by planned time first, so a change
+made on Courts & schedule shows up here immediately. The nudges send that same
+reorder command; a started or finished match shows a lock instead, because the
+order a match was played in is a fact rather than a setting. Lateness follows
+from the same source — a match still waiting more than `LATE_AFTER_MINUTES` past
+its planned start is flagged, and "behind schedule" is a filter, not just a count.
+
+There is no undo here. Correcting a recorded result is an administrator act with
+a reason, on the bracket page — deliberately slower than recording one.
 
 **Player event** notes. Ordered as the competitor asks: am I in
 (`PlayerEntryCard`, the same entry path as the player home), who am I playing

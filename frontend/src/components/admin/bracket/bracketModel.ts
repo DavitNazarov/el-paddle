@@ -9,7 +9,8 @@ import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
  * preview route can build a whole screen from fixtures.
  */
 
-const rounds: MatchDto['round'][] = ['ROUND_OF_16', 'QUARTERFINAL', 'SEMIFINAL', 'FINAL'];
+/** Every round a draw can hold, in the order they are played. */
+const rounds: MatchDto['round'][] = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTERFINAL', 'SEMIFINAL', 'FINAL'];
 
 export function activeRounds(matches: MatchDto[]) {
   const present = new Set(matches.map((match) => match.round));

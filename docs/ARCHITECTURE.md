@@ -26,7 +26,7 @@ The Next.js App Router application provides:
 
 - a public marketing landing page plus club, player, event, bracket, schedule, and match-history pages with SEO metadata, sitemap, and structured data;
 - player dashboards for the club, entries, events, opponent requests, notifications, match history, and account settings;
-- the match control console: court, time, draw, and scoring on one screen;
+- the match control console: court lanes, a filterable run order, the draw, and every scoring command on one screen, plus a single-court screen for a tablet at the desk;
 - administrative screens for events, registrations, opponent requests, brackets, schedules, match control, users, clubs, categories, settings, and operations.
 
 The UI is bilingual (English and Georgian) via the shared i18n provider. The shared API client (`frontend/src/lib/api/`) sends credentialed requests and automatically retrieves `/api/auth/csrf` before unsafe requests, sending the token in `x-csrf-token`.

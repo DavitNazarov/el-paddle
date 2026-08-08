@@ -497,8 +497,15 @@
 }
 
 @media (min-width: 64rem) {
+  /* A 32-entry draw is five rounds wide. The floor keeps a pair of names
+     readable rather than letting five equal columns crush them; on the four
+     rounds a smaller draw has, `1fr` still wins and nothing scrolls. */
+  .boardRegion {
+    overflow-x: auto;
+  }
+
   .board {
-    grid-template-columns: repeat(var(--round-count), minmax(0, 1fr));
+    grid-template-columns: repeat(var(--round-count), minmax(11rem, 1fr));
     gap: 2.4rem;
   }
 

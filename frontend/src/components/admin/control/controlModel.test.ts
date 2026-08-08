@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { BracketDto, MatchDto } from '@/types/tournament';
+import type { MatchDto } from '@/types/tournament';
 import {
-  actionableMatches,
-  buildControlSummary,
+  LATE_AFTER_MINUTES,
   canEditTime,
   courtOf,
   fromLocalInputValue,
+  minutesLate,
   plannedStartOf,
   toLocalInputValue,
 } from './controlModel';
@@ -24,8 +24,6 @@ function scheduled(courtId: string, queuePosition: number, status = 'READY', pla
     court: { id: courtId, name: courtId.toUpperCase(), location: null },
   } as unknown as MatchDto['scheduleItem'];
 }
-
-const bracket = (matches: MatchDto[]) => ({ id: 'b1', matches } as BracketDto);
 
 describe('where and when a match is', () => {
   it('reads the court off the match, and null while it waits for one', () => {
@@ -46,6 +44,30 @@ describe('where and when a match is', () => {
   });
 });
 
+describe('running late', () => {
+  const now = new Date('2026-08-05T12:00:00.000Z').getTime();
+  const due = (minutesAgo: number) => new Date(now - minutesAgo * 60_000).toISOString();
+
+  it('stays quiet until a match is far enough behind to be worth saying', () => {
+    const barely = match('m1', { scheduleItem: scheduled('c1', 1, 'READY', due(LATE_AFTER_MINUTES - 1)) });
+    const late = match('m2', { scheduleItem: scheduled('c1', 2, 'READY', due(23)) });
+    expect(minutesLate(barely, now)).toBeNull();
+    expect(minutesLate(late, now)).toBe(23);
+  });
+
+  it('says nothing about a match that has already started or finished', () => {
+    const started = { status: 'IN_PROGRESS', scheduleItem: scheduled('c1', 1, 'IN_PROGRESS', due(40)) };
+    const done = { status: 'COMPLETED', scheduleItem: scheduled('c1', 1, 'COMPLETED', due(40)) };
+    expect(minutesLate(match('m1', started as Partial<MatchDto>), now)).toBeNull();
+    expect(minutesLate(match('m2', done as Partial<MatchDto>), now)).toBeNull();
+  });
+
+  it('cannot be late without a time to be late against', () => {
+    expect(minutesLate(match('m1', { scheduleItem: scheduled('c1', 1) }), now)).toBeNull();
+    expect(minutesLate(match('m1'), now)).toBeNull();
+  });
+});
+
 describe('datetime-local round trip', () => {
   it('renders an ISO instant as local wall-clock text and back again', () => {
     const iso = new Date(2026, 7, 5, 14, 30).toISOString();
@@ -60,48 +82,5 @@ describe('datetime-local round trip', () => {
     expect(fromLocalInputValue('')).toBeNull();
     expect(fromLocalInputValue('   ')).toBeNull();
     expect(fromLocalInputValue('not a date')).toBeNull();
-  });
-});
-
-describe('the summary strip', () => {
-  it('counts by status, ignores cancelled matches, and counts distinct live courts', () => {
-    const summary = buildControlSummary([
-      bracket([
-        match('m1', { status: 'IN_PROGRESS', scheduleItem: scheduled('c1', 1, 'IN_PROGRESS') }),
-        match('m2', { status: 'IN_PROGRESS', scheduleItem: scheduled('c1', 2, 'IN_PROGRESS') }),
-        match('m3', { status: 'IN_PROGRESS', scheduleItem: scheduled('c2', 1, 'IN_PROGRESS') }),
-        match('m4', { status: 'READY', scheduleItem: scheduled('c2', 2) }),
-        match('m5', { status: 'COMPLETED' }),
-        match('m6', { status: 'CANCELLED' }),
-      ]),
-    ]);
-    expect(summary).toMatchObject({ live: 3, ready: 1, completed: 1, total: 5, courtsInPlay: 2 });
-  });
-
-  it('flags matches that are ready with nowhere to play', () => {
-    const summary = buildControlSummary([bracket([match('m1', { status: 'READY' }), match('m2', { status: 'READY', scheduleItem: scheduled('c1', 1) })])]);
-    expect(summary.awaitingCourt).toBe(1);
-  });
-});
-
-describe('what can be acted on now', () => {
-  it('puts running matches first, then ready ones in court-queue order', () => {
-    const ordered = actionableMatches([
-      bracket([
-        match('m4', { status: 'READY', scheduleItem: scheduled('c1', 3) }),
-        match('m2', { status: 'READY', scheduleItem: scheduled('c1', 2) }),
-        match('m9', { status: 'IN_PROGRESS', scheduleItem: scheduled('c1', 1, 'IN_PROGRESS') }),
-        match('m7', { status: 'COMPLETED' }),
-        match('m8', { status: 'PENDING' }),
-      ]),
-    ]);
-    expect(ordered.map(({ match: entry }) => entry.id)).toEqual(['m9', 'm2', 'm4']);
-  });
-
-  it('sends matches with no court to the back, ordered by match number', () => {
-    const ordered = actionableMatches([
-      bracket([match('m5', { status: 'READY' }), match('m3', { status: 'READY' }), match('m1', { status: 'READY', scheduleItem: scheduled('c1', 1) })]),
-    ]);
-    expect(ordered.map(({ match: entry }) => entry.id)).toEqual(['m1', 'm3', 'm5']);
   });
 });

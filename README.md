@@ -89,7 +89,7 @@ Players are distributed two per club across the seeded clubs.
 2. Publish the event and review club team registrations.
 3. Publish the approved roster, close registration, and open per-category opponent-request windows.
 4. Approve accepted pairings, reject them, or override refusals.
-5. Generate, review, lock, and publish each category bracket (2–16 entries; bracket sized 2/4/8/16 with byes).
+5. Generate, review, lock, and publish each category bracket (2–32 entries; bracket sized 2/4/8/16/32 with byes).
 6. Create courts, queue matches, and publish the schedule.
 7. Move the event to ongoing, optionally enable public live scoring, and monitor scores and deliveries.
 8. Complete the event and publish final results; reopen explicitly if a correction is needed.
@@ -111,12 +111,15 @@ Players are distributed two per club across the seeded clubs.
 
 ### Match control (admin & organiser)
 
-1. Open **Match control** for the event: every match with its court, its planned time, both pairs and their clubs, in draw order.
-2. Set or adjust a planned start time in place, until the match starts.
-3. Start the next ready match on a court — earlier queue positions must be finished first. Starting it freezes the match's set format. Several courts can run at once.
-4. After each set, press the button for the side that won it and confirm in the dialog. The match completes automatically once a side reaches the required set wins, and the winner moves into the next round.
-5. Use "Finish early" for a walkover or a retirement, with a reason.
-6. To correct a set recorded for the wrong side, reopen the match from the bracket page (administrators only).
+1. Open **Match control** for the event. It opens on the courts: one lane per court showing what is on it, what it starts next, the queue behind that, and what it has played. Two other layouts cover the same matches — **Run order** (everything in the order it is due to be played) and **Draw** (where each winner goes).
+2. Narrow the screen by court, category, round or state, or search a player, a club or a match number. The filter follows you between layouts. The counts along the top — playing now, ready, courts free, behind schedule, played — are themselves filters.
+3. Start the next ready match on a court from its "up next" row — earlier queue positions must be finished first. Starting it freezes the match's set format. Several courts can run at once.
+4. Select any match to open its sheet: court, queue position and planned time; both pairs with their clubs and set tallies; where the winner goes; and every command for that match.
+5. When a match ends, write the final set tally in the two fields marked A and B. The dialog names the winning pair before the result is recorded, and recording it advances the winner.
+6. Use "Finish early" for a walkover or a retirement, with a reason.
+7. Reorder a court's remaining queue with the up/down controls on its rows; a started or finished match is locked in place. Planned times can be changed from the match sheet until the match starts.
+8. Park a tablet on one court with its own page, reached from the lane's "Open court" link.
+9. To correct a recorded result, reopen the match from the bracket page (administrators only).
 
 ## Commands
 

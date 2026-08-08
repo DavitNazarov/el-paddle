@@ -36,7 +36,7 @@ export type OpponentRequestDto = {
   targetEntry: EntrySummary;
 };
 
-export type MatchRoundDto = 'ROUND_OF_16' | 'QUARTERFINAL' | 'SEMIFINAL' | 'FINAL';
+export type MatchRoundDto = 'ROUND_OF_32' | 'ROUND_OF_16' | 'QUARTERFINAL' | 'SEMIFINAL' | 'FINAL';
 
 export type MatchSetDto = {
   setNumber: number;

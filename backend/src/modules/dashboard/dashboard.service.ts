@@ -393,12 +393,16 @@ export async function getPlayerSummary(userId: string) {
   return { unreadNotifications, attentionEntries, pendingOpponentRequests };
 }
 
-/** How far a round carries a player, for picking their best-ever finish. */
+/**
+ * How far a round carries a player, for picking their best-ever finish. Only the
+ * ordering matters — the numbers are compared against each other, never stored.
+ */
 const ROUND_DEPTH: Record<string, number> = {
-  ROUND_OF_16: 0,
-  QUARTERFINAL: 1,
-  SEMIFINAL: 2,
-  FINAL: 3,
+  ROUND_OF_32: 0,
+  ROUND_OF_16: 1,
+  QUARTERFINAL: 2,
+  SEMIFINAL: 3,
+  FINAL: 4,
 };
 
 /**

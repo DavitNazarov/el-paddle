@@ -70,13 +70,15 @@ const ROUNDS_BY_SIZE: Record<number, MatchRound[]> = {
   4: [MatchRound.SEMIFINAL, MatchRound.FINAL],
   8: [MatchRound.QUARTERFINAL, MatchRound.SEMIFINAL, MatchRound.FINAL],
   16: [MatchRound.ROUND_OF_16, MatchRound.QUARTERFINAL, MatchRound.SEMIFINAL, MatchRound.FINAL],
+  32: [MatchRound.ROUND_OF_32, MatchRound.ROUND_OF_16, MatchRound.QUARTERFINAL, MatchRound.SEMIFINAL, MatchRound.FINAL],
 };
 
-function bracketSizeFor(teamCount: number): 2 | 4 | 8 | 16 {
+function bracketSizeFor(teamCount: number): 2 | 4 | 8 | 16 | 32 {
   if (teamCount <= 2) return 2;
   if (teamCount <= 4) return 4;
   if (teamCount <= 8) return 8;
-  return 16;
+  if (teamCount <= 16) return 16;
+  return 32;
 }
 
 // Classic seeding order so byes fall against the top seeds and never meet.
@@ -1109,7 +1111,7 @@ async function main() {
 
   // Insert matches final-round-first so nextMatchId FK targets already exist.
   const matchesByRoundDesc = [...matchRows].sort((a, b) => {
-    const order = [MatchRound.ROUND_OF_16, MatchRound.QUARTERFINAL, MatchRound.SEMIFINAL, MatchRound.FINAL];
+    const order = [MatchRound.ROUND_OF_32, MatchRound.ROUND_OF_16, MatchRound.QUARTERFINAL, MatchRound.SEMIFINAL, MatchRound.FINAL];
     return order.indexOf(b.round) - order.indexOf(a.round);
   });
   for (const m of matchesByRoundDesc) {

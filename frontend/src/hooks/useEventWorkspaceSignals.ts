@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import type { RegistrationDto } from '@/types/admin';
 import type { BracketDto, CourtDto, OpponentRequestDto } from '@/types/tournament';
-import { buildControlSummary } from '@/components/admin/control/controlModel';
+import { bandOf, buildControlMatches } from '@/components/admin/control/runBoard';
 
 /**
  * Live counts the event workspace prints on each stage card. A null section
@@ -30,6 +30,18 @@ const emptySignals: EventWorkspaceSignals = {
 
 /** Opponent-request states that still sit in the administrator's decision queue. */
 const awaitingDecision = new Set(['ACCEPTED_BY_OPPONENT', 'REFUSED_BY_OPPONENT', 'CONFLICTED']);
+
+/**
+ * The two numbers the match-control card prints. Courts are not read here, so
+ * this counts matches by state rather than building the console's whole board.
+ */
+function controlSignal(brackets: BracketDto[]) {
+  const bands = buildControlMatches(brackets, Date.now()).map((entry) => bandOf(entry.match));
+  return {
+    live: bands.filter((band) => band === 'live').length,
+    ready: bands.filter((band) => band === 'ready').length,
+  };
+}
 
 async function readJson<T>(path: string): Promise<T | null> {
   try {
@@ -83,9 +95,7 @@ export function useEventWorkspaceSignals(eventId: string) {
               queued: schedule.courts.reduce((total, court) => total + court.scheduleItems.length, 0),
             }
           : null,
-        control: brackets
-          ? (({ live, ready }) => ({ live, ready }))(buildControlSummary(brackets.brackets))
-          : null,
+        control: brackets ? controlSignal(brackets.brackets) : null,
       });
       setLoading(false);
     }
