@@ -1,5 +1,6 @@
 import {
   UserRole,
+  UserStatus,
   type Category,
   type Bracket,
   type Club,
@@ -443,6 +444,8 @@ function serializeClubMemberPublic(member: ClubMember & { user: PublicUserSource
     user: {
       fullName: user.fullName,
     },
+    // /players/:id only resolves active players, so anyone else gets no link.
+    playerId: user.role === UserRole.USER && user.status === UserStatus.ACTIVE ? user.id : null,
   };
 }
 
