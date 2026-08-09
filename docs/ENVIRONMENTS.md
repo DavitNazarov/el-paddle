@@ -81,7 +81,9 @@ docker run --rm --network elpadel_staging_default -w /app/backend \
 
 The seed is idempotent (wipes/recreates only its own `seed_event_*` events) and
 never touches the bootstrapped admin. Logins after seeding: `admin@example.com`,
-`judge1..5@example.com`, `athlete001..036@example.com` — all password `Password123!`.
+`judge1..5@example.com`, `athlete001..154@example.com` — all password `Password123!`.
+The athlete pool is 154 players in 77 clubs, two players per club (owner + teammate);
+events draw distinct clubs from that pool, so no club fields two teams in one event.
 
 Completed and in-progress fixtures are scored in sets, matching the live product:
 quarterfinals race to one set win, semifinals to two, finals to three (so a final

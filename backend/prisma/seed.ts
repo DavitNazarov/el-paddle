@@ -243,12 +243,28 @@ const LAST_NAMES = [
   'Chikovani', 'Sturua', 'Gabelia', 'Tabatadze', 'Zurabishvili', 'Kobakhidze',
 ];
 
+// One club per entry, two players per club: 77 clubs seed 154 players.
 const CLUB_NAMES = [
   'Aurum Padel Club', 'Velvet Court Team', 'Vake Smash Club', 'Lisi Lake Padel',
   'Saburtalo Slice', 'Old Town Rally', 'Mtatsminda Volley', 'Digomi Drop Shot',
   'Kus Tba Padel', 'Rustavi Racket Club', 'Batumi Bandeja', 'Gldani Glass Court',
   'Isani Ace Team', 'Nadzaladevi Net', 'Krtsanisi Court Kings', 'Chugureti Chip',
-  'Ortachala Overhead', 'Didube Deuce Club',
+  'Ortachala Overhead', 'Didube Deuce Club', 'Mukhiani Match Point', 'Varketili Volley',
+  'Sololaki Smash Club', 'Avlabari Ace Club', 'Tbilisi Sea Padel', 'Turtle Lake Rally',
+  'Marjanishvili Match Club', 'Rike Park Padel', 'Delisi Drop Club', 'Vazisubani Vantage',
+  'Temka Topspin', 'Gotsiridze Glass Club', 'Samgori Serve Club', 'Ponichala Padel',
+  'Tskneti Court Club', 'Bagebi Baseline', 'Nutsubidze Net Club', 'Vashlijvari Volley',
+  'Sanzona Smash Club', 'Elia Padel Club', 'Khelvachauri Court Club', 'Kobuleti Coast Padel',
+  'Gonio Golden Court', 'Makhinjauri Match Club', 'Poti Port Padel', 'Kutaisi Kings Court',
+  'Zestafoni Zone Padel', 'Chiatura Chip Club', 'Samtredia Smash', 'Tskaltubo Spa Padel',
+  'Telavi Terrace Club', 'Sighnaghi Sunset Padel', 'Gurjaani Grand Slam', 'Kvareli Court Club',
+  'Lagodekhi Lob Club', 'Mtskheta Mixed Padel', 'Gori Grand Court', 'Kaspi Court Club',
+  'Khashuri Highland Padel', 'Borjomi Valley Padel', 'Bakuriani Alpine Court', 'Akhaltsikhe Ace Club',
+  'Vardzia Volley Club', 'Ambrolauri Racket Club', 'Oni Overhead Club', 'Mestia Mountain Padel',
+  'Zugdidi Zenith Padel', 'Senaki Slice Club', 'Martvili Match Club', 'Ozurgeti Open Court',
+  'Ureki Magnetic Padel', 'Shekvetili Shore Club', 'Anaklia Bay Padel', 'Marneuli Meridian Club',
+  'Bolnisi Baseline Club', 'Dmanisi Drive Club', 'Tetritskaro Top Court', 'Sagarejo Smash Club',
+  'Dedoplistskaro Deuce Club',
 ];
 
 async function main() {
@@ -1189,7 +1205,7 @@ async function main() {
   console.log('Admin login: admin@example.com');
   console.log('Judges: judge1@example.com … judge5@example.com');
   console.log('Organiser: organiser@example.com (runs the live Summer Slam event only)');
-  console.log('Athletes: athlete001@example.com … athlete036@example.com');
+  console.log(`Athletes: athlete001@example.com … athlete${(CLUB_NAMES.length * 2).toString().padStart(3, '0')}@example.com (2 per club across ${CLUB_NAMES.length} clubs)`);
   console.log('Categories: A, B, C, B + C');
   console.log(`Events seeded: ${seedEventIds.length} (completed, ongoing/live, registration-closed, registration-open, draft, archived).`);
   console.log(`Registrations: ${registrationRows.length}, matches: ${matchRows.length}, decided sets: ${matchSetRows.length}.`);

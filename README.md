@@ -77,9 +77,9 @@ After seeding, every account uses the password `Password123!`:
 | Role | Email |
 | --- | --- |
 | Administrator | `admin@example.com` |
-| Player | `athlete001@example.com` … `athlete036@example.com` |
+| Player | `athlete001@example.com` … `athlete154@example.com` |
 
-Players are distributed two per club across the seeded clubs.
+Players are distributed two per club across the seeded clubs — 154 players in 77 clubs.
 
 ## Main workflows
 
