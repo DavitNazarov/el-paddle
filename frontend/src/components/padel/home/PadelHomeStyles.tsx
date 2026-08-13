@@ -1133,6 +1133,19 @@ export function PadelHomeStyles() {
         }
 
         /* ---- Word reveal ---- */
+        /* A revealed heading is a row of word boxes, not text, and the box
+           holding each word carries a transform for as long as the reveal
+           runs. Safari's text-wrap: balance (set on h1-h3 in globals.css)
+           measures that row and strands the first word on a line of its own,
+           then corrects itself on the layout pass that follows the animation
+           — the heading visibly re-flows. Balancing has nothing to do here
+           anyway: it cannot move a word between lines the reveal has fixed. */
+        h1:has(.reveal-word),
+        h2:has(.reveal-word),
+        h3:has(.reveal-word) {
+          text-wrap: wrap;
+        }
+
         .reveal-word {
           display: inline-flex;
           overflow: hidden;
