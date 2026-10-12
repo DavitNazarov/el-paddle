@@ -28,7 +28,9 @@ All four are in Frankfurt so the API and worker use the internal database URL. T
 
 ## 1. Apply the blueprint
 
-In the Render dashboard, create a Blueprint from this repository's `main` branch. Render reads `render.yaml`.
+In the Render dashboard, create a **Blueprint** from this repository's `main` branch. Render reads `render.yaml` and creates the web, API, worker, and database as Docker services.
+
+Do not use **New Web Service** on the repo. That builds with Node (`npm install; npm run build`) from the repository root, which is one process and is not this app. A log line `Using Node.js version` means that service was created the wrong way. Delete it and create the Blueprint instead.
 
 Fill the secrets it asks for:
 
