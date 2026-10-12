@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api';
 import type { RegistrationDto } from '@/types/admin';
 import type { BracketDto, CourtDto, OpponentRequestDto } from '@/types/tournament';
 import { bandOf, buildControlMatches } from '@/components/admin/control/runBoard';
+import { courtState, unscheduledMatches } from '@/components/admin/schedule/scheduleModel';
 
 /**
  * Live counts the event workspace prints on each stage card. A null section
@@ -15,7 +16,14 @@ export type EventWorkspaceSignals = {
   registrations: { approved: number; pending: number } | null;
   requests: { awaiting: number; total: number } | null;
   brackets: { locked: number; published: number; total: number } | null;
-  schedule: { courts: number; queued: number } | null;
+  schedule: {
+    courts: number;
+    queued: number;
+    /** Courts standing free with matches still queued on them — dead time. */
+    courtsIdle: number;
+    /** Matches in a draw that are in no court queue at all. */
+    unscheduled: number;
+  } | null;
   /** Derived from the same bracket read, so match control costs no extra request. */
   control: { live: number; ready: number } | null;
 };
@@ -93,6 +101,15 @@ export function useEventWorkspaceSignals(eventId: string) {
           ? {
               courts: schedule.courts.length,
               queued: schedule.courts.reduce((total, court) => total + court.scheduleItems.length, 0),
+              // `ready` is a court with work queued and nothing on it: free, and
+              // costing the event time for as long as it stays that way.
+              courtsIdle: schedule.courts.filter((court) => courtState(court) === 'ready').length,
+              unscheduled: brackets
+                ? unscheduledMatches(
+                    brackets.brackets.flatMap((bracket) => bracket.matches),
+                    schedule.courts,
+                  ).length
+                : 0,
             }
           : null,
         control: brackets ? controlSignal(brackets.brackets) : null,

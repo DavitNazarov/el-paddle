@@ -4,6 +4,8 @@ import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { entryUserSelect } from '../../common/includes.js';
+import { carryParticipantSnapshot } from '../../common/snapshots.js';
+import { applyByes } from '../brackets/byes.js';
 import { isTerminalTally, isValidSetCount, maxSets, nextSetNumber, setMatchWinner, setsToReachTally, tallySets, terminalTallyExample } from './set-engine.js';
 
 /** Event fields serializeMatch emits plus the publication flags getMatchDetail gates on. No bank columns. */
@@ -189,13 +191,6 @@ export async function startMatch(input: { judgeId: string; judgeRole: UserRole; 
   });
 }
 
-async function copyWinnerSnapshot(tx: Prisma.TransactionClient, sourceMatchId: string, winnerEntryId: string, targetMatchId: string, targetSide: MatchSide) {
-  const snapshot = await tx.matchParticipantSnapshot.findFirst({ where: { matchId: sourceMatchId, entryId: winnerEntryId } });
-  if (!snapshot) jsonError('Participant history snapshot is missing.', 500);
-  const snapshotData = { entryId: snapshot.entryId, ownerUserId: snapshot.ownerUserId, ownerName: snapshot.ownerName, teammateUserId: snapshot.teammateUserId, teammateName: snapshot.teammateName, clubId: snapshot.clubId, clubName: snapshot.clubName };
-  await tx.matchParticipantSnapshot.upsert({ where: { matchId_side: { matchId: targetMatchId, side: targetSide } }, update: snapshotData, create: { matchId: targetMatchId, side: targetSide, ...snapshotData } });
-}
-
 async function advanceWinner(tx: Prisma.TransactionClient, match: Awaited<ReturnType<typeof requireMatchScorer>>, winnerEntryId: string) {
   if (!match.nextMatchId || !match.nextMatchSlot) return;
   const nextBefore = await tx.match.findUniqueOrThrow({ where: { id: match.nextMatchId } });
@@ -203,12 +198,15 @@ async function advanceWinner(tx: Prisma.TransactionClient, match: Awaited<Return
   if (occupied && occupied !== winnerEntryId) jsonError('Winner slot is already occupied.', 409);
   const data = match.nextMatchSlot === MatchSide.A ? { participantAEntryId: winnerEntryId } : { participantBEntryId: winnerEntryId };
   const next = await tx.match.update({ where: { id: match.nextMatchId }, data: { ...data, version: { increment: 1 } } });
-  await copyWinnerSnapshot(tx, match.id, winnerEntryId, next.id, match.nextMatchSlot);
+  await carryParticipantSnapshot(tx, { sourceMatchId: match.id, entryId: winnerEntryId, targetMatchId: next.id, targetSide: match.nextMatchSlot });
   if (next.participantAEntryId && next.participantBEntryId) {
     await tx.match.update({ where: { id: next.id }, data: { status: MatchStatus.READY, version: { increment: 1 } } });
     const nextSchedule = await tx.scheduleItem.findUnique({ where: { matchId: next.id } });
     if (nextSchedule) await tx.scheduleItem.update({ where: { id: nextSchedule.id }, data: { status: ScheduleItemStatus.READY, version: { increment: 1 } } });
   }
+  // The winner may have walked into a round whose other side is empty, which is
+  // only knowable now — that is another bye, and it can carry on up the draw.
+  await applyByes(tx, match.bracketId);
 }
 
 async function completeMatch(
@@ -512,6 +510,38 @@ export async function listMatchHistory(input: { eventId?: string; clubId?: strin
   });
 }
 
+/**
+ * Every match of one event, filtered the way the match-day screens ask for it.
+ *
+ * The control console used to rebuild this list in the browser by reading every
+ * bracket and every court and joining them, which meant two large reads and a
+ * join that had to agree with the server's own idea of which match is on which
+ * court. The join belongs where the rows are.
+ */
+export async function listEventMatches(input: {
+  eventId: string;
+  status?: MatchStatus[];
+  round?: MatchRound;
+  categoryId?: string;
+  courtId?: string;
+  unscheduledOnly?: boolean;
+}) {
+  return prisma.match.findMany({
+    where: {
+      bracket: {
+        eventId: input.eventId,
+        ...(input.categoryId ? { categoryId: input.categoryId } : {}),
+      },
+      ...(input.status?.length ? { status: { in: input.status } } : {}),
+      ...(input.round ? { round: input.round } : {}),
+      ...(input.unscheduledOnly ? { scheduleItem: { is: null } } : {}),
+      ...(input.courtId ? { scheduleItem: { is: { courtId: input.courtId } } } : {}),
+    },
+    orderBy: [{ bracket: { categoryId: 'asc' } }, { matchNumber: 'asc' }],
+    include: matchInclude,
+  });
+}
+
 export async function getMatchDetail(matchId: string, viewer?: { id: string; role: UserRole }) {
   const match = await prisma.match.findUnique({ where: { id: matchId }, include: matchInclude });
   if (!match) jsonError('Match not found.', 404);
@@ -556,7 +586,7 @@ export async function correctCompletedMatch(input: { actorId: string; matchId: s
       if (next.status === MatchStatus.IN_PROGRESS || next.status === MatchStatus.COMPLETED || next.startedAt) jsonError('A downstream match has already started. Use a bracket repair procedure.', 409);
       const data = match.nextMatchSlot === MatchSide.A ? { participantAEntryId: input.winnerEntryId } : { participantBEntryId: input.winnerEntryId };
       await tx.match.update({ where: { id: next.id }, data: { ...data, version: { increment: 1 } } });
-      await copyWinnerSnapshot(tx, match.id, input.winnerEntryId, next.id, match.nextMatchSlot);
+      await carryParticipantSnapshot(tx, { sourceMatchId: match.id, entryId: input.winnerEntryId, targetMatchId: next.id, targetSide: match.nextMatchSlot });
     }
     if (match.winnerEntryId !== input.winnerEntryId) {
       const oldWinner = await tx.eventRegistration.findUniqueOrThrow({ where: { id: match.winnerEntryId } });

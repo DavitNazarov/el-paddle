@@ -5,12 +5,14 @@ import {
   asyncHandler,
   cleanEmail,
   cleanString,
+  cleanStringArray,
   isValidEmail,
   jsonError,
   requireParamId,
   setPublicCache,
 } from '../../common/http.js';
 import { auditLog, requestIp } from '../../common/audit.js';
+import { csvFilename, sendCsv, wantsCsv } from '../../common/csv.js';
 import { requireParticipationLegalAcceptance } from '../../common/legal.js';
 import { requireCapability, requireEventReadCapability } from '../../common/capabilities.js';
 import { requireCommandId } from '../../common/commands.js';
@@ -23,6 +25,8 @@ import {
   replaceRegistrationPlayer,
   updateRegistrationRosterPublication,
   updateRegistrationStatus,
+  updateRegistrationStatusBatch,
+  withdrawRegistration,
 } from './registrations.service.js';
 
 export const registrationsRouter = Router();
@@ -90,6 +94,26 @@ registrationsRouter.patch('/api/registrations/:id/lineup', asyncHandler(async (r
   response.json({ registration: serializeRegistration(registration) });
 }));
 
+registrationsRouter.post('/api/registrations/:id/withdraw', asyncHandler(async (request, response) => {
+  const currentUser = await requireUser(request);
+  if (currentUser.role !== UserRole.USER) {
+    jsonError('Only club players can withdraw a registered team.', 403);
+  }
+  const expectedVersion = Number(request.body.expectedVersion);
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+    jsonError('A valid registration version is required.');
+  }
+
+  const registration = await withdrawRegistration({
+    registrationId: requireParamId(request.params.id, 'registration id'),
+    actorId: currentUser.id,
+    reason: cleanString(request.body.reason),
+    expectedVersion,
+    commandId: requireCommandId(request.body.commandId),
+  });
+  response.json({ registration: serializeRegistration(registration) });
+}));
+
 registrationsRouter.get('/api/admin/registrations', asyncHandler(async (request, response) => {
   await requireCapability(request, Capability.REGISTRATION_REVIEW);
   const page = await listAdminRegistrations(undefined, parseListRange(request.query));
@@ -129,8 +153,62 @@ registrationsRouter.get('/api/admin/events/:eventId/registrations', asyncHandler
   // Read-only for organisers: an admin approves the entries before hand-off,
   // but the organiser still needs the roster to seed a bracket.
   await requireEventReadCapability(request, eventId, Capability.REGISTRATION_REVIEW);
-  const page = await listAdminRegistrations(eventId, parseListRange(request.query));
+  // A CSV is the desk copy: the whole roster in one page, not the cursor the
+  // screen reads, so it is fetched unpaged and capped rather than followed.
+  const page = await listAdminRegistrations(
+    eventId,
+    wantsCsv(request) ? {} : parseListRange(request.query),
+  );
+  if (wantsCsv(request)) {
+    sendCsv(
+      response,
+      csvFilename('entries', eventId),
+      ['Category', 'Status', 'Club', 'Player 1', 'Player 1 phone', 'Player 2', 'Player 2 phone', 'Registered', 'Reason'],
+      page.items.map((registration) => [
+        registration.category.name,
+        registration.status,
+        registration.owner.clubMemberships[0]?.club?.name ?? '',
+        [registration.owner.name, registration.owner.surname].filter(Boolean).join(' '),
+        registration.ownerPhone,
+        [registration.teammate.name, registration.teammate.surname].filter(Boolean).join(' '),
+        registration.teammatePhone ?? '',
+        registration.createdAt.toISOString(),
+        registration.publicStatusReason ?? '',
+      ]),
+    );
+    return;
+  }
   response.json({ registrations: page.items.map(serializeRegistration), nextCursor: page.nextCursor });
+}));
+
+registrationsRouter.patch('/api/admin/events/:eventId/registrations/status', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.REGISTRATION_REVIEW);
+  const status = cleanString(request.body.status).toUpperCase();
+  if (!isRegistrationStatus(status)) jsonError('Invalid registration status.');
+  const registrationIds = cleanStringArray(request.body.registrationIds);
+  if (!registrationIds.length) jsonError('Select at least one entry.');
+  if (registrationIds.length > 100) jsonError('Decide at most 100 entries at a time.');
+
+  const results = await updateRegistrationStatusBatch({
+    eventId: requireParamId(request.params.eventId, 'event id'),
+    registrationIds,
+    status,
+    publicReason: cleanString(request.body.publicReason),
+    internalNote: cleanString(request.body.internalNote),
+    adminId: admin.id,
+    commandId: requireCommandId(request.body.commandId),
+  });
+
+  const applied = results.filter((result) => result.ok).length;
+  auditLog({
+    event: 'admin.registration_status_batch',
+    outcome: applied === results.length ? 'success' : 'failure',
+    userId: admin.id,
+    ip: requestIp(request),
+    detail: `${status}:${applied}/${results.length}`,
+  });
+
+  response.json({ results, applied, total: results.length });
 }));
 
 registrationsRouter.patch('/api/admin/events/:eventId/registration-roster-publication', asyncHandler(async (request, response) => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Check, CheckCircle2, CircleDot, Clock3, GitBranch } from 'lucide-react';
+import { Check, CheckCircle2, CircleDot, Clock3, GitBranch, Trophy } from 'lucide-react';
 import {
   DndContext,
   DragOverlay,
@@ -19,12 +19,13 @@ import type { BracketDto, MatchDto, OpponentRequestDto } from '@/types/tournamen
 import { AdminShell } from './AdminShell';
 import { BackLink, CommandButton, EmptyTournamentState } from '@/components/tournament/TournamentUI';
 import { Notice, PageNotice } from '@/components/shared/dashboard/Feedback';
+import { pushToast } from '@/components/shared/Toasts';
 import { DashboardModal, formControlClassName } from '@/components/shared/dashboard/DashboardUI';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import styles from './AdminBracket.module.css';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { fillTemplate, tournamentCopy, tournamentStatus } from '@/lib/i18n/tournament';
-import { BracketDrawStrip } from './bracket/BracketDrawStrip';
+import { BracketSwitcher } from './bracket/BracketSwitcher';
 import { BracketTree } from './bracket/BracketTree';
 import {
   buildDrawSummaries,
@@ -44,12 +45,17 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [bracketToLock, setBracketToLock] = useState<BracketDto | null>(null);
+  const [bracketToDiscard, setBracketToDiscard] = useState<BracketDto | null>(null);
+  const [bracketToUnlock, setBracketToUnlock] = useState<BracketDto | null>(null);
+  const [unlockReason, setUnlockReason] = useState('');
   const [matchToReopen, setMatchToReopen] = useState<MatchDto | null>(null);
   const [reopenReason, setReopenReason] = useState('');
   const [moveSource, setMoveSource] = useState<PlacementSlot | null>(null);
   const [moveTargetKey, setMoveTargetKey] = useState('');
   const [warning, setWarning] = useState('');
   const [draggingSlot, setDraggingSlot] = useState<string | null>(null);
+  /** Which draw is on screen. Empty until the event's categories are known. */
+  const [openCategoryId, setOpenCategoryId] = useState('');
   const isCompleted = event?.status === 'COMPLETED';
 
   const sensors = useSensors(
@@ -79,107 +85,194 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  /**
+   * One command, reported over the page rather than on it. Locking a draw and
+   * reopening a match are both driven from dialogs, so a banner behind them is
+   * a refusal nobody reads — and the server's reason ("A downstream match has
+   * already started") is the whole content of the message.
+   *
+   * Returns the parsed body on success and null on refusal, so a caller only
+   * closes its dialog when the change actually landed.
+   */
+  const send = useCallback(async <T,>(
+    key: string,
+    path: string,
+    init: { method: string; body: unknown },
+    failure: string,
+    success?: string,
+  ): Promise<(T & { error?: string }) | null> => {
+    setBusy(key);
+    try {
+      const response = await apiFetch(path, { method: init.method, body: JSON.stringify(init.body) });
+      const data = await response.json().catch(() => ({})) as T & { error?: string };
+      if (!response.ok) {
+        pushToast({ tone: 'error', title: failure, message: data.error ?? copy.admin.common.commandFailed });
+        return null;
+      }
+      if (success) pushToast({ tone: 'success', message: success });
+      return data;
+    } catch {
+      pushToast({ tone: 'error', title: failure, message: copy.admin.common.offline });
+      return null;
+    } finally {
+      setBusy('');
+      void load();
+    }
+  }, [copy.admin.common.commandFailed, copy.admin.common.offline, load]);
+
   async function create(categoryId: string) {
-    setBusy(`create-${categoryId}`);
-    setError('');
-    const response = await apiFetch(`/api/admin/events/${eventId}/brackets`, {
-      method: 'POST',
-      body: JSON.stringify({ categoryId, commandId: createCommandId('bracket-create') }),
-    });
-    const data = await response.json() as { error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? copy.admin.bracket.createError);
-    else void load();
+    await send(
+      `create-${categoryId}`,
+      `/api/admin/events/${eventId}/brackets`,
+      { method: 'POST', body: { categoryId, commandId: createCommandId('bracket-create') } },
+      copy.admin.bracket.createError,
+      fillTemplate(copy.admin.bracket.drawCreated, { category: categoryName(categoryId) }),
+    );
+  }
+
+  /** Draws are spoken about by their category, never by their id. */
+  function categoryName(categoryId: string) {
+    return event?.categories.find((category) => category.id === categoryId)?.name ?? '';
+  }
+
+  /** What each draw command confirms once it has landed. */
+  function commandSuccess(bracket: BracketDto, action: 'generate' | 'lock' | 'publication') {
+    const category = categoryName(bracket.categoryId);
+    if (action === 'generate') return fillTemplate(copy.admin.bracket.drawGenerated, { category });
+    if (action === 'lock') return fillTemplate(copy.admin.bracket.drawLocked, { category });
+    return fillTemplate(
+      bracket.publishedAt ? copy.admin.bracket.drawHidden : copy.admin.bracket.drawPublished,
+      { category },
+    );
   }
 
   async function command(bracket: BracketDto, action: 'generate' | 'lock' | 'publication') {
-    setBusy(`${action}-${bracket.id}`);
-    setError('');
     const approvedRequestIds = requests
       .filter((request) => request.categoryId === bracket.categoryId && ['APPROVED_BY_ADMIN', 'OVERRIDDEN_BY_ADMIN'].includes(request.status))
       .map((request) => request.id);
-    const response = await apiFetch(`/api/admin/events/${eventId}/brackets/${bracket.id}/${action === 'publication' ? 'publication' : action}`, {
-      method: action === 'publication' ? 'PATCH' : 'POST',
-      body: JSON.stringify({
-        expectedVersion: bracket.version,
-        commandId: createCommandId(`bracket-${action}`),
-        requestIds: approvedRequestIds,
-        published: !bracket.publishedAt,
-      }),
-    });
-    const data = await response.json() as { error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? copy.admin.bracket.commandError);
-    else { if (action === 'lock') setBracketToLock(null); void load(); }
+    const result = await send(
+      `${action}-${bracket.id}`,
+      `/api/admin/events/${eventId}/brackets/${bracket.id}/${action}`,
+      {
+        method: action === 'publication' ? 'PATCH' : 'POST',
+        body: {
+          expectedVersion: bracket.version,
+          commandId: createCommandId(`bracket-${action}`),
+          requestIds: approvedRequestIds,
+          published: !bracket.publishedAt,
+        },
+      },
+      copy.admin.bracket.commandError,
+      commandSuccess(bracket, action),
+    );
+    if (result && action === 'lock') setBracketToLock(null);
+  }
+
+  /**
+   * Throwing a draft away, and rewinding a locked draw.
+   *
+   * Both are corrections rather than steps forward, so both ask first and both
+   * say plainly what goes: a discard takes the whole draw with it, an unlock
+   * puts every team back in the first round and clears the byes the lock wrote.
+   * Unlocking additionally needs a reason, because it is auditable in the same
+   * way reopening a finished event is.
+   */
+  async function discardDraw() {
+    if (!bracketToDiscard) return;
+    const category = categoryName(bracketToDiscard.categoryId);
+    const result = await send(
+      `discard-${bracketToDiscard.id}`,
+      `/api/admin/events/${eventId}/brackets/${bracketToDiscard.id}`,
+      { method: 'DELETE', body: { commandId: createCommandId('bracket-delete') } },
+      copy.admin.bracket.discardError,
+      fillTemplate(copy.admin.bracket.drawDiscarded, { category }),
+    );
+    if (result) setBracketToDiscard(null);
+  }
+
+  async function unlockDraw() {
+    if (!bracketToUnlock) return;
+    const category = categoryName(bracketToUnlock.categoryId);
+    const result = await send(
+      `unlock-${bracketToUnlock.id}`,
+      `/api/admin/events/${eventId}/brackets/${bracketToUnlock.id}/unlock`,
+      {
+        method: 'POST',
+        body: {
+          reason: unlockReason,
+          expectedVersion: bracketToUnlock.version,
+          commandId: createCommandId('bracket-unlock'),
+        },
+      },
+      copy.admin.bracket.unlockError,
+      fillTemplate(copy.admin.bracket.drawUnlocked, { category }),
+    );
+    if (result) { setBracketToUnlock(null); setUnlockReason(''); }
   }
 
   async function setRoundDefault(bracket: BracketDto, round: MatchDto['round'], setCount: number) {
-    setBusy(`sets-${bracket.id}-${round}`);
-    setError('');
-    const response = await apiFetch(`/api/admin/events/${eventId}/brackets/${bracket.id}/set-defaults`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        defaults: { ...bracket.setDefaults, [round]: setCount },
-        expectedVersion: bracket.version,
-        commandId: createCommandId('bracket-set-defaults'),
-      }),
-    });
-    const data = await response.json() as { error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? copy.admin.bracket.setConfigError);
-    void load();
+    await send(
+      `sets-${bracket.id}-${round}`,
+      `/api/admin/events/${eventId}/brackets/${bracket.id}/set-defaults`,
+      {
+        method: 'PUT',
+        body: {
+          defaults: { ...bracket.setDefaults, [round]: setCount },
+          expectedVersion: bracket.version,
+          commandId: createCommandId('bracket-set-defaults'),
+        },
+      },
+      copy.admin.bracket.setConfigError,
+      copy.admin.bracket.setFormatSaved,
+    );
   }
 
   async function setMatchOverride(match: MatchDto, setCountOverride: number | null) {
-    setBusy(`sets-match-${match.id}`);
-    setError('');
-    const response = await apiFetch(`/api/admin/matches/${match.id}/set-config`, {
-      method: 'PATCH',
-      body: JSON.stringify({ setCountOverride, expectedVersion: match.version, commandId: createCommandId('match-set-config') }),
-    });
-    const data = await response.json() as { error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? copy.admin.bracket.setConfigError);
-    void load();
+    await send(
+      `sets-match-${match.id}`,
+      `/api/admin/matches/${match.id}/set-config`,
+      { method: 'PATCH', body: { setCountOverride, expectedVersion: match.version, commandId: createCommandId('match-set-config') } },
+      copy.admin.bracket.setConfigError,
+      copy.admin.bracket.setFormatSaved,
+    );
   }
 
   async function reopenMatch() {
     if (!matchToReopen) return;
-    setBusy(`reopen-${matchToReopen.id}`);
-    setError('');
-    const response = await apiFetch(`/api/admin/matches/${matchToReopen.id}/sets/undo`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: reopenReason, expectedVersion: matchToReopen.version, commandId: createCommandId('set-undo-admin') }),
-    });
-    const data = await response.json() as { error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? copy.admin.bracket.reopenError);
-    else { setMatchToReopen(null); setReopenReason(''); }
-    void load();
+    const result = await send(
+      `reopen-${matchToReopen.id}`,
+      `/api/admin/matches/${matchToReopen.id}/sets/undo`,
+      { method: 'POST', body: { reason: reopenReason, expectedVersion: matchToReopen.version, commandId: createCommandId('set-undo-admin') } },
+      copy.admin.bracket.reopenError,
+      fillTemplate(copy.admin.bracket.matchReopened, { number: matchToReopen.matchNumber }),
+    );
+    if (result) { setMatchToReopen(null); setReopenReason(''); }
   }
 
   async function placeEntry(source: PlacementSlot, target: PlacementSlot) {
     const bracket = brackets.find((candidate) => candidate.id === source.bracketId);
     if (!bracket || source.bracketId !== target.bracketId) return;
-    setBusy(`place-${slotKey(source)}`);
-    setError('');
     setWarning('');
-    const response = await apiFetch(`/api/admin/events/${eventId}/brackets/${bracket.id}/placements`, {
-      method: 'POST',
-      body: JSON.stringify({
-        sourceMatchId: source.matchId,
-        sourceSide: source.side,
-        targetMatchId: target.matchId,
-        targetSide: target.side,
-        expectedVersion: bracket.version,
-        commandId: createCommandId('bracket-place'),
-      }),
-    });
-    const data = await response.json() as { revertedRequestIds?: string[]; error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? copy.admin.bracket.placementError);
-    else if (data.revertedRequestIds?.length) setWarning(copy.admin.bracket.pairingBroken);
-    void load();
+    const result = await send<{ revertedRequestIds?: string[] }>(
+      `place-${slotKey(source)}`,
+      `/api/admin/events/${eventId}/brackets/${bracket.id}/placements`,
+      {
+        method: 'POST',
+        body: {
+          sourceMatchId: source.matchId,
+          sourceSide: source.side,
+          targetMatchId: target.matchId,
+          targetSide: target.side,
+          expectedVersion: bracket.version,
+          commandId: createCommandId('bracket-place'),
+        },
+      },
+      copy.admin.bracket.placementError,
+      fillTemplate(copy.admin.bracket.entryMoved, { pair: slotLabel(brackets, source, locale) }),
+    );
+    // Moving an entry can break a pairing an admin already approved, which is
+    // not a failure but does need saying.
+    if (result?.revertedRequestIds?.length) setWarning(copy.admin.bracket.pairingBroken);
   }
 
   function handleDragEnd(dragEvent: DragEndEvent) {
@@ -192,6 +285,13 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
     if (!source || !target || source.bracketId !== target.bracketId) return;
     void placeEntry(source, target);
   }
+
+  const draws = event ? buildDrawSummaries(event.categories, brackets, locale) : [];
+  // Derived, not synced: a category can vanish under a refresh, and falling back
+  // to the first one keeps the page showing a draw rather than nothing.
+  const openCategory = event
+    ? event.categories.find((category) => category.id === openCategoryId) ?? event.categories[0] ?? null
+    : null;
 
   return (
     <AdminShell
@@ -211,9 +311,10 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
 
       {event ? (
         <>
-          <BracketDrawStrip
-            draws={buildDrawSummaries(event.categories, brackets, locale)}
-            isCompleted={Boolean(isCompleted)}
+          <BracketSwitcher
+            draws={draws}
+            selectedCategoryId={openCategory?.id ?? ''}
+            onSelect={setOpenCategoryId}
           />
 
           {isCompleted ? (
@@ -232,11 +333,17 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
             onDragCancel={() => setDraggingSlot(null)}
           >
           <div className={styles.categoryList}>
-            {event.categories.map((category) => {
+            {(openCategory ? [openCategory] : []).map((category) => {
               const bracket = brackets.find((item) => item.categoryId === category.id);
               if (!bracket) {
                 return (
-                  <section id={`category-${category.id}`} key={category.id} className={styles.bracketPanel} aria-labelledby={`category-title-${category.id}`}>
+                  <section
+                    id={`draw-panel-${category.id}`}
+                    key={category.id}
+                    className={styles.bracketPanel}
+                    role={draws.length > 1 ? 'tabpanel' : undefined}
+                    aria-labelledby={draws.length > 1 ? `draw-tab-${category.id}` : `category-title-${category.id}`}
+                  >
                     <BracketHeader
                       titleId={`category-title-${category.id}`}
                       title={category.name}
@@ -257,11 +364,15 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
                 <BracketCategory
                   key={bracket.id}
                   bracket={bracket}
+                  tabbed={draws.length > 1}
+                  champion={draws.find((draw) => draw.categoryId === category.id)?.champion ?? null}
                   categoryName={category.name}
                   busy={busy}
                   isCompleted={Boolean(isCompleted)}
                   onCommand={command}
                   onLock={setBracketToLock}
+                  onDiscard={setBracketToDiscard}
+                  onUnlock={(bracket) => { setBracketToUnlock(bracket); setUnlockReason(''); }}
                   onMatchOverride={setMatchOverride}
                   onMoveRequest={(slot) => { setMoveSource(slot); setMoveTargetKey(''); }}
                   onReopen={setMatchToReopen}
@@ -292,6 +403,53 @@ export function AdminBracketClient({ eventId }: { eventId: string }) {
             }
           >
             <p className="text-sm leading-6 text-[rgba(88,16,16,0.72)]">{copy.admin.bracket.lockNote}</p>
+          </DashboardModal>
+          <DashboardModal
+            open={Boolean(bracketToDiscard)}
+            onOpenChange={(open) => { if (!open && !busy) setBracketToDiscard(null); }}
+            title={copy.admin.bracket.discardTitle}
+            description={bracketToDiscard ? categoryName(bracketToDiscard.categoryId) : undefined}
+            size="md"
+            footer={(
+              <ModalFormFooter
+                onCancel={() => setBracketToDiscard(null)}
+                cancelLabel={copy.common.cancel}
+                submitType="button"
+                onSubmitClick={() => { void discardDraw(); }}
+                busy={Boolean(bracketToDiscard && busy === `discard-${bracketToDiscard.id}`)}
+                submitLabel={copy.admin.bracket.discard}
+              />
+            )}
+          >
+            <p className="text-sm leading-6 text-[rgba(88,16,16,0.72)]">{copy.admin.bracket.discardNote}</p>
+          </DashboardModal>
+          <DashboardModal
+            open={Boolean(bracketToUnlock)}
+            onOpenChange={(open) => { if (!open && !busy) { setBracketToUnlock(null); setUnlockReason(''); } }}
+            title={copy.admin.bracket.unlockTitle}
+            description={bracketToUnlock ? categoryName(bracketToUnlock.categoryId) : undefined}
+            size="md"
+            footer={(
+              <ModalFormFooter
+                onCancel={() => { setBracketToUnlock(null); setUnlockReason(''); }}
+                cancelLabel={copy.common.cancel}
+                submitType="button"
+                onSubmitClick={() => { void unlockDraw(); }}
+                busy={Boolean(bracketToUnlock && busy === `unlock-${bracketToUnlock.id}`)}
+                disabled={unlockReason.trim().length < 3}
+                submitLabel={copy.admin.bracket.unlock}
+              />
+            )}
+          >
+            <p className="text-sm leading-6 text-[rgba(88,16,16,0.72)]">{copy.admin.bracket.unlockNote}</p>
+            <label className="mt-4 block text-sm font-semibold text-[var(--dash-text)]" htmlFor="unlock-reason">{copy.admin.bracket.unlockReason}</label>
+            <input
+              id="unlock-reason"
+              className={formControlClassName}
+              value={unlockReason}
+              onChange={(fieldEvent) => setUnlockReason(fieldEvent.target.value)}
+            />
+            <p className="mt-1 text-xs text-[var(--dash-muted)]">{copy.admin.bracket.unlockReasonHint}</p>
           </DashboardModal>
           <DashboardModal
             open={Boolean(matchToReopen)}
@@ -367,20 +525,30 @@ function BracketCategory({
   bracket,
   busy,
   categoryName,
+  champion,
   isCompleted,
   onCommand,
   onLock,
+  onDiscard,
+  onUnlock,
   onMatchOverride,
   onMoveRequest,
   onReopen,
   onRoundDefault,
+  tabbed,
 }: {
   bracket: BracketDto;
   busy: string;
   categoryName: string;
+  /** Named in the header once the final is decided — the draw's own answer. */
+  champion: string | null;
   isCompleted: boolean;
+  /** True when the switcher is on screen, which makes this panel its tab panel. */
+  tabbed: boolean;
   onCommand: (bracket: BracketDto, action: 'generate' | 'lock' | 'publication') => void;
   onLock: (bracket: BracketDto) => void;
+  onDiscard: (bracket: BracketDto) => void;
+  onUnlock: (bracket: BracketDto) => void;
   onMatchOverride: (match: MatchDto, setCountOverride: number | null) => void;
   onMoveRequest: (slot: PlacementSlot) => void;
   onReopen: (match: MatchDto) => void;
@@ -391,9 +559,10 @@ function BracketCategory({
 
   return (
     <section
-      id={`category-${bracket.categoryId}`}
+      id={`draw-panel-${bracket.categoryId}`}
       className={styles.bracketPanel}
-      aria-labelledby={`category-title-${bracket.categoryId}`}
+      role={tabbed ? 'tabpanel' : undefined}
+      aria-labelledby={tabbed ? `draw-tab-${bracket.categoryId}` : `category-title-${bracket.categoryId}`}
     >
       <BracketHeader
         titleId={`category-title-${bracket.categoryId}`}
@@ -407,6 +576,13 @@ function BracketCategory({
             <MetaPill tone={bracket.publishedAt ? 'info' : 'neutral'} icon={bracket.publishedAt ? <Check /> : <Clock3 />}>
               {bracket.publishedAt ? copy.admin.bracket.published : copy.admin.bracket.hidden}
             </MetaPill>
+            {/* The one fact the summary cards carried that this header did not:
+                who actually won it. */}
+            {champion ? (
+              <MetaPill tone="success" icon={<Trophy />}>
+                {fillTemplate(copy.admin.bracket.championIs, { pair: champion })}
+              </MetaPill>
+            ) : null}
           </>
         )}
         actions={isCompleted ? undefined : (
@@ -434,6 +610,27 @@ function BracketCategory({
             >
               {bracket.publishedAt ? copy.admin.bracket.unpublish : copy.admin.bracket.publish}
             </CommandButton>
+            {/* Exactly one of these applies at a time: a draft can be thrown
+                away, a locked draw can be rewound. Offering both at once would
+                be two ways to undo one thing. */}
+            {bracket.status === 'DRAFT' ? (
+              <CommandButton
+                tone="danger"
+                busy={busy === `discard-${bracket.id}`}
+                onClick={() => onDiscard(bracket)}
+              >
+                {copy.admin.bracket.discard}
+              </CommandButton>
+            ) : (
+              <CommandButton
+                tone="danger"
+                busy={busy === `unlock-${bracket.id}`}
+                disabled={Boolean(bracket.publishedAt)}
+                onClick={() => onUnlock(bracket)}
+              >
+                {copy.admin.bracket.unlock}
+              </CommandButton>
+            )}
           </>
         )}
       />

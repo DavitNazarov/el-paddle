@@ -1,4 +1,21 @@
 /**
+ * Hosting platforms where every app is its own site. The last-two-labels
+ * rule would call these a shared parent, and browsers reject that cookie.
+ */
+const MULTI_TENANT_SUFFIXES = new Set([
+  'onrender.com',
+  'vercel.app',
+  'github.io',
+  'herokuapp.com',
+  'netlify.app',
+  'fly.dev',
+  'railway.app',
+  'pages.dev',
+  'azurewebsites.net',
+  'cloudfront.net',
+]);
+
+/**
  * Resolve the Domain attribute for auth cookies when the API and site
  * sit on sibling hosts (e.g. api.elpadell.com + elpadell.com).
  * Without a shared parent domain, Next.js SSR on the site origin cannot
@@ -14,7 +31,13 @@ export function resolveSharedCookieDomain(options: {
     if (explicit.includes('://') || explicit.includes('/')) {
       throw new Error('COOKIE_DOMAIN must be a hostname like .elpadell.com, not a URL.');
     }
-    return explicit.startsWith('.') ? explicit : `.${explicit}`;
+    const domain = explicit.startsWith('.') ? explicit : `.${explicit}`;
+    if (MULTI_TENANT_SUFFIXES.has(domain.slice(1).toLowerCase())) {
+      throw new Error(
+        'COOKIE_DOMAIN cannot be a shared hosting suffix such as .onrender.com. Use a domain you control.',
+      );
+    }
+    return domain;
   }
 
   const hosts = [
@@ -40,5 +63,8 @@ function registrableParentDomain(hostname: string): string | null {
   const parts = hostname.split('.').filter(Boolean);
   if (parts.length < 2) return null;
 
-  return `.${parts.slice(-2).join('.')}`;
+  const parent = parts.slice(-2).join('.');
+  if (MULTI_TENANT_SUFFIXES.has(parent)) return null;
+
+  return `.${parent}`;
 }

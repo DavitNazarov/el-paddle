@@ -93,9 +93,25 @@ export function InlineNotice({
   );
 }
 
+/**
+ * A command, and whether it is running.
+ *
+ * `busy` and `disabled` both stop the button from being pressed but mean
+ * opposite things — one is "this is happening", the other "this is not
+ * available" — so they are marked apart for the stylesheet rather than being
+ * flattened into one faded state.
+ */
 export function CommandButton({ busy, children, className, tone = 'default', ...props }: ButtonProps & { busy?: boolean; tone?: 'default' | 'primary' | 'danger' }) {
   return (
-    <Button {...props} data-tone={tone} disabled={busy || props.disabled} variant={props.variant ?? 'outline'} className={cn(styles.commandButton, className)}>
+    <Button
+      {...props}
+      data-tone={tone}
+      data-busy={busy ? 'true' : undefined}
+      disabled={busy || props.disabled}
+      aria-busy={busy || undefined}
+      variant={props.variant ?? 'outline'}
+      className={cn(styles.commandButton, className)}
+    >
       {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
       {children}
     </Button>

@@ -38,6 +38,8 @@ import { apiFetch, readApiJson } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { PublicUser } from '@/types/auth';
 import { AccountIdentityCard, AccountProfileForm, useOwnAccount } from './AccountProfile';
+import { AccountEmailChange } from './AccountEmailChange';
+import { AccountSessions } from './AccountSessions';
 import {
   emptyPasswordForm,
   hasErrors,
@@ -429,6 +431,20 @@ export function AccountSettings({
                   </div>
                 </form>
               </SurfaceCard>
+
+              <AccountEmailChange
+                currentEmail={ownAccount?.email ?? user.email}
+                hasPassword={hasPassword}
+                onChanged={(email) => {
+                  setOwnAccount((current) => (current ? { ...current, email } : current));
+                  // The address is the account's identity, so every other device
+                  // was signed out; the shell has to re-read who this is.
+                  router.refresh();
+                }}
+              />
+
+              {/* What "everywhere" means, before the button that hits it. */}
+              <AccountSessions />
 
               {/* Signing out on this device no longer signs the account out
                   everywhere, so the account-wide version needs its own control —

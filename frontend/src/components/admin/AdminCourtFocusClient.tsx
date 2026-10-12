@@ -48,7 +48,6 @@ export function AdminCourtFocusClient({ courtId, eventId }: { courtId: string; e
       </div>
 
       {desk.error ? <div className="mb-4"><InlineNotice kind="error" onDismiss={desk.clearError}>{desk.error}</InlineNotice></div> : null}
-      {desk.notice ? <div className="mb-4"><InlineNotice kind="success" onDismiss={desk.clearNotice}>{desk.notice}</InlineNotice></div> : null}
       {locked ? <div className="mb-4"><InlineNotice kind="info">{control.readOnly}</InlineNotice></div> : null}
 
       <div className={styles.page}>

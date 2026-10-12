@@ -192,6 +192,125 @@ export async function assignJudge(input: { eventId: string; courtId: string; jud
   });
 }
 
+/**
+ * Ends one court assignment.
+ *
+ * `revokedAt` was only ever written by removing the judge from the event
+ * entirely, so a judge who was put on the wrong court, or on the right one at
+ * the wrong hours, had to be taken off the whole tournament to fix it. Revoking
+ * is idempotent: an assignment already ended stays ended, and the caller is
+ * told rather than refused, because the state they asked for is the state.
+ */
+export async function revokeCourtJudgeAssignment(input: { eventId: string; courtId: string; assignmentId: string; actorId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const assignment = await tx.courtJudgeAssignment.findFirst({
+      where: { id: input.assignmentId, courtId: input.courtId, court: { eventId: input.eventId } },
+    });
+    if (!assignment) jsonError('Court assignment not found.', 404);
+    if (assignment.revokedAt) return assignment;
+
+    const running = await tx.scheduleItem.findFirst({
+      where: { courtId: input.courtId, status: ScheduleItemStatus.IN_PROGRESS },
+      select: { id: true },
+    });
+    if (running) jsonError('A match is running on this court. Finish it before changing the judge.', 409);
+
+    const revoked = await tx.courtJudgeAssignment.update({
+      where: { id: assignment.id },
+      data: { revokedAt: new Date() },
+    });
+    // The schedule items this judge was named on lose their judge rather than
+    // keeping a name that no longer has the court.
+    await tx.scheduleItem.updateMany({
+      where: { courtId: input.courtId, assignedJudgeId: assignment.judgeUserId, status: { notIn: [ScheduleItemStatus.COMPLETED, ScheduleItemStatus.CANCELLED] } },
+      data: { assignedJudgeId: null },
+    });
+    await writeAudit(tx, { action: 'court.judge.revoked', actorId: input.actorId, eventId: input.eventId, entityType: 'CourtJudgeAssignment', entityId: assignment.id, before: { courtId: assignment.courtId, judgeId: assignment.judgeUserId }, after: { revoked: true } });
+    await queueOutbox(tx, { topic: 'court.assignment.updated', aggregateType: 'Court', aggregateId: input.courtId, payload: { eventId: input.eventId, courtId: input.courtId, judgeId: assignment.judgeUserId, revoked: true }, deduplicationKey: `court:${input.courtId}:judge:${assignment.id}:revoked` });
+    return revoked;
+  });
+}
+
+/** Every playable match in an event that no court is holding yet, in playing order. */
+export async function listUnscheduledMatches(eventId: string) {
+  return prisma.match.findMany({
+    where: {
+      bracket: { eventId },
+      scheduleItem: { is: null },
+      status: { notIn: [MatchStatus.COMPLETED, MatchStatus.CANCELLED] },
+    },
+    orderBy: [{ bracket: { categoryId: 'asc' } }, { matchNumber: 'asc' }],
+    select: { id: true, matchNumber: true, round: true, status: true, bracketId: true },
+  });
+}
+
+/**
+ * Deals the unplaced matches out over the active courts.
+ *
+ * A 32-entry draw arrives as thirty-odd matches and an empty court strip, and
+ * placing them is thirty identical drags before the first ball is hit. The rule
+ * it follows is the one an operator would: matches in playing order, dealt round
+ * robin so every court gets a similar share, appended to whatever each court is
+ * already holding. It never reorders or retimes what is already placed, so it
+ * cannot disturb a queue in progress, and a court whose queue is finished is
+ * skipped rather than refused.
+ *
+ * `ready` limits it to matches whose two teams are known — the default, because
+ * a court queue full of "winner of match 4" is a plan, not a schedule.
+ */
+export async function autoFillSchedule(input: { eventId: string; actorId: string; readyOnly: boolean; canManageAllJudges: boolean; commandId: string }) {
+  const hash = payloadHash({ eventId: input.eventId, readyOnly: input.readyOnly });
+  const receipt = await prisma.commandReceipt.findUnique({
+    where: { actorId_action_commandId: { actorId: input.actorId, action: 'schedule.auto-fill', commandId: input.commandId } },
+  });
+  if (receipt) {
+    if (receipt.payloadHash !== hash) jsonError('Command ID was reused with different data.', 409);
+    return { placed: [] as { matchId: string; courtId: string }[], skipped: 0 };
+  }
+
+  const [courts, pending] = await Promise.all([
+    prisma.court.findMany({
+      where: { eventId: input.eventId, active: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, scheduleItems: { select: { status: true } } },
+    }),
+    listUnscheduledMatches(input.eventId),
+  ]);
+  if (!courts.length) jsonError('Add a court before filling the schedule.', 409);
+
+  const openCourts = courts.filter((court) => !isQueueFinished(court.scheduleItems));
+  if (!openCourts.length) jsonError('Every court queue is finished. Add a court to schedule more matches.', 409);
+
+  const matches = input.readyOnly ? pending.filter((match) => match.status === MatchStatus.READY) : pending;
+  const placed: { matchId: string; courtId: string }[] = [];
+  let skipped = 0;
+
+  for (const [index, match] of matches.entries()) {
+    const court = openCourts[index % openCourts.length]!;
+    try {
+      await scheduleMatch({
+        eventId: input.eventId,
+        matchId: match.id,
+        courtId: court.id,
+        actorId: input.actorId,
+        canManageAllJudges: input.canManageAllJudges,
+      });
+      placed.push({ matchId: match.id, courtId: court.id });
+    } catch {
+      // A match another operator placed a moment ago, or a court that filled up
+      // mid-run. Neither is a reason to abandon the matches after it.
+      skipped += 1;
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await writeAudit(tx, { action: 'schedule.auto-filled', actorId: input.actorId, eventId: input.eventId, entityType: 'Event', entityId: input.eventId, after: { placed: placed.length, skipped, courts: openCourts.length } });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'schedule.auto-fill', commandId: input.commandId, hash, response: { placed: placed.length, skipped } });
+  });
+
+  return { placed, skipped };
+}
+
 export async function scheduleMatch(input: { eventId: string; matchId: string; courtId: string; judgeId?: string; plannedStartAt?: Date; plannedEndAt?: Date; actorId: string; canManageAllJudges: boolean }) {
   return prisma.$transaction(async (tx) => {
     await assertEventEditable(tx, input.eventId);

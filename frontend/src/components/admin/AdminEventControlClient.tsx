@@ -1,20 +1,32 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
 import { apiFetch, createCommandId } from '@/lib/api';
 import type { EventDto } from '@/types/admin';
 import { AdminShell } from './AdminShell';
 import { EventOrganiserPanel } from './EventOrganiserPanel';
-import { EventLifecycleHero } from './event-workspace/EventLifecycleHero';
-import { EventStageBoard } from './event-workspace/EventStageBoard';
-import { EventPublicationBoard, type PublicationField } from './event-workspace/EventPublicationBoard';
+import { EventHeaderBand } from './event-workspace/EventHeaderBand';
+import { EventAgendaBand } from './event-workspace/EventAgendaBand';
+import { EventStageList } from './event-workspace/EventStageList';
+import { EventPublicationList, type PublicationField } from './event-workspace/EventPublicationList';
 import { CommandButton, InlineNotice } from '@/components/tournament/TournamentUI';
 import { DashboardModal } from '@/components/shared/dashboard/DashboardUI';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
+import { SkeletonRows } from '@/components/shared/dashboard/Feedback';
+import { pushToast } from '@/components/shared/Toasts';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { useEventWorkspaceSignals } from '@/hooks/useEventWorkspaceSignals';
-import { tournamentCopy, tournamentStatus } from '@/lib/i18n/tournament';
+import { fillTemplate, tournamentCopy, tournamentStatus } from '@/lib/i18n/tournament';
+
+/**
+ * The event workspace: what needs doing, and where each thing is done.
+ *
+ * It answers three questions in that order — which event and how far along, what
+ * is waiting on the operator, and which screen resolves it. Everything the page
+ * used to explain about each stage in prose is now the stage's own live count,
+ * because after the first visit nobody reads the explanation and everybody reads
+ * the number.
+ */
 
 const nextStatus: Partial<Record<EventDto['status'], EventDto['status']>> = {
   REGISTRATION_OPEN: 'REGISTRATION_CLOSED',
@@ -23,7 +35,9 @@ const nextStatus: Partial<Record<EventDto['status'], EventDto['status']>> = {
   COMPLETED: 'ONGOING',
 };
 
-function statusAction(status: EventDto['status'], copy: typeof tournamentCopy.en.admin.event | typeof tournamentCopy.ka.admin.event) {
+type EventCopy = (typeof tournamentCopy)['en' | 'ka']['admin']['event'];
+
+function statusAction(status: EventDto['status'], copy: EventCopy) {
   if (status === 'REGISTRATION_OPEN') return copy.closeRegistration;
   if (status === 'REGISTRATION_CLOSED') return copy.startEvent;
   if (status === 'ONGOING') return copy.completeEvent;
@@ -34,68 +48,125 @@ function statusAction(status: EventDto['status'], copy: typeof tournamentCopy.en
 export function AdminEventControlClient({ eventId }: { eventId: string }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale];
+  const eventCopy = copy.admin.event;
+  const shared = copy.admin.common;
   const [event, setEvent] = useState<EventDto | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   // Stage counts load beside the event rather than blocking it: the lifecycle
   // must be actionable even when a stage read is slow or refused.
-  const { signals } = useEventWorkspaceSignals(eventId);
+  const { signals, loading: signalsLoading } = useEventWorkspaceSignals(eventId);
 
   const load = useCallback(async () => {
-    const response = await apiFetch(`/api/events/${eventId}`, { cache: 'no-store' });
-    const data = await response.json() as { event?: EventDto; error?: string };
-    if (!response.ok) setError(data.error ?? copy.admin.event.loadError);
-    else setEvent(data.event ?? null);
-  }, [copy.admin.event.loadError, eventId]);
+    try {
+      const response = await apiFetch(`/api/events/${eventId}`, { cache: 'no-store' });
+      const data = await response.json() as { event?: EventDto; error?: string };
+      if (!response.ok) setError(data.error ?? eventCopy.loadError);
+      else { setEvent(data.event ?? null); setError(''); }
+    } catch {
+      setError(eventCopy.loadError);
+    }
+  }, [eventCopy.loadError, eventId]);
 
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
 
-  async function advanceStatus() {
-    if (!event || !nextStatus[event.status]) return;
-    const target = nextStatus[event.status]!;
+  /**
+   * Both commands on this screen report through the message layer: one is sent
+   * from inside a dialog and the other from a row far down the page, and a
+   * banner at the top is a result neither reader would see.
+   */
+  const send = useCallback(async (
+    path: string,
+    body: unknown,
+    failure: string,
+    success: (updated: EventDto) => string,
+  ) => {
     setBusy(true);
-    setError('');
-    const response = await apiFetch(`/api/admin/events/${event.id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: target, expectedVersion: event.version, commandId: createCommandId('event-status') }),
-    });
-    const data = await response.json() as { event?: EventDto; error?: string };
-    setBusy(false);
-    if (!response.ok) setError(data.error ?? copy.admin.event.updateError);
-    else { setEvent(data.event ?? event); setStatusModalOpen(false); }
+    try {
+      const response = await apiFetch(path, { method: 'PATCH', body: JSON.stringify(body) });
+      const data = await response.json().catch(() => ({})) as { event?: EventDto; error?: string };
+      if (!response.ok) {
+        pushToast({ tone: 'error', title: failure, message: data.error ?? shared.commandFailed });
+        return null;
+      }
+      const updated = data.event ?? null;
+      if (updated) {
+        setEvent(updated);
+        pushToast({ tone: 'success', message: success(updated) });
+      }
+      return updated;
+    } catch {
+      pushToast({ tone: 'error', title: failure, message: shared.offline });
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }, [shared.commandFailed, shared.offline]);
+
+  async function advanceStatus() {
+    if (!event) return;
+    const target = nextStatus[event.status];
+    if (!target) return;
+    const updated = await send(
+      `/api/admin/events/${event.id}/status`,
+      { status: target, expectedVersion: event.version, commandId: createCommandId('event-status') },
+      eventCopy.statusError,
+      (next) => fillTemplate(eventCopy.stageChanged, { stage: tournamentStatus(locale, next.status) }),
+    );
+    if (updated) setStatusModalOpen(false);
   }
 
-  async function updatePublication(field: PublicationField) {
+  async function updatePublication(field: PublicationField, next: boolean) {
     if (!event) return;
-    const value = field === 'publicLiveScoringEnabled' ? !event.publicLiveScoringEnabled : !event.resultsPublishedAt;
-    setBusy(true); setError('');
-    const response = await apiFetch(`/api/admin/events/${event.id}/tournament-publication`, { method: 'PATCH', body: JSON.stringify({ [field]: value, expectedVersion: event.version }) });
-    const data = await response.json() as { event?: EventDto; error?: string };
-    setBusy(false); if (!response.ok) setError(data.error ?? copy.admin.event.visibilityError); else setEvent(data.event ?? event);
+    const surface = field === 'publicLiveScoringEnabled' ? eventCopy.liveScoresLabel : eventCopy.finalResultsLabel;
+    await send(
+      `/api/admin/events/${event.id}/tournament-publication`,
+      { [field]: next, expectedVersion: event.version },
+      eventCopy.visibilityError,
+      () => fillTemplate(next ? eventCopy.nowPublic : eventCopy.nowHidden, { surface }),
+    );
   }
+
+  const action = event ? statusAction(event.status, eventCopy) : '';
+  const target = event ? nextStatus[event.status] : undefined;
 
   return (
-    <AdminShell title={event?.title ?? copy.admin.event.fallbackTitle} description={copy.admin.event.description} eyebrow={copy.admin.common.eyebrow}>
-      {error ? <InlineNotice kind="error">{error}</InlineNotice> : null}
+    <AdminShell
+      title={event?.title ?? eventCopy.fallbackTitle}
+      description={eventCopy.description}
+      eyebrow={copy.admin.common.eyebrow}
+    >
+      {/* Only a failure to load the event stays on the page — it describes the
+          screen itself. Command outcomes go to the message layer. */}
+      {error ? <div className="mb-4"><InlineNotice kind="error" onDismiss={() => setError('')}>{error}</InlineNotice></div> : null}
+
       {event ? (
-        <div className="space-y-5">
-          <EventLifecycleHero
+        <div className="space-y-4">
+          <EventHeaderBand
             event={event}
-            action={statusAction(event.status, copy.admin.event) ? (
+            action={action ? (
               <CommandButton tone="primary" busy={busy} onClick={() => setStatusModalOpen(true)}>
-                {statusAction(event.status, copy.admin.event)}
+                {action}
               </CommandButton>
             ) : undefined}
           />
-          <EventStageBoard event={event} signals={signals} />
-          <EventPublicationBoard event={event} signals={signals} busy={busy} onToggle={(field) => { void updatePublication(field); }} />
+
+          <EventAgendaBand event={event} signals={signals} loading={signalsLoading} />
+          <EventStageList event={event} signals={signals} />
+          <EventPublicationList
+            event={event}
+            signals={signals}
+            busy={busy}
+            onToggle={(field, next) => { void updatePublication(field, next); }}
+          />
           <EventOrganiserPanel eventId={event.id} />
+
           <DashboardModal
             open={statusModalOpen}
             onOpenChange={(open) => { if (!busy) setStatusModalOpen(open); }}
-            title={statusAction(event.status, copy.admin.event)}
-            description={copy.admin.event.confirmDescription}
+            title={action}
+            description={eventCopy.confirmDescription}
             size="md"
             footer={
               <ModalFormFooter
@@ -104,18 +175,21 @@ export function AdminEventControlClient({ eventId }: { eventId: string }) {
                 submitType="button"
                 onSubmitClick={() => { void advanceStatus(); }}
                 busy={busy}
-                submitLabel={busy ? copy.admin.event.updating : statusAction(event.status, copy.admin.event)}
+                submitLabel={busy ? eventCopy.updating : action}
               />
             }
           >
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg border border-[rgba(88,16,16,0.12)] bg-white/55 p-4 text-center">
-              <div><p className="text-xs uppercase tracking-[0.1em] text-[rgba(88,16,16,0.5)]">{copy.admin.common.current}</p><p className="mt-1 text-sm font-semibold">{tournamentStatus(locale, event.status)}</p></div>
-              <ArrowRight aria-hidden="true" className="h-4 w-4 text-[rgba(88,16,16,0.4)]" />
-              <div><p className="text-xs uppercase tracking-[0.1em] text-[rgba(88,16,16,0.5)]">{copy.admin.common.next}</p><p className="mt-1 text-sm font-semibold">{nextStatus[event.status] ? tournamentStatus(locale, nextStatus[event.status]!) : ''}</p></div>
-            </div>
+            <p className="text-sm leading-6 text-[var(--dash-text)]">
+              {fillTemplate(eventCopy.confirmMoves, {
+                from: tournamentStatus(locale, event.status),
+                to: target ? tournamentStatus(locale, target) : '',
+              })}
+            </p>
           </DashboardModal>
         </div>
-      ) : !error ? <p className="text-sm text-[var(--dash-muted)]">{copy.admin.event.loading}</p> : null}
+      ) : error ? null : (
+        <SkeletonRows rows={4} label={eventCopy.loading} />
+      )}
     </AdminShell>
   );
 }

@@ -4,7 +4,7 @@ import { requireEventCapability } from '../../common/capabilities.js';
 import { requireCommandId } from '../../common/commands.js';
 import { asyncHandler, cleanString, jsonError, requireParamId, setPublicCache } from '../../common/http.js';
 import { serializeBracket } from '../../common/serializers.js';
-import { createBracket, generateBracket, listBrackets, lockBracket, placeBracketEntry, publishBracket, setBracketSetDefaults } from './brackets.service.js';
+import { createBracket, deleteBracket, generateBracket, listBrackets, lockBracket, placeBracketEntry, publishBracket, setBracketSetDefaults, unlockBracket } from './brackets.service.js';
 
 export const bracketsRouter = Router();
 
@@ -26,6 +26,37 @@ bracketsRouter.post('/api/admin/events/:eventId/brackets/:bracketId/lock', async
   const eventId = requireParamId(request.params.eventId);
   const admin = await requireEventCapability(request, eventId, Capability.BRACKET_MANAGE);
   response.json({ bracket: serializeBracket(await lockBracket({ eventId, bracketId: requireParamId(request.params.bracketId), actorId: admin.id, expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) })) });
+}));
+
+bracketsRouter.post('/api/admin/events/:eventId/brackets/:bracketId/unlock', asyncHandler(async (request, response) => {
+  const eventId = requireParamId(request.params.eventId);
+  // Rewinding a frozen draw is a correction, not a step forward, so it sits
+  // with the completed-event reopen under EVENT_STATE_CORRECT — which an
+  // organiser never holds.
+  const admin = await requireEventCapability(request, eventId, Capability.EVENT_STATE_CORRECT);
+  const reason = cleanString(request.body.reason);
+  if (reason.length < 3) jsonError('A reason for unlocking the draw is required.');
+  const bracket = await unlockBracket({
+    eventId,
+    bracketId: requireParamId(request.params.bracketId),
+    actorId: admin.id,
+    reason,
+    expectedVersion: Number(request.body.expectedVersion),
+    commandId: requireCommandId(request.body.commandId),
+  });
+  response.json({ bracket: serializeBracket(bracket) });
+}));
+
+bracketsRouter.delete('/api/admin/events/:eventId/brackets/:bracketId', asyncHandler(async (request, response) => {
+  const eventId = requireParamId(request.params.eventId);
+  const admin = await requireEventCapability(request, eventId, Capability.BRACKET_MANAGE);
+  const result = await deleteBracket({
+    eventId,
+    bracketId: requireParamId(request.params.bracketId),
+    actorId: admin.id,
+    commandId: requireCommandId(request.body?.commandId ?? request.query.commandId),
+  });
+  response.json(result);
 }));
 
 bracketsRouter.post('/api/admin/events/:eventId/brackets/:bracketId/placements', asyncHandler(async (request, response) => {

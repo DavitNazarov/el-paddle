@@ -3,29 +3,36 @@
 import { GripVertical, Inbox } from 'lucide-react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { CourtDto, MatchDto } from '@/types/tournament';
-import { EmptyTournamentState, TournamentPanel, TournamentSectionHeader, StatusLabel } from '@/components/tournament/TournamentUI';
 import { selectControlClassName } from '@/components/shared/dashboard/DashboardUI';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
-import { POOL_DROPPABLE_ID, isQueueFinished, matchPair, matchTitle, poolItemId } from './scheduleModel';
+import {
+  POOL_DROPPABLE_ID,
+  isQueueFinished,
+  matchPair,
+  matchTitle,
+  poolItemId,
+  type CategoryNamer,
+} from './scheduleModel';
 import styles from './Schedule.module.css';
 
 /**
- * Matches that exist in a draw but are not on any court yet. It used to be a
- * number in a metric tile and a dropdown inside a modal, which hid the one
- * question the operator has left: what still has nowhere to be played?
+ * Matches that belong to a draw but sit in no court queue yet.
  *
- * It is also a drop target, so a match dragged out of a queue lands back here
- * rather than needing a separate "remove" trip.
+ * The first column on the board, because it is the one everything is dragged
+ * out of. It is also a drop target, so a match dragged back here comes off the
+ * schedule rather than needing a separate remove trip.
  */
 export function UnscheduledPool({
   busy,
+  categoryOf,
   courts,
   locked,
   matches,
   onPlace,
 }: {
   busy: string;
+  categoryOf: CategoryNamer;
   courts: CourtDto[];
   locked: boolean;
   matches: MatchDto[];
@@ -37,20 +44,24 @@ export function UnscheduledPool({
   const openCourts = courts.filter((court) => !isQueueFinished(court));
 
   return (
-    <TournamentPanel className="border-[var(--dash-border)] bg-white" labelledBy="unscheduled-pool">
-      <TournamentSectionHeader
-        id="unscheduled-pool"
-        title={copy.unscheduledTitle}
-        description={locked ? undefined : copy.unscheduledDetail}
-        actions={matches.length ? <StatusLabel>{fillTemplate(copy.matchesCount, { count: matches.length })}</StatusLabel> : undefined}
-      />
-      <div ref={setNodeRef} className={styles.pool} data-over={isOver}>
+    <section className={styles.column} data-pool="true" data-over={isOver} aria-labelledby="unscheduled-pool">
+      <header className={styles.columnHead}>
+        <h3 id="unscheduled-pool" className={styles.columnName}>{copy.unscheduledTitle}</h3>
+        <span className={styles.columnState} data-state={matches.length ? 'idle' : 'done'}>
+          <Inbox aria-hidden="true" />
+          {fillTemplate(copy.matchesCount, { count: matches.length })}
+        </span>
+        <p className={styles.columnCount}>{locked ? '' : copy.unscheduledDetail}</p>
+      </header>
+
+      <div ref={setNodeRef} className={styles.columnBody}>
         {matches.length ? (
-          <ul className={styles.poolList}>
+          <ul className={styles.cardList}>
             {matches.map((match) => (
               <PoolCard
                 key={match.id}
                 busy={busy}
+                category={categoryOf(match)}
                 courts={openCourts}
                 locked={locked}
                 match={match}
@@ -59,21 +70,23 @@ export function UnscheduledPool({
             ))}
           </ul>
         ) : (
-          <EmptyTournamentState title={copy.poolEmpty} detail={copy.poolEmptyDetail} />
+          <p className={styles.columnEmpty}>{copy.poolEmptyDetail}</p>
         )}
       </div>
-    </TournamentPanel>
+    </section>
   );
 }
 
 function PoolCard({
   busy,
+  category,
   courts,
   locked,
   match,
   onPlace,
 }: {
   busy: string;
+  category: string;
   courts: CourtDto[];
   locked: boolean;
   match: MatchDto;
@@ -82,33 +95,38 @@ function PoolCard({
   const { locale } = useI18n();
   const copy = tournamentCopy[locale].admin.schedule;
   const draggable = !locked && courts.length > 0;
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: poolItemId(match.id), disabled: !draggable });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: poolItemId(match.id),
+    disabled: !draggable,
+  });
 
   return (
-    <li ref={setNodeRef} className={styles.poolCard} data-dragging={isDragging}>
-      <div className={styles.poolCardTop}>
+    <li ref={setNodeRef} className={styles.card} data-dragging={isDragging} data-pool="true">
+      <div className={styles.cardTop}>
+        <div className={styles.cardText}>
+          {/* The category leads: it is what tells two "Match 3"s apart. */}
+          {category ? <p className={styles.cardCategory}>{category}</p> : null}
+          <p className={styles.cardTitle}>{matchTitle(locale, match)}</p>
+          <p className={styles.cardPair}>{matchPair(locale, match)}</p>
+        </div>
+
         {draggable ? (
           <button
             type="button"
-            className={styles.grip}
+            className={styles.cardGrip}
             aria-label={fillTemplate(copy.dragToCourt, { number: match.matchNumber })}
             {...attributes}
             {...listeners}
           >
             <GripVertical aria-hidden="true" />
           </button>
-        ) : (
-          <span className={styles.grip} data-frozen="true"><Inbox aria-hidden="true" /></span>
-        )}
-        <div className={styles.rowText}>
-          <p className={styles.rowTitle}>{matchTitle(locale, match)}</p>
-          <p className={styles.rowPair}>{matchPair(locale, match)}</p>
-        </div>
+        ) : null}
       </div>
+
       {/* Keyboard and touch path for the same move the drag performs. */}
       {draggable ? (
         <select
-          className={`${selectControlClassName} h-11 bg-white text-xs`}
+          className={`${selectControlClassName} ${styles.cardMove}`}
           aria-label={fillTemplate(copy.placeOnCourtLabel, { number: match.matchNumber })}
           value=""
           disabled={busy === `place-${match.id}`}

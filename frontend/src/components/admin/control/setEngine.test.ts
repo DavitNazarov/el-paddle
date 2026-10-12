@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MatchDto } from '@/types/tournament';
-import { finishedTallyExample, isFinishedTally, maxSetsFor, setsToWin } from './setEngine';
+import { finishedTallies, maxSetsFor, setsToWin } from './setEngine';
 
 const match = (fields: Partial<MatchDto>) => fields as MatchDto;
 
@@ -22,23 +22,25 @@ describe('set race, as the console reads it', () => {
 
 });
 
-describe('a result entered as two numbers', () => {
-  it('accepts a tally the winner has reached and the loser has not', () => {
-    expect(isFinishedTally(2, 1, 2)).toBe(true);
-    expect(isFinishedTally(1, 2, 2)).toBe(true);
-    expect(isFinishedTally(1, 0, 1)).toBe(true);
+describe('the results a race can end on', () => {
+  const read = (winsNeeded: number) => finishedTallies(winsNeeded).map(({ a, b }) => `${a}-${b}`);
+
+  it('lists every finish of the race, in scoreboard order', () => {
+    expect(read(1)).toEqual(['1-0', '0-1']);
+    expect(read(2)).toEqual(['2-0', '2-1', '1-2', '0-2']);
+    expect(read(3)).toEqual(['3-0', '3-1', '3-2', '2-3', '1-3', '0-3']);
   });
 
-  it('rejects a tally that is unfinished, overrun, or not two whole numbers', () => {
-    expect(isFinishedTally(1, 1, 2)).toBe(false);
-    expect(isFinishedTally(3, 1, 2)).toBe(false);
-    expect(isFinishedTally(2, 2, 2)).toBe(false);
-    expect(isFinishedTally(-1, 2, 2)).toBe(false);
-    expect(isFinishedTally(Number.NaN, 2, 2)).toBe(false);
+  it('offers nothing that leaves the match undecided or overruns the race', () => {
+    // A draw and an overrun are the two shapes a typed tally used to take.
+    expect(read(2)).not.toContain('1-1');
+    expect(read(2)).not.toContain('2-2');
+    expect(read(2)).not.toContain('3-1');
   });
 
-  it('shows the shortest valid result as the example', () => {
-    expect(finishedTallyExample(1)).toBe('1–0');
-    expect(finishedTallyExample(2)).toBe('2–1');
+  it('has nothing to offer for a race that is not a whole number of sets', () => {
+    expect(finishedTallies(0)).toEqual([]);
+    expect(finishedTallies(-1)).toEqual([]);
+    expect(finishedTallies(1.5)).toEqual([]);
   });
 });

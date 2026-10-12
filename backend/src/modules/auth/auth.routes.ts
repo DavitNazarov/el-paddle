@@ -11,13 +11,16 @@ import {
   asyncHandler,
   cleanEmail,
   cleanString,
+  isUniqueConstraintError,
   isValidEmail,
   jsonError,
+  requireParamId,
 } from '../../common/http.js';
 import {
   addMinutes,
   compareSecret,
   createInviteToken,
+  createVerificationCode,
   hashSecret,
   hashToken,
   passwordValidationError,
@@ -50,7 +53,7 @@ import { startGoogleApplication } from '../club-applications/club-applications.s
 import { serializeClub } from '../../common/serializers.js';
 import { clubInclude } from '../../common/includes.js';
 import { assertNotDisqualified } from '../../common/disqualification.js';
-import { sendPasswordResetEmail } from '../../common/notifications.js';
+import { sendPasswordResetEmail, sendVerificationCodeEmail } from '../../common/notifications.js';
 import { consumeLimit, rateLimit } from '../../common/rateLimit.js';
 import { auditLog, requestIp } from '../../common/audit.js';
 import {
@@ -303,6 +306,183 @@ authRouter.post('/api/auth/logout-all', asyncHandler(async (request, response) =
   response.json({ ok: true });
 }));
 
+/**
+ * The devices this account is signed in on.
+ *
+ * `Session` has been per-device since it existed — signing out revokes one row
+ * and leaves the others alone — but nothing ever read the rows back, so the only
+ * control anyone had was the all-or-nothing "log out everywhere". This lists
+ * what that hammer would hit, and lets one of them be picked off instead.
+ *
+ * What it deliberately does not claim: which device each row is. No user agent
+ * or address is recorded against a session, so a row can honestly say when it
+ * started, when it expires, and whether it is the one reading this — and nothing
+ * more. Naming devices would need a column.
+ */
+authRouter.get('/api/account/sessions', asyncHandler(async (request, response) => {
+  const current = await requireUser(request);
+  const currentSessionId = readSessionId(request);
+  const sessions = await prisma.session.findMany({
+    where: { userId: current.id, revokedAt: null, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, createdAt: true, expiresAt: true },
+  });
+  response.json({
+    sessions: sessions.map((session) => ({
+      id: session.id,
+      createdAt: session.createdAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      current: session.id === currentSessionId,
+    })),
+  });
+}));
+
+authRouter.delete('/api/account/sessions/:id', asyncHandler(async (request, response) => {
+  const current = await requireUser(request);
+  const sessionId = requireParamId(request.params.id, 'session id');
+  const session = await prisma.session.findFirst({
+    where: { id: sessionId, userId: current.id },
+    select: { id: true },
+  });
+  // Scoped to the caller's own rows, and 404 rather than 403 so this cannot be
+  // used to ask whether someone else's session id exists.
+  if (!session) jsonError('Session not found.', 404);
+
+  await revokeSession(session.id);
+  auditLog({
+    event: 'auth.session_revoked',
+    outcome: 'success',
+    userId: current.id,
+    email: current.email,
+    ip: requestIp(request),
+    detail: session.id === readSessionId(request) ? 'self' : 'other',
+  });
+  // Revoking the device you are reading from signs you out here too, so the
+  // cookie goes with it rather than being left to fail on the next request.
+  if (session.id === readSessionId(request)) clearSessionCookie(response);
+  response.json({ ok: true, signedOut: session.id === readSessionId(request) });
+}));
+
+/** How long an email-change code stays usable. */
+const EMAIL_CHANGE_LIFETIME_MINUTES = 30;
+
+/**
+ * Change the address the account signs in with.
+ *
+ * The code is mailed to the *new* address, because the thing that has to be
+ * proven is control of it. There is no column to park a pending address in, so
+ * the address is bound into the code's hash instead: a code is only valid for
+ * the address it was issued for, and the caller presents both to redeem it. A
+ * code that leaks is useless against any other address.
+ *
+ * A change that would alter the account's role — an address in `ADMIN_EMAILS` —
+ * is refused. Elevation is an administrative act, not a side effect of editing
+ * your own profile.
+ */
+authRouter.post('/api/account/email', authStrictLimit, asyncHandler(async (request, response) => {
+  const current = await requireUser(request);
+  const email = cleanEmail(request.body.email);
+  const password = cleanString(request.body.password);
+
+  if (!isValidEmail(email)) jsonError('Enter a valid email address.');
+  if (email === current.email) jsonError('That is already your email address.');
+  if (roleForEmail(email, current.role) !== current.role) {
+    jsonError('This address cannot be used for your account. Ask an administrator.', 403);
+  }
+
+  const account = await prisma.user.findUnique({
+    where: { id: current.id },
+    select: { passwordHash: true },
+  });
+  // A password-less account got here through Google, so there is nothing to
+  // re-prove beyond the session it is already holding.
+  if (account?.passwordHash) {
+    if (!password) jsonError('Enter your current password to change your email address.');
+    if (!(await compareSecret(password, account.passwordHash))) {
+      auditLog({ event: 'account.email_change', outcome: 'denied', userId: current.id, email: current.email, ip: requestIp(request) });
+      jsonError('Current password is incorrect.', 403);
+    }
+  }
+
+  const taken = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (taken) jsonError('That email address is already in use.', 409);
+
+  consumeLimit({ windowMs: 15 * 60 * 1000, max: 5, keyPrefix: 'email-change', subject: current.id });
+
+  const code = createVerificationCode();
+  await prisma.$transaction([
+    // One live code at a time, exactly like a reset link.
+    prisma.emailVerificationCode.updateMany({
+      where: { userId: current.id, usedAt: null },
+      data: { usedAt: new Date() },
+    }),
+    prisma.emailVerificationCode.create({
+      data: {
+        userId: current.id,
+        codeHash: hashToken(`${code}:${email}`),
+        expiresAt: addMinutes(EMAIL_CHANGE_LIFETIME_MINUTES),
+      },
+    }),
+  ]);
+
+  auditLog({ event: 'account.email_change_requested', outcome: 'success', userId: current.id, email: current.email, ip: requestIp(request) });
+  await sendVerificationCodeEmail(email, code);
+  response.json({ ok: true, expiresInMinutes: EMAIL_CHANGE_LIFETIME_MINUTES });
+}));
+
+authRouter.post('/api/account/email/verify', authStrictLimit, asyncHandler(async (request, response) => {
+  const current = await requireUser(request);
+  const email = cleanEmail(request.body.email);
+  const code = cleanString(request.body.code);
+  if (!isValidEmail(email) || !code) jsonError('Enter the code sent to your new address.');
+  if (roleForEmail(email, current.role) !== current.role) {
+    jsonError('This address cannot be used for your account. Ask an administrator.', 403);
+  }
+
+  const verification = await prisma.emailVerificationCode.findFirst({
+    where: {
+      userId: current.id,
+      codeHash: hashToken(`${code}:${email}`),
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    select: { id: true },
+  });
+  if (!verification) jsonError('That code is not valid. Request a new one.', 400);
+
+  try {
+    await prisma.$transaction([
+      prisma.emailVerificationCode.updateMany({
+        where: { id: verification.id, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      prisma.user.update({
+        where: { id: current.id },
+        // The address is the account's identity, so every other device is signed
+        // out — the same rule a password change follows.
+        data: { email, emailVerifiedAt: new Date(), sessionVersion: { increment: 1 } },
+      }),
+      prisma.session.updateMany({
+        where: { userId: current.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+  } catch (error) {
+    if (isUniqueConstraintError(error)) jsonError('That email address is already in use.', 409);
+    throw error;
+  }
+
+  auditLog({ event: 'account.email_changed', outcome: 'success', userId: current.id, email, ip: requestIp(request) });
+  // Every session just died, including this one; hand this device a new cookie
+  // so changing an address does not read as being logged out for no reason.
+  const updated = await prisma.user.findUniqueOrThrow({
+    where: { id: current.id },
+    select: { id: true, sessionVersion: true },
+  });
+  await startSession(response, updated);
+  response.json({ ok: true, email });
+}));
+
 /** How long a reset link stays usable. Short: it is a bearer token in an inbox. */
 const PASSWORD_RESET_LIFETIME_MINUTES = 30;
 
@@ -359,6 +539,44 @@ authRouter.post('/api/auth/password-reset', authStrictLimit, asyncHandler(async 
   }
 
   response.json(identical);
+}));
+
+/**
+ * Is this reset link still good?
+ *
+ * Read-only and never consuming, so the form can say "this link expired, ask
+ * for a new one" before the reader types a new password twice and only then
+ * learns the link was dead. It answers about the token it was handed and
+ * nothing else — no email, no name, no account state — so it reveals no more
+ * than trying to redeem the link already would.
+ */
+authRouter.get('/api/auth/password-reset/validate', authStrictLimit, asyncHandler(async (request, response) => {
+  const token = cleanString(request.query.token);
+  if (!token) {
+    response.json({ valid: false, reason: 'MISSING' });
+    return;
+  }
+  const reset = await prisma.passwordResetToken.findFirst({
+    where: { tokenHash: hashToken(token) },
+    select: { usedAt: true, expiresAt: true, user: { select: { status: true } } },
+  });
+  if (!reset) {
+    response.json({ valid: false, reason: 'UNKNOWN' });
+    return;
+  }
+  if (reset.usedAt) {
+    response.json({ valid: false, reason: 'USED' });
+    return;
+  }
+  if (reset.expiresAt.getTime() <= Date.now()) {
+    response.json({ valid: false, reason: 'EXPIRED' });
+    return;
+  }
+  if (reset.user.status !== UserStatus.ACTIVE) {
+    response.json({ valid: false, reason: 'UNKNOWN' });
+    return;
+  }
+  response.json({ valid: true, expiresAt: reset.expiresAt.toISOString() });
 }));
 
 /**

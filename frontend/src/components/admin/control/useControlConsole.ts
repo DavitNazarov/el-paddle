@@ -5,6 +5,7 @@ import type { BracketDto, CourtDto, MatchDto } from '@/types/tournament';
 import type { EventDto } from '@/types/admin';
 import { apiFetch, createCommandId } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
+import { pushToast } from '@/components/shared/Toasts';
 import { useTournamentRealtime } from '@/hooks/useTournamentRealtime';
 import { tournamentCopy } from '@/lib/i18n/tournament';
 import { buildRunBoard, reorderedQueue, type CourtLane } from './runBoard';
@@ -28,12 +29,12 @@ const CLOCK_TICK_MS = 30_000;
 export function useControlConsole(eventId: string) {
   const { locale } = useI18n();
   const control = tournamentCopy[locale].admin.control;
+  const shared = tournamentCopy[locale].admin.common;
   const [event, setEvent] = useState<EventDto | null>(null);
   const [brackets, setBrackets] = useState<BracketDto[]>([]);
   const [courts, setCourts] = useState<CourtDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
   const [now, setNow] = useState(() => Date.now());
 
@@ -72,6 +73,14 @@ export function useControlConsole(eventId: string) {
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
   useTournamentRealtime({ eventId, onChange: load });
 
+  /**
+   * Every command reports through the message layer rather than a banner on the
+   * page. Commands are sent from inside the match sheet, and a banner behind an
+   * open dialog is a refusal the operator never sees — they retry instead.
+   *
+   * `failure` is the fallback wording only; the server's own reason is what an
+   * operator needs to act on, so it wins whenever there is one.
+   */
   const send = useCallback(async (
     key: string,
     path: string,
@@ -80,22 +89,23 @@ export function useControlConsole(eventId: string) {
     success?: string,
   ) => {
     setBusy(key);
-    setError('');
-    setNotice('');
     try {
       const response = await apiFetch(path, { method: init.method, body: JSON.stringify(init.body) });
       const data = await response.json().catch(() => ({})) as { error?: string };
-      if (!response.ok) { setError(data.error ?? failure); return false; }
-      if (success) setNotice(success);
+      if (!response.ok) {
+        pushToast({ tone: 'error', title: failure, message: data.error ?? shared.commandFailed });
+        return false;
+      }
+      if (success) pushToast({ tone: 'success', message: success });
       return true;
     } catch {
-      setError(failure);
+      pushToast({ tone: 'error', title: failure, message: shared.offline });
       return false;
     } finally {
       setBusy('');
       await load();
     }
-  }, [load]);
+  }, [load, shared.commandFailed, shared.offline]);
 
   const commands = useMemo(() => ({
     start: (match: MatchDto) => send(
@@ -176,15 +186,14 @@ export function useControlConsole(eventId: string) {
     brackets,
     busy,
     clearError: () => setError(''),
-    clearNotice: () => setNotice(''),
     commands,
     courts,
+    /** Only a failure to load the day. Command outcomes go to the message layer. */
     error,
     event,
     /** A completed event is read-only until an admin reopens it. */
     locked: event?.status === 'COMPLETED',
     loading,
-    notice,
     reload: load,
   };
 }

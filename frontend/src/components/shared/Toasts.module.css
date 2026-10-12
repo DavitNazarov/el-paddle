@@ -1,0 +1,62 @@
+/*
+ * The message layer.
+ *
+ * It sits above the dialog stack (overlay 50, content 51) because the commands
+ * that fail are sent from inside dialogs. The strip itself never takes pointer
+ * events, so a message hovering over the screen cannot block the control
+ * underneath it; only the notice inside it does.
+ */
+
+.viewport {
+  position: fixed;
+  z-index: 100;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 0.5rem);
+  padding: var(--space-3, 0.75rem);
+  pointer-events: none;
+}
+
+@media (min-width: 40rem) {
+  .viewport {
+    left: auto;
+    max-width: 26rem;
+    padding: var(--space-4, 1rem);
+  }
+}
+
+/*
+ * The tone fills a notice uses are translucent tints, meant to sit on a page.
+ * Floating over arbitrary content they need something opaque underneath, so the
+ * wrapper — not the notice — carries the white and the lift. Nothing here
+ * competes with the notice's own rules for the same properties.
+ */
+.toast {
+  overflow: hidden;
+  border-radius: var(--radius-tile, 0.65rem);
+  background: #fff;
+  box-shadow: 0 14px 40px rgba(43, 26, 24, 0.22);
+  pointer-events: auto;
+  animation: toast-in 180ms ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

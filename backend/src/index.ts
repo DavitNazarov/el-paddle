@@ -33,6 +33,6 @@ if (process.env.RUN_OUTBOX_IN_API !== 'false') {
   });
 }
 
-server.listen(config.port, () => {
-  console.log(`El Padel backend listening on http://localhost:${config.port}`);
+server.listen(config.port, '0.0.0.0', () => {
+  console.log(`El Padel backend listening on http://0.0.0.0:${config.port}`);
 });

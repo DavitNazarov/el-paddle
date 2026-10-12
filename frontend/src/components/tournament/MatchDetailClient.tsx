@@ -129,7 +129,7 @@ function MatchResultSheet({ match }: { match: MatchDetailDto }) {
   );
 }
 
-function DetailSide({ side, team, isBye, score, winner }: { side: 'A' | 'B'; team?: { ownerName: string; teammateName: string; clubName?: string }; isBye: boolean; score?: number; winner: boolean }) {
+function DetailSide({ side, team, isBye, score, winner }: { side: 'A' | 'B'; team?: { ownerName: string; teammateName: string; clubName?: string | null }; isBye: boolean; score?: number; winner: boolean }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale].common;
   return (

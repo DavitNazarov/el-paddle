@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import {
+  ClubMembershipRole,
   PrismaClient,
   RegistrationStatus,
   UserRole,
@@ -352,15 +353,29 @@ async function main() {
       surname: LAST_NAMES[(i + 7) % LAST_NAMES.length],
     });
 
+    // The owner leads the club they found. Writing the row directly means
+    // `membershipRole` falls to its schema default of MEMBER unless it is named
+    // here — which is how every seeded club ended up with nobody able to edit
+    // it, review a join request, or change a registered team.
     await prisma.clubMember.upsert({
       where: { userId: owner.id },
-      update: { clubId: club.id, roleTitle: 'Captain' },
-      create: { clubId: club.id, userId: owner.id, roleTitle: 'Captain' },
+      update: { clubId: club.id, roleTitle: 'Captain', membershipRole: ClubMembershipRole.LEADER },
+      create: {
+        clubId: club.id,
+        userId: owner.id,
+        roleTitle: 'Captain',
+        membershipRole: ClubMembershipRole.LEADER,
+      },
     });
     await prisma.clubMember.upsert({
       where: { userId: teammate.id },
-      update: { clubId: club.id, roleTitle: 'Doubles player' },
-      create: { clubId: club.id, userId: teammate.id, roleTitle: 'Doubles player' },
+      update: { clubId: club.id, roleTitle: 'Doubles player', membershipRole: ClubMembershipRole.MEMBER },
+      create: {
+        clubId: club.id,
+        userId: teammate.id,
+        roleTitle: 'Doubles player',
+        membershipRole: ClubMembershipRole.MEMBER,
+      },
     });
 
     teamPool.push({

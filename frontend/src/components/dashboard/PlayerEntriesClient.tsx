@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRightLeft, ListChecks, Users } from 'lucide-react';
+import { ArrowRightLeft, ListChecks, LogOut, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   EmptyState,
@@ -18,8 +18,16 @@ import { cn } from '@/lib/utils';
 import type { PublicUser } from '@/types/auth';
 import type { DashboardData, RegistrationDto, StatusFilter } from '@/types/dashboard';
 import { ClubLineupEditor } from './ClubLineupEditor';
+import { EntryWithdrawDialog } from './EntryWithdrawDialog';
 import { PlayerEntryCard } from './PlayerEntryCard';
 import { PlayerShell } from './PlayerShell';
+
+/**
+ * Entries a club can still pull out of. Once a status is terminal — declined,
+ * cancelled, already withdrawn — there is nothing to withdraw from, and the
+ * server refuses anyway, so the command is not offered.
+ */
+const withdrawableStatuses = new Set(['PENDING', 'APPROVED', 'NEEDS_CHANGES', 'WAITLISTED']);
 
 export function PlayerEntriesClient({
   initialUser,
@@ -47,6 +55,7 @@ export function PlayerEntriesClient({
   } = api;
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [managedEntry, setManagedEntry] = useState<RegistrationDto | null>(null);
+  const [withdrawingEntry, setWithdrawingEntry] = useState<RegistrationDto | null>(null);
   const filtered = filterRegistrations(statusFilter);
   const copy = player.clubEntries;
   const clubPlayers = [user, ...clubMembers].filter(
@@ -170,19 +179,49 @@ export function PlayerEntriesClient({
                 : copy.clubTeam
             }
             actions={clubMembershipRole === 'LEADER' ? (
-              <Button
-                type="button"
-                variant="outline"
-                className={cn(softButtonClassName, 'min-h-11 rounded-lg')}
-                onClick={() => openLineupManager(registration)}
-              >
-                <ArrowRightLeft className="h-4 w-4" />
-                {copy.manageLineup}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(softButtonClassName, 'min-h-11 rounded-lg')}
+                  onClick={() => openLineupManager(registration)}
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  {copy.manageLineup}
+                </Button>
+                {withdrawableStatuses.has(registration.status) ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(softButtonClassName, 'min-h-11 rounded-lg')}
+                    onClick={() => setWithdrawingEntry(registration)}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {dictionary.dashboard.player.withdrawEntry.action}
+                  </Button>
+                ) : null}
+              </>
             ) : undefined}
           />
         ))}
       </div>
+
+      {withdrawingEntry ? (
+        <EntryWithdrawDialog
+          key={`${withdrawingEntry.id}:${withdrawingEntry.version}`}
+          registration={withdrawingEntry}
+          onClose={() => setWithdrawingEntry(null)}
+          onConflict={() => loadDashboard(false)}
+          onWithdrawn={async () => {
+            const title = withdrawingEntry.event.title;
+            setWithdrawingEntry(null);
+            // Names the entry that left, not "Saved" — a leader may withdraw
+            // one of several teams and has to see which one landed.
+            setMessage(dictionary.dashboard.player.withdrawEntry.success.replace('{event}', title));
+            await loadDashboard(false);
+          }}
+        />
+      ) : null}
 
       {managedEntry ? (
         <ClubLineupEditor

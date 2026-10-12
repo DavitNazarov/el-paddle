@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { CourtDto, ScheduleItemDto } from '@/types/tournament';
+import type { BracketDto, CourtDto, MatchDto, ScheduleItemDto } from '@/types/tournament';
 import {
   courtDroppableId,
-  courtFocus,
   courtNeedsAttention,
   courtState,
   poolItemId,
@@ -10,6 +9,7 @@ import {
   POOL_DROPPABLE_ID,
   firstMovablePosition,
   nudgeOrder,
+  categoryNamer,
 } from './scheduleModel';
 
 function item(id: string, queuePosition: number, status: ScheduleItemDto['status'] = 'READY') {
@@ -96,19 +96,30 @@ describe('court state', () => {
     expect(courtNeedsAttention('idle')).toBe(true);
     expect((['done', 'live', 'ready'] as const).map((state) => courtNeedsAttention(state))).toEqual([false, false, false]);
   });
+});
 
-  it('names the running match and the one after it, and counts the rest', () => {
-    const busy = court('a', [item('a1', 1, 'COMPLETED'), item('a2', 2, 'IN_PROGRESS'), item('a3', 3), item('a4', 4)]);
-    const focus = courtFocus(busy);
-    expect(focus.live?.id).toBe('a2');
-    expect(focus.next?.id).toBe('a3');
-    expect(focus.waiting).toBe(2);
+describe('naming the category a row belongs to', () => {
+  const bracket = (name: string, matchIds: string[]) => ({
+    eventCategory: { category: { id: name, name } },
+    matches: matchIds.map((id) => ({ id })),
+  }) as unknown as BracketDto;
+
+  const match = (id: string) => ({ id }) as MatchDto;
+
+  it('says nothing when the event runs a single category', () => {
+    const namer = categoryNamer([bracket('Men’s Open', ['m1', 'm2'])]);
+    expect(namer(match('m1'))).toBe('');
   });
 
-  it('names only the next match when nothing is running', () => {
-    const focus = courtFocus(court('a', [item('a1', 1), item('a2', 2)]));
-    expect(focus.live).toBeNull();
-    expect(focus.next?.id).toBe('a1');
-    expect(focus.waiting).toBe(2);
+  it('names the draw once more than one category is in play', () => {
+    const namer = categoryNamer([bracket('Men’s Open', ['m1']), bracket('Mixed', ['m2'])]);
+    expect(namer(match('m1'))).toBe('Men’s Open');
+    expect(namer(match('m2'))).toBe('Mixed');
+  });
+
+  it('falls back to the copy of the bracket a schedule item carries', () => {
+    const namer = categoryNamer([bracket('Men’s Open', ['m1']), bracket('Mixed', ['m2'])]);
+    const fromSchedule = { id: 'm9', bracket: { eventCategory: { category: { id: 'x', name: 'Women’s Open' } } } } as MatchDto;
+    expect(namer(fromSchedule)).toBe('Women’s Open');
   });
 });

@@ -45,6 +45,63 @@ export function bracketChampion(bracket: BracketDto): { names: string; club: str
   return names ? { names, club: snapshot?.clubName ?? null } : null;
 }
 
+export type StandingTeam = { names: string; club: string | null };
+
+/** Identity for one side of a match: the frozen snapshot first, the live entry as fallback. */
+function sideTeam(match: MatchDto, side: 'A' | 'B'): StandingTeam | null {
+  const snapshot = match.snapshots.find((item) => item.side === side);
+  const entry = side === 'A' ? match.participantA : match.participantB;
+  const names = entry
+    ? `${entry.owner.fullName} / ${entry.teammate.fullName}`
+    : snapshot
+      ? `${snapshot.ownerName} / ${snapshot.teammateName}`
+      : null;
+  return names ? { names, club: snapshot?.clubName ?? null } : null;
+}
+
+function winningSide(match: MatchDto): 'A' | 'B' | null {
+  if (match.winnerEntryId) {
+    if (match.winnerEntryId === match.participantAEntryId) return 'A';
+    if (match.winnerEntryId === match.participantBEntryId) return 'B';
+    return null;
+  }
+  if (match.scoreA === match.scoreB) return null;
+  return match.scoreA > match.scoreB ? 'A' : 'B';
+}
+
+/**
+ * Where a category finished: the final's winner and loser, then whoever the
+ * semifinals eliminated.
+ *
+ * The draw already carries all of it — the page just never read past the
+ * champion, so a runner-up who played five matches appeared nowhere. Third place
+ * is not played, so both losing semifinalists hold it; saying "3=" twice is
+ * truer than inventing an order between them.
+ */
+export function bracketStandings(bracket: BracketDto): Array<{ place: 1 | 2 | 3; team: StandingTeam }> {
+  const final = bracket.matches.find((match) => match.round === 'FINAL' && match.status === 'COMPLETED');
+  if (!final) return [];
+  const winner = winningSide(final);
+  if (!winner) return [];
+  const loser = winner === 'A' ? 'B' : 'A';
+
+  const podium: Array<{ place: 1 | 2 | 3; team: StandingTeam }> = [];
+  const champion = sideTeam(final, winner);
+  const runnerUp = sideTeam(final, loser);
+  if (champion) podium.push({ place: 1, team: champion });
+  if (runnerUp) podium.push({ place: 2, team: runnerUp });
+
+  for (const match of bracket.matches
+    .filter((candidate) => candidate.round === 'SEMIFINAL' && candidate.status === 'COMPLETED')
+    .sort((left, right) => left.matchNumber - right.matchNumber)) {
+    const side = winningSide(match);
+    if (!side) continue;
+    const beaten = sideTeam(match, side === 'A' ? 'B' : 'A');
+    if (beaten) podium.push({ place: 3, team: beaten });
+  }
+  return podium;
+}
+
 export function LiveBadge() {
   const { locale } = useI18n();
   return (
@@ -237,9 +294,11 @@ function pairLabel(bracket: BracketDto, match: MatchDto, side: 'A' | 'B', locale
   if (entry) return `${entry.owner.fullName} / ${entry.teammate.fullName}`;
   const snapshot = match.snapshots.find((item) => item.side === side);
   if (snapshot) return `${snapshot.ownerName} / ${snapshot.teammateName}`;
+  const copy = tournamentCopy[locale];
+  // The empty side of a bye is not a team still to be decided — nobody is coming.
+  if (match.resultType === 'BYE') return copy.common.bye;
   const source = bracket.matches.find((candidate) => candidate.nextMatchId === match.id && candidate.nextMatchSlot === side);
-  const copy = tournamentCopy[locale].publicEvent;
-  return source ? fillTemplate(copy.winnerOfMatch, { number: source.matchNumber }) : copy.toBeDetermined;
+  return source ? fillTemplate(copy.publicEvent.winnerOfMatch, { number: source.matchNumber }) : copy.publicEvent.toBeDetermined;
 }
 
 export function ChampionBanner({ category, champion }: { category: string; champion: { names: string; club: string | null } }) {
@@ -256,6 +315,66 @@ export function ChampionBanner({ category, champion }: { category: string; champ
         {champion.club ? <p className="mt-0.5 text-sm text-[var(--padel-muted)]">{champion.club}</p> : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * A category's final standings.
+ *
+ * Place is stated as a number and a word, never by colour alone: the champion
+ * row carries the only accent on the panel, and the two below it are told apart
+ * by their rank and rule, which is what a printed result sheet does. Joint third
+ * repeats the same "3=" on both rows rather than picking one to be fourth.
+ */
+export function StandingsPanel({ category, standings }: { category: string; standings: Array<{ place: 1 | 2 | 3; team: StandingTeam }> }) {
+  const { locale } = useI18n();
+  const copy = tournamentCopy[locale].publicEvent.standings;
+  const placeLabel = (place: 1 | 2 | 3) =>
+    place === 1 ? copy.first : place === 2 ? copy.second : copy.thirdEqual;
+
+  return (
+    <section
+      className="rounded-sm border border-[var(--padel-line)] bg-[var(--padel-red)]/24 p-4"
+      aria-label={fillTemplate(copy.ariaLabel, { category })}
+    >
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--padel-muted)]">
+        {category}
+      </p>
+      <ol className="mt-3 space-y-2">
+        {standings.map((standing, index) => (
+          <li
+            key={`${standing.place}-${standing.team.names}-${index}`}
+            data-place={standing.place}
+            className={
+              standing.place === 1
+                ? 'flex items-center gap-3 rounded-sm border border-[var(--padel-gold)]/50 bg-[var(--padel-gold)]/10 px-3 py-2.5'
+                : 'flex items-center gap-3 rounded-sm border border-[var(--padel-line)] px-3 py-2.5'
+            }
+          >
+            <span
+              className={
+                standing.place === 1
+                  ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--padel-gold)]/50 text-sm font-bold text-[var(--padel-gold)]'
+                  : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--padel-line)] text-sm font-bold text-[var(--padel-muted)]'
+              }
+              aria-hidden="true"
+            >
+              {standing.place === 3 ? '3=' : standing.place}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium leading-6 text-[var(--padel-ivory)]">{standing.team.names}</p>
+              <p className="text-xs text-[var(--padel-muted)]">
+                <span className="sr-only">{placeLabel(standing.place)} — </span>
+                {standing.team.club ?? placeLabel(standing.place)}
+              </p>
+            </div>
+            {standing.place === 1 ? (
+              <Trophy className="h-4 w-4 shrink-0 text-[var(--padel-gold)]" aria-hidden="true" />
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -613,9 +732,13 @@ function ResultCard({ bracket, match }: { bracket: BracketDto; match: MatchDto }
 export function ResultsSection({ brackets }: { brackets: BracketDto[] }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale];
-  const champions = brackets
-    .map((bracket) => ({ bracket, champion: bracketChampion(bracket) }))
-    .filter((entry): entry is { bracket: BracketDto; champion: NonNullable<ReturnType<typeof bracketChampion>> } => Boolean(entry.champion));
+  // The podium replaces the champion banner here: a runner-up who played every
+  // round to the final was previously nowhere on the page that exists to say
+  // how the event finished. The banner is still used on the draw tab, where the
+  // question really is only "who won this".
+  const podiums = brackets
+    .map((bracket) => ({ bracket, standings: bracketStandings(bracket) }))
+    .filter((entry) => entry.standings.length > 0);
   // Byes are advancement bookkeeping, not played matches — keep them out of results.
   const ordered = brackets
     .flatMap((bracket) => bracket.matches
@@ -630,14 +753,23 @@ export function ResultsSection({ brackets }: { brackets: BracketDto[] }) {
   return (
     <TournamentPanel className={panelSurface}>
       <TournamentSectionHeader title={copy.publicEvent.resultsTab.title} description={copy.publicEvent.resultsTab.description} />
-      {ordered.length || champions.length ? (
+      {ordered.length || podiums.length ? (
         <div className="space-y-5 p-4 sm:p-5">
-          {champions.length ? (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {champions.map(({ bracket, champion }) => (
-                <ChampionBanner key={bracket.id} category={bracket.eventCategory.category.name} champion={champion} />
-              ))}
-            </div>
+          {podiums.length ? (
+            <>
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--padel-muted)]">
+                {copy.publicEvent.standings.title}
+              </p>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {podiums.map(({ bracket, standings }) => (
+                  <StandingsPanel
+                    key={bracket.id}
+                    category={bracket.eventCategory.category.name}
+                    standings={standings}
+                  />
+                ))}
+              </div>
+            </>
           ) : null}
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--padel-muted)]">
             {fillTemplate(copy.publicEvent.resultsTab.completedCount, { count: ordered.length })}

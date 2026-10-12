@@ -89,59 +89,51 @@ function renderSheet(match: MatchDto = liveMatch, locked = false) {
   return handlers;
 }
 
-// By accessible name, so the aria-hidden A/B marker beside each field stays out of it.
-const fields = () => ({
-  a: screen.getByRole('spinbutton', { name: 'Sets won by Ana / Nino' }),
-  b: screen.getByRole('spinbutton', { name: 'Sets won by Beka / Giorgi' }),
-  submit: screen.getByRole('button', { name: 'Record result' }),
-});
+// By accessible name: the visible label is a bare score, which says nothing on
+// its own about who won.
+const option = (name: string) => screen.getByRole('button', { name });
 
 describe('writing a result on a live match', () => {
-  it('asks for the sets each side won, named by pair', () => {
+  it('offers every result the match can end on, and states the format', () => {
     renderSheet();
-    const { a, b } = fields();
-    expect(a).toBeInTheDocument();
-    expect(b).toBeInTheDocument();
-    expect(screen.getByText('Write the sets each side won, for example 2–1.')).toBeInTheDocument();
+    expect(screen.getByText('Best of 2 — pick the result.')).toBeInTheDocument();
+    for (const name of ['Ana / Nino win 2–0', 'Ana / Nino win 2–1', 'Beka / Giorgi win 1–2', 'Beka / Giorgi win 0–2']) {
+      expect(option(name)).toBeEnabled();
+    }
   });
 
-  it('holds the command back until the two numbers are a finished result', () => {
+  it('offers nothing that does not finish the match', () => {
     renderSheet();
-    const { a, b, submit } = fields();
-    expect(submit).toBeDisabled();
-
-    fireEvent.change(a, { target: { value: '1' } });
-    expect(submit).toBeDisabled();
-
-    fireEvent.change(b, { target: { value: '1' } });
-    expect(submit).toBeDisabled();
-
-    fireEvent.change(b, { target: { value: '2' } });
-    expect(submit).toBeEnabled();
+    // 1–1 and 2–2 decide nothing; 3–1 overshoots a race to two.
+    expect(screen.queryByText('1–1')).not.toBeInTheDocument();
+    expect(screen.queryByText('3–1')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /win \d–\d$/ })).toHaveLength(4);
   });
 
-  it('hands the two numbers over as typed', () => {
+  it('follows the match’s own set format rather than a fixed list', () => {
+    renderSheet({ ...liveMatch, setCount: 1, setsToWin: 1, maxSets: 1 } as MatchDto);
+    expect(screen.getByText('Best of 1 — pick the result.')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /win \d–\d$/ })).toHaveLength(2);
+    expect(option('Ana / Nino win 1–0')).toBeEnabled();
+  });
+
+  it('hands the chosen tally over as two numbers', () => {
     const handlers = renderSheet();
-    const { a, b, submit } = fields();
-    fireEvent.change(a, { target: { value: '1' } });
-    fireEvent.change(b, { target: { value: '2' } });
-    fireEvent.click(submit);
+    fireEvent.click(option('Beka / Giorgi win 1–2'));
     expect(handlers.onRecordResult).toHaveBeenCalledWith(liveMatch, 1, 2);
   });
 
-  it('refuses a result that would take back a set already recorded', () => {
+  it('bars a result that would take back a set already recorded, and says why', () => {
     const played = { ...liveMatch, scoreA: 0, scoreB: 1, sets: [{ setNumber: 1, winnerSide: 'B' }] } as unknown as MatchDto;
     renderSheet(played);
-    const { a, b, submit } = fields();
-    fireEvent.change(a, { target: { value: '2' } });
-    fireEvent.change(b, { target: { value: '0' } });
-    expect(submit).toBeDisabled();
-    expect(screen.getByText('The result cannot be lower than the sets already recorded.')).toBeInTheDocument();
+    expect(option('Ana / Nino win 2–0')).toBeDisabled();
+    expect(option('Beka / Giorgi win 0–2')).toBeEnabled();
+    expect(screen.getByText(/taking a set back is a reopen, not a result/)).toBeInTheDocument();
   });
 
-  it('offers no result fields until the match is running', () => {
+  it('offers no result at all until the match is running', () => {
     renderSheet({ ...liveMatch, status: 'READY', scheduleItem: { ...liveMatch.scheduleItem, status: 'READY' } } as MatchDto);
-    expect(screen.queryByRole('button', { name: 'Record result' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /win \d–\d$/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start match' })).toBeInTheDocument();
   });
 });
@@ -165,7 +157,7 @@ describe('what the sheet says about where and when', () => {
 
   it('offers no command at all once the event is read-only', () => {
     renderSheet(liveMatch, true);
-    expect(screen.queryByRole('button', { name: 'Record result' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /win \d–\d$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Finish early' })).not.toBeInTheDocument();
   });
 });

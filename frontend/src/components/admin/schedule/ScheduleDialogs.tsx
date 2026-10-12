@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { useResetOnOpen } from '@/hooks/useResetOnOpen';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
-import { isQueueFinished, matchTitle } from './scheduleModel';
+import { isQueueFinished, matchTitle, type CategoryNamer } from './scheduleModel';
 
 /**
  * The three schedule forms. Each owns its own fields and resets when it opens,
@@ -73,6 +73,7 @@ export function AddMatchDialog({
   open,
   onOpenChange,
   busy,
+  categoryOf,
   courts,
   matches,
   onSubmit,
@@ -80,6 +81,7 @@ export function AddMatchDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy: boolean;
+  categoryOf: CategoryNamer;
   courts: CourtDto[];
   matches: MatchDto[];
   onSubmit: (selection: MatchSelection) => void;
@@ -121,7 +123,12 @@ export function AddMatchDialog({
           disabled={!matches.length}
           value={selection.matchId}
           onChange={(value) => setSelection((current) => ({ ...current, matchId: value }))}
-          options={matches.map((match) => ({ value: match.id, label: matchTitle(locale, match) }))}
+          // Match numbers restart per draw, so an option has to say which draw.
+          options={matches.map((match) => {
+            const category = categoryOf(match);
+            const title = matchTitle(locale, match);
+            return { value: match.id, label: category ? `${category} · ${title}` : title };
+          })}
         />
         <DashboardField label={schedule.plannedStart} id="planned-start" hint={schedule.optional}>
           <Input

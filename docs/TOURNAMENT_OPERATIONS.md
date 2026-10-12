@@ -16,6 +16,14 @@ New clubs arrive as requests. An applicant confirms their email, names their clu
 
 Players cannot register for events without a club. An existing player without one requests to join an established club; the club leader approves join requests. Each club can field exactly one team per event, so multiple pairs from one club cannot enter the same tournament.
 
+### When a club has no leader
+
+Leadership is always a swap: handing it on makes the outgoing leader an ordinary member in the same write, because a club with two leaders and a club with none are both broken. A leader cannot leave the club without handing it on first; an ordinary member can leave on their own, resolving the same entries a removal would.
+
+A club can still end up **leaderless** — a membership row written without naming a role takes the database default of member. Those clubs are stuck: nobody can edit the profile, review a join request, or change a registered team. **Clubs → Leaderless** lists them, and an administrator with `CLUB_MANAGE` appoints one. This is the only route back; the member-facing transfer cannot rescue such a club, because it needs an existing leader to do the handing over.
+
+Deleting a club is refused while one of its teams is entered in an unfinished event. Once it goes, past entries survive with their club field emptied, every member is notified that they now have no club, and the `club.deleted` audit row — written before the delete — is the only surviving record.
+
 ## 1. Prepare the event
 
 Create the required categories and confirm participating clubs and users exist. Create the event with its title, date, location, description, optional arrival time, categories, participation fee (GEL), and the bank transfer details (Georgian IBAN and receiver name) shown to players.
@@ -44,15 +52,27 @@ Use a clear public reason whenever the player must understand or act on the deci
 
 A club leader can replace one player in the team while the entry is still editable (not after the bracket locks or the event starts); the entry then returns to `PENDING` for re-review.
 
-When the approved list is ready, publish the registered teams from the event Registrations page. The public roster contains only player names, club, and category; contact and review details remain private. This publication control is independent from the event page, bracket, schedule, live scoring, and results.
+A club can also **pull its own team out**, on the same terms: while the leader can still act on the entry (`PENDING`, `APPROVED`, `NEEDS_CHANGES`, `WAITLISTED`), and never once the draw is locked or the event has started. From there the only way out is a walkover an administrator records. The entry lands on `WITHDRAWN`, which is the team's own word for leaving; `CANCELLED` is the organiser's. Both are terminal — neither can be moved back, so re-entering means a new registration while registration is still open.
+
+When the approved list is ready, publish the entry list from the event's Entries screen. The public roster contains only player names, club, and category; contact and review details remain private. This publication control is independent from the event page, bracket, schedule, live scoring, and results.
+
+Entries are reviewed as a queue: the filters above it carry the count in each state, and each row is the pair, their club and their category, with the contact details beneath for the decisions that need a phone call. Approving or declining reports back by name — "Approved Ana Beridze / Nino Chkheidze" — so an outcome is checkable without re-reading the row.
 
 Each bracket category needs 2–32 approved entries. The bracket size adapts to the entry count (2, 4, 8, 16, or 32 slots), so byes only appear when the count is between the two nearest sizes. A 32-slot draw opens with a round of 32 and runs 31 matches over five rounds; plan court time accordingly.
 
 ### Handing the event to an organiser
 
-Once the entries are approved, an administrator can hand the event to an organiser with **Send to organiser** — available on the event workspace and at the top of the event's registrations screen. The organiser is emailed and, from then on, runs this event's bracket, schedule, courts, opponent requests and lifecycle, and can start and score its matches. Everything else stays with administrators, including registration decisions, result corrections, reopening the event, and accounts and clubs. Revoke the assignment from the same panel to take the event back.
+Once the entries are approved, an administrator can hand the event to an organiser with **Send to organiser**, on the event workspace. The organiser is emailed and, from then on, runs this event's bracket, schedule, courts, opponent requests and lifecycle, and can start and score its matches. Everything else stays with administrators, including registration decisions, result corrections, reopening the event, and accounts and clubs. Revoke the assignment from the same panel to take the event back.
 
 Administrators and organisers are not tied to one court, so they can run several matches at once. The physical rules still hold for everyone: a court's queue is played in order, and only one match runs on a court at a time.
+
+### The event workspace
+
+Every event opens on its workspace, which answers three questions in order: which event this is and how far along it is, what is waiting on the operator, and which screen resolves it.
+
+**What needs you** is the part to read first. It ranks the event's open queues by what they are costing and states the most expensive one outright — a court standing free with matches queued on it outranks every review queue, because it is the only one losing time while it is being read. Anything else waiting is listed beneath it as links. When nothing is waiting the band says so, and says what the current stage is now waiting for instead.
+
+Below it, the five stages each carry their live count rather than a description, and **What the public can see** lists the five surfaces with their state. Live scores and final results are switched there; the entry list, the draws and the schedule are published from the screen that produces them, and the row links to it rather than growing a second switch for the same command.
 
 ## 3. Close registration and open opponent requests
 
@@ -82,9 +102,13 @@ Review:
 - bye placement is acceptable;
 - later-round progression links are complete.
 
+A team with no opponent is marked **BYE** on the draw and the next round already shows its name: the draft reads exactly the way the locked draw will, in every round, so nothing about the walk-through is a surprise after locking. If a rearrangement leaves a match no team can reach, the draw says so on that card — move an entry back into it before locking, or accept that the team above it walks through twice.
+
 Rearrange a draft draw by dragging an entry onto another first-round set, or with the move button on each pair. Dropping on an occupied set swaps the two entries. If a move separates a pairing that came from an approved opponent request, the request returns to the approved list and the page says so — regenerate or place the pair yourself before locking.
 
-Regenerating a draft rebuilds the match graph; nothing is final until the bracket is locked. Locking freezes the draw, snapshots participant identity for history, and automatically advances bye winners, after which placement can no longer change. Publish only after the review is complete — a draft bracket cannot be published.
+An event with more than one category shows one draw at a time; the tabs above the draw carry each category's progress, so which draw needs opening is readable without opening it.
+
+Regenerating a draft rebuilds the match graph; nothing is final until the bracket is locked. Locking freezes the draw, snapshots participant identity for history, and advances every bye, after which placement can no longer change. A bye that only becomes possible later — where a team wins into a round whose other side is empty — is applied as soon as that match is recorded. Publish only after the review is complete — a draft bracket cannot be published.
 
 ### Set format
 
@@ -93,6 +117,10 @@ Each match is decided over 1, 2, or 3 set wins. Set the default per round in the
 Set settings are editable until the match starts. Starting the match snapshots the format onto it, so later changes to a round default never affect a match already under way, and the server rejects an override on a started match.
 
 ## 5. Build and publish the schedule
+
+Courts & schedule is a board: one column per court, with the matches that have nowhere to be played as the first column. Drag a match from **Waiting** onto a court, or between courts to even out two queues that have drifted apart — the queues sit side by side so that comparison can actually be made. Started and finished matches are pinned by the server: they keep their place, show a lock instead of a handle, and the reorder arrows beside a movable match stop at them rather than offering a move that would be refused. Dropping a queued match back into Waiting takes it off the schedule.
+
+Every move can also be made without dragging: each card carries reorder arrows, a "move to court" picker, and a remove button, so the board works by keyboard and on a phone.
 
 There is no judge pool to manage. The endpoints still exist for API clients, but nothing in the product assigns a judge, and no court needs one before its matches can be played.
 
@@ -122,9 +150,7 @@ Move the event to ongoing only when at least one bracket is locked and operation
 
 This is what **Match control** (`/admin/events/:eventId/control`) is for. It is the one screen the event is run from, and it is organised the way the day is: by court.
 
-**The strip at the top is the day in five numbers** — playing now, ready to start, courts free, behind schedule, played — and every one of them is a way in. Pressing a number narrows the screen to the matches behind it.
-
-**Three layouts over the same matches**, chosen from the bar beneath:
+**Three layouts over the same matches**, chosen from the bar at the top:
 
 | Layout | Answers |
 | --- | --- |
@@ -133,6 +159,8 @@ This is what **Match control** (`/admin/events/:eventId/control`) is for. It is 
 | **Draw** | "Who plays the winner of match 12?" Each category's rounds left to right. |
 
 **Filter and search sit above all three.** Court, category, round and state are four dropdowns; the search box takes a player name, a club, or a match number. What you have chosen shows as removable chips, and the filter survives a change of layout — so "the women's quarter-finals on Court 2" stays asked while you look at it three ways.
+
+The console opens with the one thing the day needs next: the court standing free, the match it is waiting on, and **Start** where the server would allow it. A court free while matches queue on it is the only state here that costs time as it is read, so it gets the headline; matches that are ready with no court at all are named there too, with a link to the schedule. Everything else — playing, ready, behind, played — is a filter in the bar below rather than a number to interpret.
 
 **Every match reads the same everywhere and is acted on in one place.** A row is read-only: state, court and time, both pairs with their set tallies, and a flag if it is running late. Selecting it opens the match sheet, which is where every command lives — start, record the result, finish early, set the planned time. The only exception is **Start** on the up-next row of a lane, because a court waiting to be told to go should not need a second tap.
 
@@ -146,7 +174,7 @@ Whoever runs the event processes each court queue strictly from top to bottom:
 
 1. Confirm the displayed players, clubs and match number against the four people on court.
 2. Start the match from the court's "up next" row, or from the match sheet (earlier queue positions must be finished first, and the match must be on a court). Starting the match freezes its set format.
-3. When the match finishes, open it and write the result: the sets each side won, in the two number fields marked A and B — the same letters that mark the two pairs. "Record result" stays off until the two numbers form a finished tally, and the dialog names the winning pair before the result is written.
+3. When the match finishes, open it and pick the result. The sheet lists every finish this match can end on — two options for a race to one set, six for a race to three — each showing the set tally and the pair it gives the match to. There is nothing to type and nothing that does not finish the match, and the dialog names the winning pair before the result is written.
 4. Recording the result completes the match and moves the winner into the next round.
 5. For a walkover or a retirement, use "Finish early", choose the side that advances, and give a reason.
 
@@ -158,7 +186,9 @@ There is no undo on this screen. To correct a result recorded the wrong way roun
 
 Scoring counts sets, not points. A match races to its configured set count: first to 1 (a single set), first to 2 (up to three sets, so 1–1 goes to a decider), or first to 3 (up to five sets). The match score is the set tally — 2–1, not 6–4. The console asks for that tally as a whole rather than set by set, because that is how a result reaches the desk: "one two", not an account of who took which set. The server derives the `MatchSet` rows the tally is made of, giving the decider to the winner, so the rows and `scoreA`/`scoreB` still agree.
 
-A judge scoring courtside through the API still records sets one at a time. A result may only add to sets already recorded that way, never take one back; taking one back is an undo.
+A judge scoring courtside through the API still records sets one at a time. A result may only add to sets already recorded that way, never take one back; taking one back is an undo. Where a set is already on the match, the results that would drop below it are shown as unavailable rather than removed, so the reason the obvious option is off is visible.
+
+Anything the server refuses appears as a message over the screen rather than as a banner behind the open sheet, and it carries the server's own words — "Court is busy", "A downstream match has already started" — because that sentence is what says which action to take instead.
 
 Every command is versioned and idempotent, and each one is stored as a `SetEvent`. The confirmation dialog keeps one command id from the moment it opens, so retrying after a dropped connection replays the same command instead of recording a second result. If the screen reports a conflict, refresh before continuing rather than repeating with a new assumption.
 
@@ -200,7 +230,13 @@ After every final is completed:
 - complete the event lifecycle (every match must be completed or cancelled);
 - publish final results (available only after completion).
 
+The standings are **derived, not recorded**: the final's winner and loser, then the two teams the semifinals eliminated. Third place is not played, so both losing semifinalists hold it jointly. Names and clubs come from the participant snapshot taken when the draw locked, so a published result survives a rename, a club change, or a deleted club. Read the podium before publishing it at `GET /api/admin/events/:eventId/results`, which organisers may also read.
+
 Results publication is independent of live scoring. Disabling public live scoring does not unpublish completed history.
+
+### Taking a desk copy
+
+Four reads also answer CSV, through `?format=csv` or `Accept: text/csv`: the entry list, the court sheet (in playing order), the final results, and the audit log. The file is UTF-8 with a byte-order mark so Georgian names open correctly in Excel, and any cell starting `=`, `+`, `-` or `@` is prefixed with an apostrophe so a spreadsheet reads it as text rather than a formula.
 
 ## 9. Reopening a completed event
 
@@ -218,7 +254,11 @@ Confirm the event is `ONGOING`, the match is `READY` with both participants know
 
 ### Club leader cannot remove a member
 
-Member removal requires resolving every unfinished registration involving that member (replace or withdraw) and is blocked while an event is ongoing or a bracket is locked. Use the removal-impact view to see what is blocking.
+Member removal requires resolving every unfinished registration involving that member, by replacing the player or withdrawing the team. Both resolutions are refused once the event is ongoing or that category's draw is locked, so removal is effectively blocked mid-tournament. Use the removal-impact view to see which entries are holding it. A member leaving on their own hits exactly the same wall, and a leader must hand leadership on before either.
+
+### A draw was locked too early
+
+An administrator holding `EVENT_STATE_CORRECT` can unlock it with a reason — the mirror of reopening a completed event. Unlocking returns every team to its first-round slot, clears the byes the lock derived, and deletes the participant snapshots. It is refused once any match has been played, or while the draw is published or sitting on the court schedule; take the publication down first, and clear the schedule, then unlock. A draw that was never locked is *discarded* instead, which releases the approved pairings it had applied back into the queue.
 
 ### Notification or email missing
 

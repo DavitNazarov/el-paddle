@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { Capability, MatchResultType, MatchSide, ScoreAction, UserRole } from '../../generated/prisma/client.js';
-import { requireCapability } from '../../common/capabilities.js';
+import { Capability, MatchResultType, MatchRound, MatchSide, MatchStatus, ScoreAction, UserRole } from '../../generated/prisma/client.js';
+import { requireCapability, requireEventReadCapability } from '../../common/capabilities.js';
 import { requireCommandId } from '../../common/commands.js';
-import { asyncHandler, cleanString, jsonError, requireParamId } from '../../common/http.js';
+import { asyncHandler, cleanString, cleanStringArray, jsonError, requireParamId } from '../../common/http.js';
 import { serializeMatch, serializeMatchDetail, serializeMatchList } from '../../common/serializers.js';
 import { getCurrentUser, requireUser } from '../auth/auth.service.js';
-import { completeMatchByDecision, correctCompletedMatch, decideSet, getJudgeMatch, getMatchDetail, listMatchHistory, recordSetResult, requireScoringRole, scoreMatch, setMatchSetConfig, startMatch, undoLastSet } from './matches.service.js';
+import { completeMatchByDecision, correctCompletedMatch, decideSet, getJudgeMatch, getMatchDetail, listEventMatches, listMatchHistory, recordSetResult, requireScoringRole, scoreMatch, setMatchSetConfig, startMatch, undoLastSet } from './matches.service.js';
 
 export const matchesRouter = Router();
 
@@ -84,6 +84,26 @@ matchesRouter.patch('/api/admin/matches/:matchId/set-config', asyncHandler(async
 matchesRouter.post('/api/admin/matches/:matchId/corrections', asyncHandler(async (request, response) => {
   const admin = await requireCapability(request, Capability.MATCH_RESULT_CORRECT);
   response.json({ match: serializeMatch(await correctCompletedMatch({ actorId: admin.id, matchId: requireParamId(request.params.matchId), winnerEntryId: requireParamId(request.body.winnerEntryId), scoreA: Number(request.body.scoreA), scoreB: Number(request.body.scoreB), reason: cleanString(request.body.reason), expectedVersion: Number(request.body.expectedVersion), commandId: requireCommandId(request.body.commandId) })) });
+}));
+
+matchesRouter.get('/api/admin/events/:eventId/matches', asyncHandler(async (request, response) => {
+  const eventId = requireParamId(request.params.eventId, 'event id');
+  await requireEventReadCapability(request, eventId, Capability.BRACKET_MANAGE);
+  const status = cleanStringArray(String(request.query.status ?? '').split(',').filter(Boolean))
+    .map((value) => value.toUpperCase())
+    .filter((value): value is MatchStatus => Object.values(MatchStatus).includes(value as MatchStatus));
+  const round = cleanString(request.query.round).toUpperCase();
+  if (round && !Object.values(MatchRound).includes(round as MatchRound)) jsonError('Unknown round.');
+
+  const matches = await listEventMatches({
+    eventId,
+    status,
+    round: round ? (round as MatchRound) : undefined,
+    categoryId: cleanString(request.query.categoryId) || undefined,
+    courtId: cleanString(request.query.courtId) || undefined,
+    unscheduledOnly: request.query.unscheduled === 'true',
+  });
+  response.json({ matches: matches.map(serializeMatch), total: matches.length });
 }));
 
 matchesRouter.get('/api/matches', asyncHandler(async (request, response) => {

@@ -135,7 +135,8 @@
   box-shadow: 0 0 0 3px rgba(164, 22, 26, 0.06);
 }
 
-.matchCard[data-status='cancelled'] {
+.matchCard[data-status='cancelled'],
+.matchCard[data-status='bye'] {
   background: #fbf8f8;
 }
 
@@ -206,6 +207,13 @@
   border-color: rgba(194, 65, 59, 0.22);
   background: var(--dash-coral-soft);
   color: var(--dash-coral);
+}
+
+/* A bye is settled but unplayed: it reads as neither a result nor a fixture. */
+.matchStatus[data-status='bye'] {
+  border-color: var(--dash-border);
+  background: #f4f2f6;
+  color: var(--dash-muted);
 }
 
 .participants {
@@ -372,6 +380,26 @@
   padding: 0.4rem 0.7rem;
   border-top: 1px solid var(--dash-border);
   background: #fbfbfd;
+}
+
+/* A walk-through carries a sentence instead of a format: there is nothing to set. */
+.byeNote {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-top: 1px solid var(--dash-border);
+  background: #fbfbfd;
+  color: var(--dash-muted);
+  font-size: 0.63rem;
+  font-weight: 650;
+  line-height: 0.95rem;
+}
+
+.byeNote svg {
+  flex-shrink: 0;
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 .formatBadge {

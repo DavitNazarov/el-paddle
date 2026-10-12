@@ -4,7 +4,18 @@
 export function DashboardStyles() {
   return (
     <style jsx global>{`
-      .dash-app {
+      /*
+       * The dashboard's design tokens.
+       *
+       * Declared on the portalled surfaces as well as on the app itself. Radix
+       * mounts dialog content and the message layer on <body>, outside
+       * .dash-app — so every var() inside a modal used to fall back to nothing,
+       * which is why a command button in a dialog rendered ivory-on-white and
+       * disappeared. Tokens travel with the surface, not with the tree.
+       */
+      .dash-app,
+      .dashboard-dialog-content,
+      .dashboard-portal-surface {
         --padel-ink: #2a1f1e;
         --padel-red: #a4161a;
         --padel-red-2: #851317;
@@ -49,6 +60,11 @@ export function DashboardStyles() {
         --radius-tile: 0.65rem;
         --radius-control: 0.55rem;
         --radius-pill: 999px;
+      }
+
+      /* Page shell. A dialog carries the tokens above but must not take the
+         full-height parchment background with them. */
+      .dash-app {
         position: relative;
         isolation: isolate;
         min-height: 100dvh;

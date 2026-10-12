@@ -11,6 +11,7 @@ import {
   MoveVertical,
   Radio,
   RotateCcw,
+  SkipForward,
   Trophy,
   XCircle,
 } from 'lucide-react';
@@ -22,12 +23,16 @@ import { useI18n } from '@/components/shared/I18nProvider';
 import { fillTemplate, tournamentCopy, tournamentRound, tournamentStatus } from '@/lib/i18n/tournament';
 import {
   activeRounds,
+  byeSlotKey,
   championEntryId,
   championPathMatchIds,
   effectiveSetCount,
+  entryNames,
   pairLabel,
+  readByes,
   slotKey,
   winnerSide,
+  type DrawByes,
   type PlacementSlot,
 } from './bracketModel';
 import styles from './BracketTree.module.css';
@@ -63,6 +68,8 @@ export function BracketTree({
   const rowCount = Math.max(firstRoundMatches.length * 2, 2);
   const championPath = championPathMatchIds(bracket);
   const champion = championEntryId(bracket);
+  const byes = readByes(bracket);
+  const names = entryNames(bracket);
   const boardStyle = {
     '--round-count': visibleRounds.length,
     '--row-count': rowCount,
@@ -127,7 +134,9 @@ export function BracketTree({
                       <MatchCard
                         bracket={bracket}
                         busy={busy}
+                        byes={byes}
                         championEntry={champion}
+                        entryNames={names}
                         isCompleted={isCompleted}
                         isFinal={round === 'FINAL'}
                         match={match}
@@ -153,7 +162,9 @@ export function BracketTree({
 function MatchCard({
   bracket,
   busy,
+  byes,
   championEntry,
+  entryNames: names,
   isCompleted,
   isFinal,
   match,
@@ -165,7 +176,9 @@ function MatchCard({
 }: {
   bracket: BracketDto;
   busy: string;
+  byes: DrawByes;
   championEntry: string | null;
+  entryNames: Map<string, string>;
   isCompleted: boolean;
   isFinal: boolean;
   match: MatchDto;
@@ -179,6 +192,11 @@ function MatchCard({
   const copy = tournamentCopy[locale];
   const winner = winnerSide(match);
   const setsUsed = match.scoringMode === 'SETS';
+  // A team with nobody to play walks through, so the card carries the walk rather
+  // than a format, a score, or a status that suggests a match will happen.
+  const isBye = byes.byeMatchIds.has(match.id);
+  const isEmpty = byes.emptyMatchIds.has(match.id);
+  const readStatus = isBye ? 'BYE' : isEmpty ? 'CANCELLED' : match.status;
   // Once a match starts its format is frozen server-side, so the select gives way to a badge.
   const formatEditable = setsUsed && !isCompleted && !match.startedAt && (match.status === 'PENDING' || match.status === 'READY');
   const roundDefault = bracket.setDefaults[match.round] ?? 1;
@@ -188,27 +206,37 @@ function MatchCard({
   return (
     <article
       className={styles.matchCard}
-      data-status={match.status.toLowerCase()}
+      data-status={readStatus.toLowerCase()}
       data-champion={onChampionPath}
-      aria-label={`${copy.common.match} ${match.matchNumber}, ${tournamentStatus(locale, match.status)}`}
+      aria-label={`${copy.common.match} ${match.matchNumber}, ${tournamentStatus(locale, readStatus)}`}
     >
       <header className={styles.matchHeader}>
         <span>{copy.common.match} {match.matchNumber}</span>
-        <MatchStatus status={match.status} />
+        <MatchStatus status={readStatus} />
       </header>
       <div className={styles.participants}>
         {(['A', 'B'] as const).map((side) => {
           const entryId = side === 'A' ? match.participantAEntryId : match.participantBEntryId;
+          // A slot a bye below fills is named now: the walk is already decided.
+          const advancing = entryId ? undefined : byes.occupants.get(byeSlotKey(match.id, side));
+          // Nobody is coming to the other side of a bye, so it names the walk, not a team to be decided.
+          const unreachable = !entryId && !advancing && (isBye || isEmpty);
+          const label = advancing
+            ? names.get(advancing) ?? pairLabel(bracket, match, side, locale)
+            : unreachable
+              ? isBye ? copy.common.bye : copy.admin.bracket.slotEmpty
+              : pairLabel(bracket, match, side, locale);
           return (
             <ParticipantRow
               key={side}
               busy={busy}
               champion={isFinal && Boolean(championEntry) && entryId === championEntry}
               hasEntry={Boolean(entryId)}
-              label={pairLabel(bracket, match, side, locale)}
+              label={label}
               onMoveRequest={onMoveRequest}
+              placeholder={!entryId && !advancing}
               placementEnabled={placementEnabled}
-              score={match.status === 'COMPLETED' ? (side === 'A' ? match.scoreA : match.scoreB) : null}
+              score={match.status === 'COMPLETED' && !isBye ? (side === 'A' ? match.scoreA : match.scoreB) : null}
               side={side}
               slot={{ bracketId: bracket.id, matchId: match.id, side }}
               winner={winner === side}
@@ -216,7 +244,12 @@ function MatchCard({
           );
         })}
       </div>
-      {setsUsed ? (
+      {isBye || isEmpty ? (
+        <p className={styles.byeNote}>
+          <SkipForward aria-hidden="true" />
+          {isBye ? copy.admin.bracket.byeAdvances : copy.admin.bracket.byeEmpty}
+        </p>
+      ) : setsUsed ? (
         <div className={styles.matchFormat}>
           {formatEditable ? (
             <div className={styles.setControl}>
@@ -265,6 +298,7 @@ function ParticipantRow({
   hasEntry,
   label,
   onMoveRequest,
+  placeholder,
   placementEnabled,
   score,
   side,
@@ -276,6 +310,8 @@ function ParticipantRow({
   hasEntry: boolean;
   label: string;
   onMoveRequest: (slot: PlacementSlot) => void;
+  /** The label names no team: a slot still to be decided, or one nobody will fill. */
+  placeholder: boolean;
   placementEnabled: boolean;
   score: number | null;
   side: 'A' | 'B';
@@ -284,7 +320,6 @@ function ParticipantRow({
 }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale];
-  const pending = label === copy.publicEvent.toBeDetermined || label.includes(copy.common.winner);
   const key = slotKey(slot);
   const draggable = placementEnabled && hasEntry;
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: key, data: { bracketId: slot.bracketId }, disabled: !draggable });
@@ -297,7 +332,7 @@ function ParticipantRow({
         styles.participant,
         winner && styles.winner,
         champion && styles.championRow,
-        pending && styles.pendingParticipant,
+        placeholder && styles.pendingParticipant,
         isOver && styles.dropTarget,
         isDragging && styles.dragging,
       )}
@@ -341,14 +376,18 @@ function ParticipantRow({
   );
 }
 
-function MatchStatus({ status }: { status: MatchDto['status'] }) {
+/** What a card reports: its own status, or the walk-through the draw's shape decides. */
+type ReadStatus = MatchDto['status'] | 'BYE';
+
+function MatchStatus({ status }: { status: ReadStatus }) {
   const { locale } = useI18n();
-  const icons: Record<MatchDto['status'], ReactNode> = {
+  const icons: Record<ReadStatus, ReactNode> = {
     COMPLETED: <CheckCircle2 aria-hidden="true" />,
     IN_PROGRESS: <Radio aria-hidden="true" />,
     READY: <CircleDot aria-hidden="true" />,
     PENDING: <Clock3 aria-hidden="true" />,
     CANCELLED: <XCircle aria-hidden="true" />,
+    BYE: <SkipForward aria-hidden="true" />,
   };
   return (
     <span className={styles.matchStatus} data-status={status.toLowerCase()}>

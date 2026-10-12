@@ -37,9 +37,11 @@ export type EventOperationsDto = {
   registrations: { pending: number; approved: number; total: number };
   requests: { awaiting: number; total: number };
   brackets: { total: number; locked: number; published: number };
-  courts: { total: number; staffed: number };
-  schedule: { queued: number };
-  matches: { total: number; live: number; completed: number };
+  /** `idle` is a court with matches queued and none of them running — dead time. */
+  courts: { total: number; staffed: number; idle: number };
+  /** `unscheduled` is a playable match no court is holding yet. */
+  schedule: { queued: number; unscheduled: number };
+  matches: { total: number; live: number; ready: number; completed: number };
 };
 
 export type RegistrationDto = {

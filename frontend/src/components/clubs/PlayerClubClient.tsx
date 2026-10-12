@@ -12,7 +12,10 @@ import {
   Crown,
   ExternalLink,
   LoaderCircle,
+  LogOut,
+  MailCheck,
   ShieldCheck,
+  Trash2,
   UserMinus,
   UserRound,
   Users,
@@ -38,6 +41,9 @@ import { useI18n } from '@/components/shared/I18nProvider';
 import { apiFetch, readApiJson } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { PublicUser } from '@/types/auth';
+import { ClubLeadershipBand } from './ClubLeadershipBand';
+import { ClubMateInvite } from './ClubMateInvite';
+import { ClubProfileEditor } from './ClubProfileEditor';
 
 type MembershipRole = 'LEADER' | 'MEMBER';
 
@@ -48,6 +54,7 @@ type ClubMember = {
   user: {
     id: string;
     fullName: string;
+    status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'INVITED' | 'INACTIVE';
   };
 };
 
@@ -111,6 +118,8 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
   const [removalImpact, setRemovalImpact] = useState<RemovalImpact | null>(null);
   const [removalResolutions, setRemovalResolutions] = useState<Record<string, RemovalResolution>>({});
   const [removalError, setRemovalError] = useState('');
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [invitingMember, setInvitingMember] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -188,6 +197,7 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
 
   function closeRemoval() {
     setKickTarget(null);
+    setDeparting(false);
     setRemovalImpact(null);
     setRemovalResolutions({});
     setRemovalError('');
@@ -232,6 +242,159 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
     }
   };
 
+  /**
+   * Leaving is the same write as being removed and resolves the same entries,
+   * so it reuses the removal dialog rather than growing a second one that would
+   * have to be kept in step with it. `departing` only changes whose authority
+   * the request carries and which words the dialog uses.
+   */
+  const [departing, setDeparting] = useState(false);
+
+  const openDeparture = async () => {
+    setDeparting(true);
+    setRemovalImpact(null);
+    setRemovalResolutions({});
+    setRemovalError('');
+    setBusyAction('impact:self');
+    try {
+      const response = await apiFetch('/api/account/club/departure-impact', { cache: 'no-store' });
+      const data = await readApiJson<{ impact?: RemovalImpact; error?: string }>(response, {});
+      if (!response.ok || !data.impact) {
+        setRemovalError(data.error ?? copy.impactError);
+        return;
+      }
+      setRemovalImpact(data.impact);
+      setRemovalResolutions(Object.fromEntries(
+        data.impact.affectedRegistrations.map((registration) => {
+          const retainedPlayerId =
+            registration.removedSlot === 'owner' ? registration.teammate.id : registration.owner.id;
+          const candidates = data.impact!.eligibleReplacements.filter(
+            (candidate) =>
+              candidate.id !== retainedPlayerId &&
+              (registration.removedSlot !== 'owner' || candidate.hasPhone),
+          );
+          return [
+            registration.id,
+            {
+              action: candidates.length ? 'REPLACE' : 'WITHDRAW',
+              replacementUserId: candidates[0]?.id ?? '',
+            } satisfies RemovalResolution,
+          ];
+        }),
+      ));
+    } catch {
+      setRemovalError(copy.impactError);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const leaveClub = async () => {
+    if (!removalImpact) return;
+    setBusyAction('remove:self');
+    setRemovalError('');
+    try {
+      const response = await apiFetch('/api/account/club/leave', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolutions: removalImpact.affectedRegistrations.map((registration) => ({
+            registrationId: registration.id,
+            expectedVersion: registration.version,
+            action: removalResolutions[registration.id]?.action,
+            replacementUserId:
+              removalResolutions[registration.id]?.action === 'REPLACE'
+                ? removalResolutions[registration.id]?.replacementUserId
+                : undefined,
+          })),
+        }),
+      });
+      const data = await readApiJson<{ error?: string }>(response, {});
+      if (!response.ok) {
+        setRemovalError(data.error ?? copy.actionError);
+        return;
+      }
+      // The club is gone from under this screen; the club-picker is the only
+      // place left that makes sense.
+      window.location.href = '/complete-club';
+    } catch {
+      setRemovalError(copy.actionError);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  /** Handing leadership over, and taking back an invitation nobody accepted. */
+  const [promoteTarget, setPromoteTarget] = useState<ClubMember | null>(null);
+
+  const transferLeadership = async () => {
+    if (!promoteTarget) return;
+    setBusyAction(`promote:${promoteTarget.id}`);
+    setError('');
+    setFeedback('');
+    try {
+      const response = await apiFetch(`/api/account/club/members/${promoteTarget.id}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ membershipRole: 'LEADER' }),
+      });
+      const data = await readApiJson<{ club?: PlayerClub; error?: string }>(response, {});
+      if (!response.ok || !data.club) {
+        setError(data.error ?? copy.actionError);
+        return;
+      }
+      setClub(data.club);
+      setFeedback(t('dashboard.player.clubPage.leadershipMoved', { name: promoteTarget.user.fullName }));
+      setPromoteTarget(null);
+    } catch {
+      setError(copy.actionError);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const resendInvite = async (member: ClubMember) => {
+    setBusyAction(`resend:${member.id}`);
+    setError('');
+    setFeedback('');
+    try {
+      const response = await apiFetch(`/api/account/club/members/${member.id}/invite/resend`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const data = await readApiJson<{ error?: string }>(response, {});
+      if (!response.ok) {
+        setError(data.error ?? copy.actionError);
+        return;
+      }
+      setFeedback(t('dashboard.player.clubPage.inviteResent', { name: member.user.fullName }));
+    } catch {
+      setError(copy.actionError);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const revokeInvite = async (member: ClubMember) => {
+    setBusyAction(`revoke:${member.id}`);
+    setError('');
+    setFeedback('');
+    try {
+      const response = await apiFetch(`/api/account/club/members/${member.id}/invite`, {
+        method: 'DELETE',
+      });
+      const data = await readApiJson<{ club?: PlayerClub; error?: string }>(response, {});
+      if (!response.ok || !data.club) {
+        setError(data.error ?? copy.actionError);
+        return;
+      }
+      setClub(data.club);
+      setFeedback(t('dashboard.player.clubPage.inviteRevoked', { name: member.user.fullName }));
+    } catch {
+      setError(copy.actionError);
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   // Approving is additive and easy to reverse (remove the member); rejecting
   // throws the request away, so only rejection asks for confirmation.
   const [rejectTarget, setRejectTarget] = useState<ClubJoinRequest | null>(null);
@@ -261,7 +424,18 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
   };
 
   const isLeader = club?.currentUserMembershipRole === 'LEADER';
-  const impactLoading = Boolean(kickTarget && busyAction === `impact:${kickTarget.id}`);
+  const leaderName = club?.members.find((member) => member.membershipRole === 'LEADER')?.user.fullName ?? null;
+  /**
+   * Leader first, then everyone else in the order they joined. The badge alone
+   * left the reader scanning eight rows for a crown; putting the leader at the
+   * top means the answer is where a reader looks first.
+   */
+  const roster = club
+    ? [...club.members].sort((left, right) =>
+        left.membershipRole === right.membershipRole ? 0 : left.membershipRole === 'LEADER' ? -1 : 1)
+    : [];
+  const impactLoading = busyAction === 'impact:self'
+    || Boolean(kickTarget && busyAction === `impact:${kickTarget.id}`);
   const hasBlockedRegistration = Boolean(
     removalImpact?.affectedRegistrations.some((registration) => registration.blockedReason),
   );
@@ -317,6 +491,20 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
 
       {club ? (
         <div className="space-y-8">
+          {/* Before anything else: which of the two you are, and the commands
+              that come with it. */}
+          <ClubLeadershipBand
+            isLeader={isLeader}
+            clubName={club.name}
+            leaderName={leaderName}
+            pendingRequests={club.joinRequests.length}
+            onEditClub={() => setEditingProfile(true)}
+            onInviteMember={() => setInvitingMember(true)}
+            onReviewRequests={() => {
+              document.getElementById('club-join-requests')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          />
+
           <section className="grid gap-4 sm:grid-cols-3" aria-label={copy.description}>
             <SurfaceCard className="p-5 sm:col-span-2">
               <div className="flex items-start gap-4">
@@ -340,6 +528,8 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                   <p className="mt-2 text-sm leading-6 text-[var(--dash-muted)]">
                     {club.description || copy.description}
                   </p>
+                  {/* Editing lives in the leadership band above, with the rest
+                      of the leader's commands. One home for them, not two. */}
                   <Link
                     href={`/clubs/${club.slug}`}
                     className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[var(--dash-primary)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]"
@@ -373,11 +563,16 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
               })}
             />
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {club.members.map((member) => {
+              {roster.map((member) => {
                 const canRemove =
                   isLeader &&
                   member.membershipRole !== 'LEADER' &&
                   member.user.id !== initialUser.id;
+                const invited = member.user.status === 'INVITED';
+                const isSelf = member.user.id === initialUser.id;
+                // Leadership can only pass to someone who has actually arrived:
+                // an invited row is an address, not yet a person who can act.
+                const canPromote = canRemove && !invited;
                 return (
                   <SurfaceCard key={member.id} className="p-4">
                     <div className="flex min-w-0 items-center gap-3">
@@ -391,27 +586,87 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium text-[var(--dash-text)]">
                           {member.user.fullName}
+                          {/* Which row is you. A "Leader" badge only answers
+                              "who leads this club" once the reader can also
+                              find themselves in the list. */}
+                          {isSelf ? (
+                            <span className="ml-1.5 text-sm font-normal text-[var(--dash-muted)]">
+                              ({copy.you.toLowerCase()})
+                            </span>
+                          ) : null}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <Badge className="border-[var(--dash-border)] bg-[var(--dash-tint)] text-[var(--dash-muted)]">
+                          <Badge
+                            className={member.membershipRole === 'LEADER'
+                              ? 'border-[#e4c98f] bg-[#fff9ec] text-[#74551b]'
+                              : 'border-[var(--dash-border)] bg-[var(--dash-tint)] text-[var(--dash-muted)]'}
+                          >
                             {member.membershipRole === 'LEADER' ? copy.leader : copy.member}
                           </Badge>
+                          {invited ? (
+                            <Badge className="border-[#e4c98f] bg-[#fff9ec] text-[#74551b]">
+                              {copy.invitePending}
+                            </Badge>
+                          ) : null}
                           {member.roleTitle ? (
                             <span className="text-xs text-[var(--dash-faint)]">{member.roleTitle}</span>
                           ) : null}
                         </div>
                       </div>
                       {canRemove ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          aria-label={`${copy.remove}: ${member.user.fullName}`}
-                          onClick={() => void openRemoval(member)}
-                          className="min-h-11 shrink-0 border-[#d7a3a1] bg-[#fff7f6] text-[#9f302b] shadow-none hover:border-[#c2413b] hover:bg-[#fbe9e8] hover:text-[#812622] focus-visible:ring-[#c2413b]/30"
-                        >
-                          <UserMinus className="h-4 w-4" />
-                          {copy.remove}
-                        </Button>
+                        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                          {canPromote ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              aria-label={`${copy.makeLeader}: ${member.user.fullName}`}
+                              disabled={Boolean(busyAction)}
+                              onClick={() => setPromoteTarget(member)}
+                              className={cn(softButtonClassName, 'min-h-11')}
+                            >
+                              <Crown className="h-4 w-4" />
+                              {copy.makeLeader}
+                            </Button>
+                          ) : null}
+                          {invited ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                aria-label={`${copy.resendInvite}: ${member.user.fullName}`}
+                                disabled={Boolean(busyAction)}
+                                onClick={() => void resendInvite(member)}
+                                className={cn(softButtonClassName, 'min-h-11')}
+                              >
+                                <MailCheck className="h-4 w-4" />
+                                {busyAction === `resend:${member.id}` ? copy.sending : copy.resendInvite}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                aria-label={`${copy.revokeInvite}: ${member.user.fullName}`}
+                                disabled={Boolean(busyAction)}
+                                onClick={() => void revokeInvite(member)}
+                                className="min-h-11 border-[#d7a3a1] bg-[#fff7f6] text-[#9f302b] shadow-none hover:border-[#c2413b] hover:bg-[#fbe9e8] hover:text-[#812622] focus-visible:ring-[#c2413b]/30"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                {copy.revokeInvite}
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              aria-label={`${copy.remove}: ${member.user.fullName}`}
+                              disabled={Boolean(busyAction)}
+                              onClick={() => void openRemoval(member)}
+                              className="min-h-11 border-[#d7a3a1] bg-[#fff7f6] text-[#9f302b] shadow-none hover:border-[#c2413b] hover:bg-[#fbe9e8] hover:text-[#812622] focus-visible:ring-[#c2413b]/30"
+                            >
+                              <UserMinus className="h-4 w-4" />
+                              {copy.remove}
+                            </Button>
+                          )}
+                        </div>
                       ) : null}
                     </div>
                   </SurfaceCard>
@@ -419,15 +674,29 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
               })}
             </div>
             {!isLeader ? (
-              <p className="mt-3 flex items-center gap-2 text-sm text-[var(--dash-muted)]">
-                <ShieldCheck className="h-4 w-4" />
-                {copy.leaderOnly}
-              </p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="flex items-center gap-2 text-sm text-[var(--dash-muted)]">
+                  <ShieldCheck className="h-4 w-4" />
+                  {copy.leaderOnly}
+                </p>
+                {/* A leader cannot leave — they hand leadership on first — so
+                    the command is only offered to the people it works for. */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={Boolean(busyAction)}
+                  onClick={() => void openDeparture()}
+                  className="min-h-11 border-[#d7a3a1] bg-[#fff7f6] text-[#9f302b] shadow-none hover:border-[#c2413b] hover:bg-[#fbe9e8] hover:text-[#812622] focus-visible:ring-[#c2413b]/30"
+                >
+                  <LogOut className="h-4 w-4" />
+                  {copy.leaveClub}
+                </Button>
+              </div>
             ) : null}
           </section>
 
           {isLeader ? (
-            <section>
+            <section id="club-join-requests" tabIndex={-1}>
               <SectionHeading
                 eyebrow={copy.eyebrow}
                 title={copy.requestsTitle}
@@ -519,13 +788,13 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
       </DashboardModal>
 
       <DashboardModal
-        open={Boolean(kickTarget)}
+        open={Boolean(kickTarget) || departing}
         onOpenChange={(open) => {
           if (!open && !busyAction) closeRemoval();
         }}
-        title={t('dashboard.player.clubPage.removeTitle', {
-          name: kickTarget?.user.fullName ?? '',
-        })}
+        title={departing
+          ? copy.leaveTitle
+          : t('dashboard.player.clubPage.removeTitle', { name: kickTarget?.user.fullName ?? '' })}
         description={
           removalImpact?.affectedRegistrations.length
             ? t(
@@ -533,11 +802,11 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                   ? 'dashboard.player.clubPage.removeAffectedDescriptionOne'
                   : 'dashboard.player.clubPage.removeAffectedDescriptionMany',
                 {
-                name: kickTarget?.user.fullName ?? '',
+                name: departing ? copy.you : kickTarget?.user.fullName ?? '',
                 count: removalImpact.affectedRegistrations.length,
                 },
               )
-            : copy.removeDescription
+            : departing ? copy.leaveDescription : copy.removeDescription
         }
         size="lg"
         footer={
@@ -560,15 +829,17 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
                 !resolutionsComplete ||
                 hasBlockedRegistration
               }
-              onClick={removeMember}
+              onClick={departing ? leaveClub : removeMember}
               className="border border-[#ad3632] bg-[#b83b36] text-white shadow-none hover:bg-[#9f302b] focus-visible:ring-[#c2413b]/35"
             >
-              <UserMinus className="h-4 w-4" />
+              {departing ? <LogOut className="h-4 w-4" /> : <UserMinus className="h-4 w-4" />}
               {busyAction.startsWith('remove:')
-                ? copy.removing
-                : removalImpact?.affectedRegistrations.length
-                  ? copy.resolveAndRemove
-                  : copy.confirmRemove}
+                ? departing ? copy.leaving : copy.removing
+                : departing
+                  ? copy.confirmLeave
+                  : removalImpact?.affectedRegistrations.length
+                    ? copy.resolveAndRemove
+                    : copy.confirmRemove}
             </Button>
           </>
         }
@@ -588,7 +859,9 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
           ) : null}
 
           {removalImpact && !removalImpact.affectedRegistrations.length ? (
-            <p className="text-sm leading-6 text-[#6d5f5c]">{copy.removeDescription}</p>
+            <p className="text-sm leading-6 text-[#6d5f5c]">
+              {departing ? copy.leaveDescription : copy.removeDescription}
+            </p>
           ) : null}
 
           {removalImpact?.affectedRegistrations.length ? (
@@ -720,6 +993,68 @@ export function PlayerClubClient({ initialUser }: { initialUser: PublicUser }) {
           ) : null}
         </div>
       </DashboardModal>
+
+      <DashboardModal
+        open={Boolean(promoteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !busyAction) setPromoteTarget(null);
+        }}
+        title={t('dashboard.player.clubPage.promoteTitle', { name: promoteTarget?.user.fullName ?? '' })}
+        description={copy.promoteDescription}
+        size="md"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={Boolean(busyAction)}
+              onClick={() => setPromoteTarget(null)}
+              className={modalSoftButtonClassName}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button type="button" variant="red" disabled={Boolean(busyAction)} onClick={transferLeadership}>
+              <Crown className="h-4 w-4" />
+              {busyAction.startsWith('promote:') ? copy.promoting : copy.confirmPromote}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm leading-6 text-[#6d5f5c]">{copy.promoteConsequence}</p>
+      </DashboardModal>
+
+      {invitingMember ? (
+        <ClubMateInvite
+          onClose={() => setInvitingMember(false)}
+          onInvited={async ({ name, invited }) => {
+            setInvitingMember(false);
+            setFeedback(t(
+              invited
+                ? 'dashboard.player.clubPage.inviteMember.invited'
+                : 'dashboard.player.clubPage.inviteMember.added',
+              { name },
+            ));
+            await load();
+          }}
+        />
+      ) : null}
+
+      {club && editingProfile ? (
+        <ClubProfileEditor
+          club={{
+            name: club.name,
+            slug: club.slug,
+            description: club.description,
+            logoUrl: club.logoUrl,
+          }}
+          onClose={() => setEditingProfile(false)}
+          onSaved={(updated) => {
+            setEditingProfile(false);
+            setClub({ ...club, ...updated });
+            setFeedback(t('dashboard.player.clubPage.editProfile.success', { name: updated.name }));
+          }}
+        />
+      ) : null}
     </PlayerShell>
   );
 }

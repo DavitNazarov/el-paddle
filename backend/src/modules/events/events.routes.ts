@@ -16,6 +16,7 @@ import {
   changeEventStatus,
   createEvent,
   deleteEvent,
+  duplicateEvent,
   getEventById,
   listEvents,
   listPublicEvents,
@@ -221,6 +222,20 @@ eventsRouter.post('/api/events', asyncHandler(async (request, response) => {
   response.status(201).json({ event: serializeEvent(event, { includeBankDetails: true }) });
 }));
 
+eventsRouter.post('/api/events/:id/duplicate', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.EVENT_MANAGE);
+  const date = new Date(String(request.body.date ?? ''));
+  if (Number.isNaN(date.getTime())) jsonError('Choose a date for the new event.');
+
+  const event = await duplicateEvent({
+    sourceId: requireParamId(request.params.id, 'event id'),
+    actorId: admin.id,
+    date,
+    title: cleanString(request.body.title) || undefined,
+  });
+  response.status(201).json({ event: serializeEvent(event, { includeBankDetails: true }) });
+}));
+
 eventsRouter.patch('/api/events/:id', asyncHandler(async (request, response) => {
   await requireCapability(request, Capability.EVENT_MANAGE);
 
@@ -279,15 +294,16 @@ eventsRouter.patch('/api/admin/events/:id/status', asyncHandler(async (request, 
 
 eventsRouter.get('/api/public/events', asyncHandler(async (_request, response) => {
   try {
-    const { upcoming, previous } = await listPublicEvents();
+    const { upcoming, scheduled, previous } = await listPublicEvents();
     setPublicCache(response);
     response.json({
       upcoming: upcoming ? serializeEvent(upcoming) : null,
+      scheduled: scheduled.map((event) => serializeEvent(event)),
       previous: previous.map((event) => serializeEvent(event)),
     });
   } catch (error) {
     if (isDatabaseConnectionError(error)) {
-      response.json({ upcoming: null, previous: [], databaseUnavailable: true });
+      response.json({ upcoming: null, scheduled: [], previous: [], databaseUnavailable: true });
       return;
     }
     throw error;

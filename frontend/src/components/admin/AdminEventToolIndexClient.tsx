@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FeedbackBanner } from '@/components/shared/dashboard/DashboardUI';
+import { InlineNotice } from '@/components/tournament/TournamentUI';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { useEventOperations } from '@/hooks/useEventOperations';
 import { useViewer } from '@/hooks/useViewer';
@@ -10,12 +10,13 @@ import type { EventDto } from '@/types/admin';
 import { AdminShell } from './AdminShell';
 import { AdminEventBoard } from './AdminEventBoard';
 
-type EventTool = 'workspace' | 'brackets' | 'opponents' | 'schedule' | 'control';
+type EventTool = 'workspace' | 'registrations' | 'brackets' | 'opponents' | 'schedule' | 'control';
 
 // An empty suffix lands on the event workspace itself, so every sidebar step
 // has an event picker behind it and none of them dead-end.
 const toolSuffix: Record<EventTool, string> = {
   workspace: '',
+  registrations: 'registrations',
   brackets: 'bracket',
   opponents: 'opponent-requests',
   schedule: 'schedule',
@@ -52,7 +53,7 @@ export function AdminEventToolIndexClient({ tool }: { tool: EventTool }) {
 
   return (
     <AdminShell title={pageCopy.title} description={pageCopy.description} eyebrow={copy.eyebrow}>
-      {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
+      {error ? <div className="mb-4"><InlineNotice kind="error" onDismiss={() => setError('')}>{error}</InlineNotice></div> : null}
       <AdminEventBoard
         events={events}
         operations={operations}

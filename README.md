@@ -94,6 +94,8 @@ Players are distributed two per club across the seeded clubs — 154 players in 
 7. Move the event to ongoing, optionally enable public live scoring, and monitor scores and deliveries.
 8. Complete the event and publish final results; reopen explicitly if a correction is needed.
 
+The entry list, court sheet, final results, and audit log also answer `?format=csv` for a desk copy.
+
 ### Player
 
 1. Register with email verification (or complete an invite), then create or join a club.
@@ -101,25 +103,28 @@ Players are distributed two per club across the seeded clubs — 154 players in 
 3. Request a preferred first-round opponent when the category window opens.
 4. Accept, refuse, edit, or withdraw opponent requests.
 5. Follow the published bracket, schedule, live scores, notifications, and match history.
+6. Manage the account: signed-in devices, a verified email change, password, and deletion.
 
 ### Club leader
 
-1. Create the club and invite club mates.
-2. Approve or reject join requests.
-3. Replace a registered player when needed (entry returns to review).
+1. Create the club, edit its profile, and invite club mates.
+2. Approve or reject join requests; resend or withdraw an outstanding invitation.
+3. Replace a registered player when needed (entry returns to review), or withdraw the team before the draw locks.
 4. Resolve affected registrations before removing a member.
+5. Hand leadership to another member — a swap, and the only way a leader can then leave.
 
 ### Match control (admin & organiser)
 
 1. Open **Match control** for the event. It opens on the courts: one lane per court showing what is on it, what it starts next, the queue behind that, and what it has played. Two other layouts cover the same matches — **Run order** (everything in the order it is due to be played) and **Draw** (where each winner goes).
-2. Narrow the screen by court, category, round or state, or search a player, a club or a match number. The filter follows you between layouts. The counts along the top — playing now, ready, courts free, behind schedule, played — are themselves filters.
-3. Start the next ready match on a court from its "up next" row — earlier queue positions must be finished first. Starting it freezes the match's set format. Several courts can run at once.
-4. Select any match to open its sheet: court, queue position and planned time; both pairs with their clubs and set tallies; where the winner goes; and every command for that match.
-5. When a match ends, write the final set tally in the two fields marked A and B. The dialog names the winning pair before the result is recorded, and recording it advances the winner.
-6. Use "Finish early" for a walkover or a retirement, with a reason.
-7. Reorder a court's remaining queue with the up/down controls on its rows; a started or finished match is locked in place. Planned times can be changed from the match sheet until the match starts.
-8. Park a tablet on one court with its own page, reached from the lane's "Open court" link.
-9. To correct a recorded result, reopen the match from the bracket page (administrators only).
+2. The header states the one thing the day needs next — the court standing free, the match it is waiting on, and **Start** where the server would allow it — because an idle court is the only state on this screen that costs time as it is read.
+3. Narrow the screen by court, category, round or state, or search a player, a club or a match number. The filter follows you between layouts.
+4. Start the next ready match on a court from its "up next" row — earlier queue positions must be finished first. Starting it freezes the match's set format. Several courts can run at once.
+5. Select any match to open its sheet: court, queue position and planned time; both pairs with their clubs and set tallies; where the winner goes; and every command for that match.
+6. When a match ends, pick the result from the finishes its set format allows — two options for a race to one set, six for a race to three, each showing the tally and the pair it gives the match to. There is nothing to type. The dialog names the winning pair before the result is recorded, and recording it advances the winner.
+7. Use "Finish early" for a walkover or a retirement, with a reason.
+8. Reorder a court's remaining queue with the up/down controls on its rows; a started or finished match is locked in place. Planned times can be changed from the match sheet until the match starts.
+9. Park a tablet on one court with its own page, reached from the lane's "Open court" link.
+10. To correct a recorded result, reopen the match from the bracket page (administrators only). There is no undo on this screen.
 
 ## Commands
 
@@ -154,7 +159,7 @@ npm run worker --workspace backend
 
 ## Security model
 
-- Session cookies are HTTP-only JWTs validated against a per-user session version; logout and sensitive changes revoke outstanding sessions.
+- Session cookies are HTTP-only JWTs naming a `Session` row, so signing out revokes one device; they also carry a per-user session version that a password change, email change, reset, disqualification, or "log out everywhere" bumps to revoke every device at once.
 - Unsafe API requests require a double-submit CSRF token and an allowed origin.
 - Admin operations use fine-grained capability checks (with per-user allow/deny grants), not UI visibility.
 - Commands that change tournament state use command IDs and optimistic versions; hot paths add PostgreSQL advisory locks.
@@ -168,14 +173,12 @@ npm run worker --workspace backend
 - [Architecture](docs/ARCHITECTURE.md)
 - [API reference](docs/API.md)
 - [Tournament operations](docs/TOURNAMENT_OPERATIONS.md)
+- [Dashboard design system](docs/DASHBOARD_DESIGN.md)
+- [Environments & deployment workflow](docs/ENVIRONMENTS.md)
 - [Production deployment](DEPLOY.md)
 
 ## Deployment
 
-For a Docker Compose deployment behind Nginx and HTTPS, follow [DEPLOY.md](DEPLOY.md). Apply database migrations explicitly after deploying a release:
+Production runs on Render. Follow [DEPLOY.md](DEPLOY.md). `render.yaml` already points the site at `https://elpadell.com` and the API at `https://api.elpadell.com`. Adding those domains in the Render dashboard is the connection step. Migrations run before each API and worker deploy.
 
-```bash
-docker compose exec backend npm run prisma:migrate:deploy
-```
-
-`NEXT_PUBLIC_API_URL` is compiled into the frontend bundle. Rebuild the frontend whenever this value changes.
+`NEXT_PUBLIC_API_URL` is compiled into the frontend bundle. A change to that URL needs a frontend rebuild.

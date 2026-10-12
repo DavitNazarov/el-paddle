@@ -1,5 +1,5 @@
 import type { MatchDto } from '@/types/tournament';
-import { isFinishedTally, maxSetsFor, setsToWin } from './setEngine';
+import { finishedTallies, maxSetsFor, setsToWin } from './setEngine';
 
 /**
  * Pure reading for the match control console. The server stays authoritative for
@@ -76,41 +76,26 @@ export function setProgress(match: MatchDto): SetProgress {
   return { played: match.sets.length, max: maxSetsFor(match), winsNeeded: setsToWin(match) };
 }
 
-/** The two numbers as typed, before they are known to mean anything. */
-export type ResultDraft = Record<Side, string>;
-
-export const emptyResultDraft: ResultDraft = { A: '', B: '' };
-
 /**
- * What the two typed numbers amount to. A result completes the match outright,
- * so the console reads it before it asks: only a finished tally is offered, and
- * one that would take back a set already recorded is refused here rather than by
- * the server.
+ * One result this match could end on, and whether it may still be recorded.
+ *
+ * A tally below the sets already on the match would take one back, which is an
+ * undo rather than a result. It is offered as unavailable instead of hidden, so
+ * a courtside judge's recorded set explains why the obvious button is off.
  */
-export type ResultReading = {
+export type ResultOption = {
   a: number;
   b: number;
-  winner: Side | null;
-  /** Both numbers form a result the server would accept. */
-  finished: boolean;
+  winner: Side;
   /** The tally drops below sets already recorded, which is an undo, not a result. */
   regresses: boolean;
 };
 
-export function readResult(match: MatchDto, draft: ResultDraft): ResultReading {
-  const a = tallyNumber(draft.A);
-  const b = tallyNumber(draft.B);
-  const finished = isFinishedTally(a, b, setsToWin(match));
-  return {
+export function resultOptions(match: MatchDto): ResultOption[] {
+  return finishedTallies(setsToWin(match)).map(({ a, b }) => ({
     a,
     b,
-    winner: finished ? (a > b ? 'A' : 'B') : null,
-    finished,
+    winner: a > b ? 'A' : 'B',
     regresses: a < match.scoreA || b < match.scoreB,
-  };
-}
-
-/** An empty or non-numeric field is not a zero; it is nothing yet. */
-function tallyNumber(value: string) {
-  return /^\d+$/.test(value.trim()) ? Number(value) : Number.NaN;
+  }));
 }

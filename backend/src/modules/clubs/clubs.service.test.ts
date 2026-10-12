@@ -4,6 +4,7 @@ import { ApiError } from '../../common/http.js';
 import {
   assertClubDeletable,
   assertClubKickAllowed,
+  assertClubLeaveAllowed,
   assertMemberRemovalResolutionsComplete,
 } from './clubs.service.js';
 
@@ -26,6 +27,25 @@ function expectStatus(action: () => void, status: number) {
     expect((error as ApiError).status).toBe(status);
   }
 }
+
+/**
+ * Leaving is the same write as being removed, with a different guard: nobody
+ * needs a leader's permission to leave, but a leader leaving would strand the
+ * club with nobody able to review a join request or edit the profile.
+ */
+describe('leaving a club', () => {
+  it('lets a member leave', () => {
+    expect(() => assertClubLeaveAllowed(member)).not.toThrow();
+  });
+
+  it('refuses a leader until leadership has been handed on', () => {
+    expectStatus(() => assertClubLeaveAllowed(leader), 409);
+  });
+
+  it('refuses someone with no membership at all', () => {
+    expectStatus(() => assertClubLeaveAllowed(null), 404);
+  });
+});
 
 describe('club member removal authorization', () => {
   it('allows a leader to remove a member of the same club', () => {

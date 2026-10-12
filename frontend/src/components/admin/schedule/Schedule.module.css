@@ -1,8 +1,10 @@
 /*
- * Courts & schedule. The board is a grid of fixed-height court tiles, so a
- * ten-court event still reads in one screenful; the queue itself is expanded
- * for one court at a time below the board. The holding area sits in a rail
- * beside both from 80rem.
+ * Courts & schedule.
+ *
+ * One column per court, with the waiting matches as the first column, because
+ * the job here is assignment: take the matches that have nowhere to be played
+ * and spread them across the courts. Queues sit side by side so two can be
+ * compared, and a match moves by being dragged from one to another.
  */
 
 /* ---- The day: the reading the operator arrives for ---- */
@@ -17,75 +19,63 @@
   box-shadow: 0 1px 3px rgba(43, 26, 24, 0.04), 0 14px 34px rgba(43, 26, 24, 0.03);
 }
 
-.dayTop {
+.dayMeta {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-4);
-}
-
-.dayIcon {
-  display: inline-flex;
-  width: 2.75rem;
-  height: 2.75rem;
-  flex: 0 0 auto;
   align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(164, 22, 26, 0.18);
-  border-radius: var(--radius-tile);
-  background: var(--dash-primary-soft);
-  color: var(--dash-primary);
+  gap: 0.4rem 1.25rem;
+  padding: var(--space-4) var(--space-5) 0;
 }
 
-.dayIcon svg {
-  width: 1.1rem;
-  height: 1.1rem;
-}
-
-.dayCopy {
+.dayMetaItem {
+  display: inline-flex;
   min-width: 0;
-  flex: 1 1 16rem;
-}
-
-.dayEyebrow {
-  margin: 0;
-  color: var(--dash-faint);
-  font-size: 0.625rem;
-  font-weight: 750;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.dayDate {
-  margin: 0.25rem 0 0;
-  color: var(--dash-text);
-  font-size: 1.15rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.dayPlace {
-  display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin: 0.3rem 0 0;
   color: var(--dash-muted);
   font-size: 0.8125rem;
 }
 
-.dayPlace svg {
-  width: 0.85rem;
+.dayMetaItem svg {
   height: 0.85rem;
-  flex: 0 0 auto;
+  width: 0.85rem;
+  flex: none;
   color: var(--dash-faint);
 }
 
-.dayAside {
+.dayMain {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5) var(--space-4);
+}
+
+/* Whether the day can be run, in a sentence. Amber only when something is
+   actually unplaceable; the word says so either way. */
+.dayState {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 20rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.dayState[data-attention='true'] {
+  color: var(--dash-amber);
+}
+
+.dayProgress {
+  color: var(--dash-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 
 .publicChip {
@@ -115,27 +105,7 @@
   color: var(--dash-teal);
 }
 
-.dayMeters {
-  display: grid;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  border-top: 1px solid var(--dash-border);
-  background: rgba(255, 255, 255, 0.6);
-}
-
-/* ---- Board of courts ---- */
-
-.layout {
-  display: grid;
-  gap: var(--space-4);
-  align-items: start;
-}
-
-.rail {
-  display: grid;
-  gap: var(--space-4);
-  align-content: start;
-}
+/* ---- Board head ---- */
 
 .boardHead {
   display: flex;
@@ -181,7 +151,7 @@
 }
 
 .boardHint {
-  max-width: 34rem;
+  max-width: 40rem;
   margin: 0.2rem 0 0;
   color: var(--dash-muted);
   font-size: 0.78rem;
@@ -198,54 +168,63 @@
   min-height: 2.75rem;
 }
 
-/* ---- Court tiles: every court at once, each a fixed height ---- */
+/* ---- The board: one column per court, plus the waiting column ----
+   Scheduling is assignment, so the queues sit side by side and a match is
+   dragged from one to another. The strip scrolls inside itself; the page
+   itself must never scroll sideways. */
 
 .board {
-  display: grid;
+  display: flex;
   gap: var(--space-3);
-  align-items: start;
-  list-style: none;
-  margin: 0 0 var(--space-4);
-  padding: 0;
+  overflow-x: auto;
+  align-items: flex-start;
+  padding-bottom: var(--space-2);
+  scroll-snap-type: x proximity;
 }
 
-.tile {
-  position: relative;
+.column {
   display: flex;
   min-width: 0;
+  /* Wide enough for a pair of names without wrapping every card. */
+  flex: 0 0 17rem;
   flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.85rem;
+  overflow: hidden;
   border: 1px solid var(--dash-border);
   border-radius: var(--radius-card);
   background: #fff;
-  box-shadow: 0 1px 2px rgba(43, 26, 24, 0.04);
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  scroll-snap-align: start;
 }
 
-/* A court still waiting on the operator keeps the amber spine used everywhere else. */
-.tile[data-attention='true'] {
-  box-shadow: inset 3px 0 0 var(--dash-amber), 0 1px 2px rgba(43, 26, 24, 0.04);
-}
-
-.tile[data-selected='true'] {
-  border-color: var(--dash-border-strong);
+/* The column everything is dragged out of leads the strip and is marked as the
+   odd one out — it is a holding area, not a court. */
+.column[data-pool='true'] {
   background: var(--dash-tint);
 }
 
-.tile[data-over='true'] {
+.column[data-over='true'] {
   border-color: var(--dash-primary);
   box-shadow: 0 0 0 3px var(--dash-primary-soft);
 }
 
-.tileHead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.4rem;
+/* A court with a queue and nothing running is the one losing time. */
+.column[data-state='idle'] {
+  box-shadow: inset 3px 0 0 var(--dash-amber);
 }
 
-.tileName {
+.column[data-state='live'] {
+  box-shadow: inset 3px 0 0 var(--dash-primary);
+}
+
+.columnHead {
+  display: grid;
+  gap: 0.15rem 0.5rem;
+  border-bottom: 1px solid var(--dash-border);
+  padding: 0.7rem 0.85rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.columnName {
+  min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--dash-text);
@@ -254,12 +233,12 @@
   letter-spacing: -0.01em;
 }
 
-.tileState {
+.columnState {
   display: inline-flex;
   min-height: 1.5rem;
-  flex: 0 0 auto;
   align-items: center;
   gap: 0.28rem;
+  justify-self: end;
   padding: 0 0.45rem;
   border: 1px solid var(--dash-border);
   border-radius: var(--radius-pill);
@@ -272,563 +251,278 @@
   white-space: nowrap;
 }
 
-.tileState svg {
-  width: 0.72rem;
+.columnState svg {
   height: 0.72rem;
+  width: 0.72rem;
 }
 
-.tileState[data-state='live'] {
+.columnState[data-state='live'] {
   border-color: rgba(164, 22, 26, 0.25);
   background: var(--dash-primary-soft);
   color: var(--dash-primary);
 }
 
-.tileState[data-state='unstaffed'],
-.tileState[data-state='idle'] {
+.columnState[data-state='idle'] {
   border-color: rgba(168, 103, 18, 0.25);
   background: var(--dash-amber-soft);
   color: var(--dash-amber);
 }
 
-.tileState[data-state='done'] {
+.columnState[data-state='done'] {
   border-color: rgba(22, 128, 106, 0.24);
   background: var(--dash-teal-soft);
   color: var(--dash-teal);
 }
 
-/* Progress sits on one line: on a phone, every saved line is a court more on screen. */
-.tileMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.2rem 0.6rem;
+.columnCount {
+  grid-column: 1 / -1;
   margin: 0;
-}
-
-
-
-
-
-.tileBar {
-  overflow: hidden;
-  height: 0.3rem;
-  border-radius: var(--radius-pill);
-  background: #eceef3;
-}
-
-.tileBar[data-empty='true'] {
-  opacity: 0.5;
-}
-
-.tileBarFill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--dash-primary);
-}
-
-.tileBarFill[data-complete='true'] {
-  background: var(--dash-teal);
-}
-
-.tileCounts {
-  flex: 0 0 auto;
   color: var(--dash-muted);
   font-size: 0.6875rem;
-  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  line-height: 1rem;
 }
 
-/*
- * Phones read the tile as a row — what is on court, and the way in, side by
- * side — so eight courts cost about a screen and a half rather than four.
- */
-.tileFoot {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--dash-border);
-}
-
-.tileFocus {
-  display: grid;
-  min-width: 0;
-  flex: 1 1 auto;
-  gap: 0.15rem;
-}
-
-.tileMatch {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 0.35rem;
-  margin: 0;
-  color: var(--dash-text);
-  font-size: 0.75rem;
-  font-weight: 650;
-}
-
-/* One line, always: a truncated round beats a tile that grows with its longest name. */
-.tileMatchName {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tileMatchLabel {
-  flex: 0 0 auto;
-  color: var(--dash-faint);
-  font-size: 0.5625rem;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.tileMatch[data-live='true'] .tileMatchLabel {
-  color: var(--dash-primary);
-}
-
-.tileMatch[data-quiet='true'] {
-  color: var(--dash-faint);
-  font-weight: 500;
-}
-
-.tileOpen {
-  display: inline-flex;
-  min-height: 2.75rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: 0 0.85rem;
-  border: 1px solid var(--dash-border);
-  border-radius: var(--radius-control);
-  background: #fff;
-  color: var(--dash-text);
-  font-size: 0.75rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
-}
-
-/* The button is the accessible name; the whole tile is the target. */
-.tileOpen::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-card);
-}
-
-.tileOpen:hover {
-  border-color: var(--dash-border-strong);
-  background: var(--dash-primary-soft);
-  color: var(--dash-primary);
-}
-
-.tileOpen:focus-visible {
-  outline: 2px solid var(--dash-primary);
-  outline-offset: 2px;
-}
-
-.tile[data-selected='true'] .tileOpen {
-  border-color: var(--dash-primary);
-  background: var(--dash-primary);
-  color: #fff;
-}
-
-/* ---- The one open court ---- */
-
-.detailAnchor {
-  scroll-margin-top: var(--space-4);
-}
-
-.detail {
-  overflow: hidden;
-  border: 1px solid var(--dash-border-strong);
-  border-radius: var(--radius-card);
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(43, 26, 24, 0.05), 0 14px 30px rgba(43, 26, 24, 0.03);
-  transition: box-shadow 160ms ease;
-}
-
-.detail[data-over='true'] {
-  box-shadow: 0 0 0 3px var(--dash-primary-soft);
-}
-
-.detailHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--dash-border);
-  background: var(--dash-tint);
-}
-
-.detailIdentity {
-  min-width: 0;
-  flex: 1 1 12rem;
-}
-
-.detailName {
-  margin: 0;
-  overflow-wrap: anywhere;
-  color: var(--dash-text);
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.detailPlace {
-  margin: 0.2rem 0 0;
-  color: var(--dash-muted);
-  font-size: 0.75rem;
-}
-
-.detailNav {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.detailBody {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) var(--space-3);
-}
-
-
-.detailHint {
-  margin: 0;
-  padding: 0 var(--space-4) var(--space-4);
-  color: var(--dash-faint);
-  font-size: 0.72rem;
-  line-height: 1.1rem;
-}
-
-.finishedChip {
-  display: inline-flex;
-  min-height: 1.65rem;
-  flex: 0 0 auto;
-  align-items: center;
-  padding: 0 0.55rem;
-  border: 1px solid rgba(22, 128, 106, 0.24);
-  border-radius: var(--radius-pill);
-  background: var(--dash-teal-soft);
-  color: var(--dash-teal);
-  font-size: 0.625rem;
-  font-weight: 750;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
-}
-
-
-
-/*
- * The only long list on the page, and it is capped: a court with thirty matches
- * scrolls inside its own panel rather than pushing the rest of the day off screen.
- */
-.courtQueue {
+/* Capped so one long queue cannot push every other column off the screen. */
+.columnBody {
   overflow-y: auto;
-  max-height: min(60vh, 34rem);
-  margin: 0 var(--space-4) var(--space-3);
-  border: 1px dashed var(--dash-border);
-  border-radius: var(--radius-tile);
-  background: rgba(246, 248, 252, 0.5);
-  overscroll-behavior: contain;
+  max-height: 32rem;
+  min-height: 5rem;
+  padding: 0.5rem;
 }
 
-.queueList {
-  list-style: none;
+.columnEmpty {
   margin: 0;
-  padding: 0;
-}
-
-.queueList > li + li {
-  border-top: 1px solid var(--dash-border);
-}
-
-.courtEmpty {
-  margin: 0;
-  padding: var(--space-4);
+  padding: 0.75rem 0.35rem;
   color: var(--dash-faint);
   font-size: 0.75rem;
   line-height: 1.15rem;
   text-align: center;
 }
 
-/* ---- One queued match ---- */
-
-.queueRow {
+.cardList {
   display: grid;
   gap: 0.4rem;
-  padding: 0.5rem;
-  border-radius: var(--radius-tile);
-  background: #fff;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.queueRow[data-dragging='true'] {
+/* ---- One match, as a card ---- */
+
+.card {
+  border: 1px solid var(--dash-border);
+  border-radius: var(--radius-tile);
+  background: #fff;
+  padding: 0.5rem 0.6rem;
+}
+
+.card[data-dragging='true'] {
   opacity: 0.45;
 }
 
-.queueRow[data-status='in_progress'] {
-  box-shadow: inset 3px 0 0 var(--dash-primary);
+.card[data-status='in_progress'] {
+  border-color: rgba(164, 22, 26, 0.3);
+  background: var(--dash-primary-soft);
 }
 
-.queueRow[data-status='completed'],
-.queueRow[data-status='cancelled'] {
-  background: rgba(246, 248, 252, 0.7);
+.card[data-status='completed'],
+.card[data-status='cancelled'] {
+  background: var(--dash-tint);
 }
 
-.rowMain {
+.card[data-status='completed'] .cardTitle,
+.card[data-status='cancelled'] .cardTitle {
+  color: var(--dash-muted);
+}
+
+.cardTop {
   display: flex;
-  min-width: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.4rem;
 }
 
-.grip {
+/* The queue position leads: the order is what this board decides. */
+.cardPosition {
   display: inline-flex;
-  width: 2.75rem;
-  height: 2.75rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: none;
-  color: var(--dash-faint);
-  cursor: grab;
-}
-
-.grip svg {
-  width: 0.9rem;
-  height: 0.9rem;
-}
-
-.grip:hover:not([data-frozen='true']) {
-  background: #f7ede9;
-  color: var(--dash-primary);
-}
-
-.grip:active:not([data-frozen='true']) {
-  cursor: grabbing;
-}
-
-.grip[data-frozen='true'] {
-  cursor: default;
-}
-
-.grip:focus-visible,
-.iconButton:focus-visible {
-  outline: 2px solid var(--dash-primary);
-  outline-offset: 2px;
-}
-
-.position {
-  display: inline-flex;
-  width: 1.75rem;
-  height: 1.75rem;
-  flex: 0 0 auto;
+  height: 1.4rem;
+  min-width: 1.4rem;
+  flex: none;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
-  background: #f0f2f6;
-  color: var(--dash-muted);
+  background: var(--dash-tint-strong);
+  color: var(--dash-text);
   font-size: 0.6875rem;
-  font-weight: 800;
   font-variant-numeric: tabular-nums;
+  font-weight: 750;
 }
 
-.position[data-first='true'] {
-  background: var(--dash-primary-soft);
-  color: var(--dash-primary);
-}
-
-.rowText {
+.cardText {
   min-width: 0;
   flex: 1 1 auto;
 }
 
-.rowTitle {
-  margin: 0;
-  overflow-wrap: anywhere;
-  color: var(--dash-text);
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-
-.rowPair {
-  margin: 0.15rem 0 0;
-  overflow-wrap: anywhere;
-  color: var(--dash-muted);
-  font-size: 0.75rem;
-  line-height: 1.1rem;
-}
-
-.statusPill {
-  display: inline-flex;
-  min-height: 1.5rem;
-  flex: 0 0 auto;
-  align-items: center;
-  padding: 0 0.5rem;
-  border: 1px solid rgba(168, 103, 18, 0.25);
-  border-radius: var(--radius-pill);
-  background: var(--dash-amber-soft);
-  color: var(--dash-amber);
+.cardCategory {
+  margin: 0 0 0.1rem;
+  overflow: hidden;
+  color: var(--dash-primary);
   font-size: 0.5625rem;
   font-weight: 750;
-  letter-spacing: 0.045em;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
-.statusPill[data-status='in_progress'] {
-  border-color: rgba(164, 22, 26, 0.25);
-  background: var(--dash-primary-soft);
-  color: var(--dash-primary);
+.cardTitle {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.1rem;
 }
 
-.statusPill[data-status='completed'] {
-  border-color: rgba(22, 128, 106, 0.25);
-  background: var(--dash-teal-soft);
-  color: var(--dash-teal);
+.cardPair {
+  margin: 0.1rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--dash-muted);
+  font-size: 0.6875rem;
+  line-height: 1rem;
 }
 
-.statusPill[data-status='cancelled'] {
-  border-color: rgba(194, 65, 59, 0.25);
-  background: var(--dash-coral-soft);
-  color: var(--dash-coral);
+.cardGrip {
+  display: inline-flex;
+  height: 1.75rem;
+  width: 1.75rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  color: var(--dash-faint);
+  cursor: grab;
+  touch-action: none;
 }
 
-.rowFoot {
+.cardGrip:hover {
+  background: var(--dash-tint);
+  color: var(--dash-text);
+}
+
+.cardGrip:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.cardGrip[data-frozen='true'] {
+  cursor: default;
+}
+
+.cardGrip svg {
+  height: 0.9rem;
+  width: 0.9rem;
+}
+
+.cardFoot {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.35rem;
-  padding-left: 3.15rem;
+  gap: 0.3rem 0.5rem;
+  margin-top: 0.4rem;
 }
 
-.rowTime {
+.cardTime {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.25rem;
   color: var(--dash-muted);
   font-size: 0.6875rem;
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.rowTime svg {
-  width: 0.8rem;
-  height: 0.8rem;
+.cardTime[data-set='false'] {
   color: var(--dash-faint);
 }
 
-.rowActions {
+.cardTime svg {
+  height: 0.7rem;
+  width: 0.7rem;
+}
+
+.cardStatus {
+  color: var(--dash-primary);
+  font-size: 0.5625rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.cardStatus[data-settled='true'] {
+  color: var(--dash-muted);
+}
+
+.cardActions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
+  margin-left: auto;
 }
 
-.moveSelect {
-  width: calc(100% - 3.15rem);
-  margin-left: 3.15rem;
-}
-
-.iconButton {
+.cardIcon {
   display: inline-flex;
-  width: 2.75rem;
-  height: 2.75rem;
+  height: 1.9rem;
+  min-width: 1.9rem;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--dash-border);
   border-radius: var(--radius-control);
   background: #fff;
   color: var(--dash-muted);
-  cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+  font-size: 0.8rem;
+  line-height: 1;
 }
 
-.iconButton svg {
-  width: 0.9rem;
-  height: 0.9rem;
-}
-
-.iconButton:hover:not(:disabled) {
+.cardIcon:hover:not(:disabled) {
   border-color: var(--dash-border-strong);
-  background: var(--dash-primary-soft);
-  color: var(--dash-primary);
+  color: var(--dash-text);
 }
 
-.iconButton[data-danger='true']:hover:not(:disabled) {
+.cardIcon:disabled {
+  color: var(--dash-faint);
+  cursor: not-allowed;
+}
+
+.cardIcon:focus-visible {
+  outline: 2px solid var(--dash-primary);
+  outline-offset: 1px;
+}
+
+.cardIcon[data-danger='true']:hover:not(:disabled) {
   border-color: rgba(194, 65, 59, 0.35);
   background: var(--dash-coral-soft);
   color: var(--dash-coral);
 }
 
-.iconButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
+.cardIcon svg {
+  height: 0.8rem;
+  width: 0.8rem;
 }
 
-/* ---- Holding area for matches with nowhere to be played ---- */
-
-.pool {
-  padding: var(--space-3);
-  border-radius: 0 0 var(--radius-card) var(--radius-card);
-  transition: background 160ms ease, box-shadow 160ms ease;
+/* The keyboard/touch path for a move. Full width under the card so it never
+   competes with the icon row for space. */
+.cardMove {
+  width: 100%;
+  min-height: 2.25rem;
+  margin-top: 0.4rem;
+  font-size: 0.6875rem;
 }
 
-.pool[data-over='true'] {
-  background: var(--dash-primary-soft);
-  box-shadow: inset 0 0 0 2px var(--dash-primary);
+.cardActions .cardMove {
+  width: auto;
+  min-width: 6rem;
+  margin-top: 0;
 }
-
-.poolList {
-  display: grid;
-  gap: 0.5rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.poolCard {
-  display: grid;
-  gap: 0.4rem;
-  padding: 0.4rem;
-  border: 1px solid var(--dash-border);
-  border-radius: var(--radius-tile);
-  background: #fff;
-}
-
-.poolCard[data-dragging='true'] {
-  opacity: 0.45;
-}
-
-.poolCardTop {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-
-
-
-
-
-
-
-/* ---- Drag ghost ---- */
 
 .dragGhost {
   padding: 0.6rem 0.9rem;
@@ -841,73 +535,21 @@
   font-weight: 700;
 }
 
-@media (min-width: 48rem) {
-  .dayTop {
-    flex-wrap: nowrap;
-    padding: var(--space-4) var(--space-5);
+/* Phones read one column at a time, snapped, so a court is never half on screen. */
+@media (max-width: 40rem) {
+  .column {
+    flex-basis: min(85vw, 20rem);
   }
 
-  .dayAside {
-    flex: 0 0 auto;
-    justify-content: flex-end;
-  }
-
-  .dayMeters {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    padding: var(--space-4) var(--space-5);
-  }
-
-  .board {
-    grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
-  }
-
-  /* A tile column is too narrow to sit the queue reading beside the control. */
-  .tileFoot {
-    display: block;
-  }
-
-  .tileOpen {
-    display: flex;
-    width: 100%;
-    margin-top: 0.5rem;
-  }
-
-  .tileFocus {
-    min-height: 2.3rem;
-  }
-
-  .detailBody {
-    grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
-    align-items: end;
-    padding: var(--space-4) var(--space-5) var(--space-3);
-  }
-
-  .detailHead {
-    flex-wrap: nowrap;
-    padding: var(--space-4) var(--space-5);
-  }
-
-  .courtQueue {
-    margin: 0 var(--space-5) var(--space-3);
-  }
-
-  .detailHint {
-    padding: 0 var(--space-5) var(--space-4);
-  }
-}
-
-@media (min-width: 80rem) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr) 22rem;
+  .columnBody {
+    max-height: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tile,
-  .tileOpen,
-  .detail,
-  .pool,
-  .iconButton {
+  .card,
+  .column,
+  .cardIcon {
     transition: none;
   }
 }

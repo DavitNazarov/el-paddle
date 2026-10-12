@@ -2,17 +2,16 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { ArrowRight, CalendarDays, MapPin, Radio } from 'lucide-react';
+import { ArrowRight, CalendarDays, Check, CircleAlert, Clock3, MapPin } from 'lucide-react';
 import { EmptyTournamentState, TournamentPanel, TournamentSectionHeader, StatusLabel } from '@/components/tournament/TournamentUI';
-import { StageDots, type RailState } from '@/components/shared/dashboard/DashboardSignals';
 import { SkeletonRows } from '@/components/shared/dashboard/Feedback';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { fillTemplate, tournamentCopy, tournamentStatus } from '@/lib/i18n/tournament';
-import { lifecycleOrder } from './event-workspace/EventLifecycleHero';
+import { lifecycleOrder } from './event-workspace/EventHeaderBand';
+import { agendaAllClear, eventAgenda } from './event-workspace/eventAgenda';
+import { operationsAsSignals } from './event-workspace/operationsSignals';
 import type { EventDto, EventOperationsDto } from '@/types/admin';
 import styles from './AdminOverview.module.css';
-
-type Chip = { key: string; label: string; tone?: 'warning' | 'live' };
 
 /**
  * Events sorted by how likely they are to need the reader right now: whatever
@@ -33,10 +32,16 @@ export function sortEventsByUrgency(events: EventDto[]) {
 }
 
 /**
- * The events board. Each row states where the event has reached and what it is
- * waiting on — the two facts that decide whether the reader opens it.
+ * The season, as a board.
  *
- * The same board serves the role home and the four event pickers behind the
+ * Each row answers one question: should I open this event? It used to answer it
+ * with up to five chips — live, pending, awaiting, draws, queued — side by side
+ * and equally weighted, which is a reading exercise rather than an answer. Now
+ * every row states the single most pressing thing that event is waiting on, in
+ * the same words the event's own workspace would use for it, so the board and
+ * the screen behind it never describe the same situation differently.
+ *
+ * The same board serves the role home and the five event pickers behind the
  * sidebar's lifecycle steps; those only differ in where a row leads, so they
  * pass a `hrefSuffix` and their own action label rather than a second design.
  */
@@ -73,6 +78,7 @@ export function AdminEventBoard({
 }) {
   const { locale, formatDate } = useI18n();
   const copy = tournamentCopy[locale].admin.board;
+  const eventCopy = tournamentCopy[locale].admin.event;
   const common = tournamentCopy[locale].common;
   const ordered = order(events);
 
@@ -89,42 +95,26 @@ export function AdminEventBoard({
           {ordered.map((event) => {
             const stageIndex = lifecycleOrder.indexOf(event.status);
             const operation = operations.get(event.id);
-            const chips: Chip[] = [];
-            const readOnly = event.status === 'COMPLETED';
-
-            if (operation) {
-              if (operation.matches.live > 0) {
-                chips.push({ key: 'live', label: fillTemplate(copy.live, { count: operation.matches.live }), tone: 'live' });
-              }
-              if (!readOnly && operation.registrations.pending > 0) {
-                chips.push({ key: 'pending', label: fillTemplate(copy.pending, { count: operation.registrations.pending }), tone: 'warning' });
-              }
-              if (!readOnly && operation.requests.awaiting > 0) {
-                chips.push({ key: 'awaiting', label: fillTemplate(copy.awaiting, { count: operation.requests.awaiting }), tone: 'warning' });
-              }
-              if (operation.brackets.total > 0) {
-                chips.push({ key: 'draws', label: fillTemplate(copy.draws, operation.brackets) });
-              }
-              if (operation.schedule.queued > 0) {
-                chips.push({ key: 'queued', label: fillTemplate(copy.queued, { count: operation.schedule.queued }) });
-              }
-            }
+            // No counts yet means the board cannot speak for this event; it says
+            // so rather than reporting a quiet event that may not be quiet.
+            const agenda = operation ? eventAgenda(event, operationsAsSignals(operation), eventCopy) : [];
+            const lead = agenda[0] ?? null;
 
             return (
               <div key={event.id} className={styles.row} data-live={(operation?.matches.live ?? 0) > 0}>
                 <div className="min-w-0">
                   <div className={styles.rowTop}>
                     <h3 className={styles.title}>{event.title}</h3>
-                    <StageDots
-                      states={lifecycleOrder.map((_, index): RailState =>
-                        index < stageIndex ? 'done' : index === stageIndex ? 'current' : 'upcoming')}
-                      label={tournamentStatus(locale, event.status)}
-                      srLabel={fillTemplate(copy.stageOf, {
-                        current: stageIndex + 1,
-                        total: lifecycleOrder.length,
-                        label: tournamentStatus(locale, event.status),
-                      })}
-                    />
+                    <span className={styles.stage}>
+                      {tournamentStatus(locale, event.status)}
+                      <span className="sr-only">
+                        {` — ${fillTemplate(copy.stageOf, {
+                          current: stageIndex + 1,
+                          total: lifecycleOrder.length,
+                          label: tournamentStatus(locale, event.status),
+                        })}`}
+                      </span>
+                    </span>
                   </div>
                   <div className={styles.meta}>
                     <span>
@@ -137,19 +127,28 @@ export function AdminEventBoard({
                     </span>
                   </div>
                 </div>
+
                 <div className={styles.rowFoot}>
-                  {chips.length ? (
-                    <div className={styles.chips}>
-                      {chips.map((chip) => (
-                        <span key={chip.key} className={styles.chip} data-tone={chip.tone}>
-                          {chip.tone === 'live' ? <Radio aria-hidden="true" /> : null}
-                          {chip.label}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className={styles.quiet}>{loading ? common.loading : copy.quiet}</span>
-                  )}
+                  <p className={styles.need} data-tone={lead ? lead.tone : operation ? 'clear' : 'unknown'}>
+                    {lead ? (
+                      lead.tone === 'urgent' ? <CircleAlert aria-hidden="true" /> : <Clock3 aria-hidden="true" />
+                    ) : operation ? (
+                      <Check aria-hidden="true" />
+                    ) : null}
+                    <span className={styles.needText}>
+                      {lead
+                        ? lead.headline
+                        : operation
+                          ? agendaAllClear(event, eventCopy)
+                          : loading ? common.loading : copy.quiet}
+                    </span>
+                    {agenda.length > 1 ? (
+                      <span className={styles.needMore}>
+                        {fillTemplate(copy.alsoWaiting, { count: agenda.length - 1 })}
+                      </span>
+                    ) : null}
+                  </p>
+
                   <div className={styles.rowActions}>
                     {renderActions?.(event)}
                     <Link

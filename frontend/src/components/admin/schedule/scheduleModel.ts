@@ -1,4 +1,4 @@
-import type { CourtDto, MatchDto, ScheduleItemDto } from '@/types/tournament';
+import type { BracketDto, CourtDto, MatchDto, ScheduleItemDto } from '@/types/tournament';
 import type { Locale } from '@/lib/i18n/types';
 import { tournamentCopy, tournamentRound } from '@/lib/i18n/tournament';
 
@@ -9,8 +9,6 @@ import { tournamentCopy, tournamentRound } from '@/lib/i18n/tournament';
  */
 
 export const COURT_DROPPABLE_PREFIX = 'court:';
-/** The open court's own queue panel. A court is on screen twice, so it needs two ids. */
-export const QUEUE_DROPPABLE_PREFIX = 'queue:';
 export const POOL_DROPPABLE_ID = 'unscheduled-pool';
 export const POOL_ITEM_PREFIX = 'match:';
 
@@ -18,13 +16,9 @@ export function courtDroppableId(courtId: string) {
   return `${COURT_DROPPABLE_PREFIX}${courtId}`;
 }
 
-export function queueDroppableId(courtId: string) {
-  return `${QUEUE_DROPPABLE_PREFIX}${courtId}`;
-}
-
-/** True for either of the two ways a court can be dropped on. */
+/** Each court is one column, and so one drop target. */
 function isCourtDroppable(overId: string) {
-  return overId.startsWith(COURT_DROPPABLE_PREFIX) || overId.startsWith(QUEUE_DROPPABLE_PREFIX);
+  return overId.startsWith(COURT_DROPPABLE_PREFIX);
 }
 
 export function poolItemId(matchId: string) {
@@ -74,19 +68,38 @@ export function courtNeedsAttention(state: CourtState) {
   return state === 'idle';
 }
 
-/**
- * The one or two matches a court tile can afford to name: the match being
- * played, and the one that follows it. Everything else is a count.
- */
-export function courtFocus(court: CourtDto) {
-  const pending = court.scheduleItems.filter((item) => !isSettled(item));
-  const live = pending.find((item) => item.status === 'IN_PROGRESS') ?? null;
-  const next = pending.find((item) => item.status !== 'IN_PROGRESS') ?? null;
-  return { live, next, waiting: pending.length - (live ? 1 : 0) };
-}
-
 export function matchTitle(locale: Locale, match: MatchDto) {
   return `${tournamentRound(locale, match.round)} · ${tournamentCopy[locale].common.match} ${match.matchNumber}`;
+}
+
+/**
+ * Which category a match was drawn in, for the rows that would otherwise be
+ * ambiguous.
+ *
+ * Match numbers restart with each draw, so "Semifinal · Match 3" names three
+ * different matches in a three-category event — and both the waiting list and
+ * every court queue mix categories freely. The name is the missing half of the
+ * row's identity there.
+ *
+ * It is withheld when the event has only one category: repeating the same word
+ * down every row is noise, and tells the reader nothing they did not know from
+ * the page title.
+ */
+export type CategoryNamer = (match: MatchDto) => string;
+
+export function categoryNamer(brackets: BracketDto[]): CategoryNamer {
+  const byMatchId = new Map<string, string>();
+  const distinct = new Set<string>();
+  for (const bracket of brackets) {
+    const name = bracket.eventCategory?.category.name ?? '';
+    if (!name) continue;
+    distinct.add(name);
+    for (const match of bracket.matches) byMatchId.set(match.id, name);
+  }
+  if (distinct.size < 2) return () => '';
+  // A schedule item carries its own lighter copy of the match, which does know
+  // its bracket — so a row is still named even if the draw payload is behind.
+  return (match) => byMatchId.get(match.id) ?? match.bracket?.eventCategory.category.name ?? '';
 }
 
 export function matchPair(locale: Locale, match: MatchDto) {
@@ -95,10 +108,19 @@ export function matchPair(locale: Locale, match: MatchDto) {
   return `${name(match.participantA)} ${common.versus} ${name(match.participantB)}`;
 }
 
-/** Matches that exist in a draw but sit in no court queue yet. */
+/**
+ * Matches that exist in a draw but sit in no court queue yet.
+ *
+ * Cancelled matches are excluded alongside completed ones: neither is waiting
+ * for a court, and a bye that decided itself has no reason to sit in the pool
+ * asking to be dragged somewhere. This is the same rule the server counts
+ * `schedule.unscheduled` by, so the pool and the season board agree.
+ */
 export function unscheduledMatches(matches: MatchDto[], courts: CourtDto[]) {
   const placed = new Set(courts.flatMap((court) => court.scheduleItems.map((item) => item.matchId)));
-  return matches.filter((match) => !placed.has(match.id) && match.status !== 'COMPLETED');
+  return matches.filter(
+    (match) => !placed.has(match.id) && match.status !== 'COMPLETED' && match.status !== 'CANCELLED',
+  );
 }
 
 export type DaySummary = {

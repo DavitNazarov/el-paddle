@@ -31,10 +31,13 @@ import {
   getPublicPlayer,
   listPublicPlayers,
   listUsers,
+  resendUserInvite,
   setUserDisqualification,
   setJudgeActive,
   updateOwnProfile,
 } from './users.service.js';
+import { getHeadToHead } from './player-stats.js';
+import { getPlayerStats as getPlayerRecord } from '../dashboard/dashboard.service.js';
 
 export const usersRouter = Router();
 
@@ -70,6 +73,32 @@ usersRouter.get('/api/public/players/:id', asyncHandler(async (request, response
   const player = await getPublicPlayer(requireParamId(request.params.id, 'player id'));
   setPublicCache(response);
   response.json({ player: serializePublicPlayer(player) });
+}));
+
+/**
+ * The public twin of `/api/me/stats`, narrowed to events that published their
+ * results. The directory already shows a played/won/lost line; this is the rest
+ * of the record — streak, best finish, partners — which until now the player
+ * could see about themselves and nobody could see about anyone else.
+ */
+usersRouter.get('/api/public/players/:id/stats', asyncHandler(async (request, response) => {
+  const player = await getPublicPlayer(requireParamId(request.params.id, 'player id'));
+  const stats = await getPlayerRecord(player.id, { publicOnly: true });
+  setPublicCache(response);
+  response.json({ player: serializePublicPlayer(player), stats });
+}));
+
+/**
+ * Two players' record against each other, over published results only. Read off
+ * the frozen snapshots, so it keeps working after either of them changes club.
+ */
+usersRouter.get('/api/public/players/:id/versus/:opponentId', asyncHandler(async (request, response) => {
+  const playerId = requireParamId(request.params.id, 'player id');
+  const opponentId = requireParamId(request.params.opponentId, 'opponent id');
+  if (playerId === opponentId) jsonError('Choose two different players.');
+  const headToHead = await getHeadToHead(playerId, opponentId);
+  setPublicCache(response);
+  response.json(headToHead);
 }));
 
 usersRouter.get('/api/admin/users', asyncHandler(async (request, response) => {
@@ -126,6 +155,19 @@ usersRouter.post('/api/admin/users', asyncHandler(async (request, response) => {
     user: serializeAdminUser(result.user),
     invited: result.invited,
   });
+}));
+
+usersRouter.post('/api/admin/users/:id/invite/resend', asyncHandler(async (request, response) => {
+  const admin = await requireCapability(request, Capability.USER_MANAGE);
+  const { email } = await resendUserInvite(requireParamId(request.params.id));
+  auditLog({
+    event: 'admin.user_invite_resent',
+    outcome: 'success',
+    userId: admin.id,
+    ip: requestIp(request),
+    detail: requireParamId(request.params.id),
+  });
+  response.json({ ok: true, email });
 }));
 
 usersRouter.delete('/api/admin/users/:id', asyncHandler(async (request, response) => {

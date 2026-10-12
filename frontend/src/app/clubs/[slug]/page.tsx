@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { ClubClient, type ClubClientDto } from '@/components/clubs/ClubClient';
+import { ClubClient, type ClubClientDto, type ClubRecord } from '@/components/clubs/ClubClient';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { apiUrl } from '@/lib/api';
 import { breadcrumbJsonLd, buildPageMetadata, sportsClubJsonLd } from '@/lib/seo';
@@ -23,6 +23,21 @@ async function getClub(slug: string) {
   return data.club;
 }
 
+/**
+ * The club's tournament record. It is a second read, so it degrades on its own:
+ * a roster that renders without its numbers is worth more than a club page that
+ * fails because a count did not arrive.
+ */
+async function getClubRecord(slug: string): Promise<ClubRecord | null> {
+  try {
+    const response = await fetch(apiUrl(`/api/public/clubs/${slug}/stats`), { next: { revalidate: 300 } });
+    if (!response.ok) return null;
+    return ((await response.json()) as { stats?: ClubRecord }).stats ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateMetadata({ params }: ClubPageProps): Promise<Metadata> {
   const { slug } = await params;
   const club = await getClub(slug);
@@ -39,7 +54,7 @@ export async function generateMetadata({ params }: ClubPageProps): Promise<Metad
 
 export default async function ClubPage({ params }: ClubPageProps) {
   const { slug } = await params;
-  const club = await getClub(slug);
+  const [club, record] = await Promise.all([getClub(slug), getClubRecord(slug)]);
 
   if (!club) notFound();
 
@@ -55,7 +70,7 @@ export default async function ClubPage({ params }: ClubPageProps) {
           ]),
         ]}
       />
-      <ClubClient club={club} />
+      <ClubClient club={club} record={record} />
     </>
   );
 }

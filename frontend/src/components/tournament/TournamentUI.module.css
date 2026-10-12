@@ -156,6 +156,19 @@
   color: var(--padel-ivory);
 }
 
+/* Dimmed to half opacity the label stopped being readable against charcoal.
+   The control stays legible and simply stops looking pressable. */
+.commandButton:disabled {
+  border-color: rgba(213, 201, 177, 0.14);
+  background: rgba(213, 201, 177, 0.05);
+  color: rgba(246, 239, 225, 0.55);
+  opacity: 1;
+}
+
+.commandButton[data-busy='true'] {
+  color: var(--padel-ivory);
+}
+
 /* Touch press feedback: phones get no hover state, so acknowledge taps. */
 @media (hover: none) {
   .commandButton:active:not(:disabled) {
@@ -222,136 +235,171 @@
   border-bottom: 0;
 }
 
-:global(.dash-app) .panel {
+:global(:is(.dash-app, .dashboard-dialog-content)) .panel {
   border-color: var(--dash-border);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 1px 3px rgba(43, 26, 24, 0.04), 0 10px 30px rgba(43, 26, 24, 0.02);
 }
 
-:global(.dash-app) .sectionHeader {
+:global(:is(.dash-app, .dashboard-dialog-content)) .sectionHeader {
   border-color: var(--dash-border);
   background: rgba(255, 255, 255, 0.72);
 }
 
-:global(.dash-app) .sectionTitle,
-:global(.dash-app) .emptyTitle {
+:global(:is(.dash-app, .dashboard-dialog-content)) .sectionTitle,
+:global(:is(.dash-app, .dashboard-dialog-content)) .emptyTitle {
   color: var(--dash-text);
 }
 
-:global(.dash-app) .sectionDescription,
-:global(.dash-app) .emptyDetail {
+:global(:is(.dash-app, .dashboard-dialog-content)) .sectionDescription,
+:global(:is(.dash-app, .dashboard-dialog-content)) .emptyDetail {
   color: var(--dash-muted);
 }
 
-:global(.dash-app) .statusLabel {
+:global(:is(.dash-app, .dashboard-dialog-content)) .statusLabel {
   border-color: var(--dash-border);
   background: #faf6f3;
   color: var(--dash-muted);
 }
 
-:global(.dash-app) .statusLabel[data-tone='success'] {
+:global(:is(.dash-app, .dashboard-dialog-content)) .statusLabel[data-tone='success'] {
   border-color: rgba(22, 128, 106, 0.25);
   background: var(--dash-teal-soft);
   color: var(--dash-teal);
 }
 
-:global(.dash-app) .statusLabel[data-tone='info'] {
+:global(:is(.dash-app, .dashboard-dialog-content)) .statusLabel[data-tone='info'] {
   border-color: rgba(61, 103, 150, 0.25);
   background: var(--dash-info-soft);
   color: var(--dash-info);
 }
 
-:global(.dash-app) .statusLabel[data-tone='danger'] {
+:global(:is(.dash-app, .dashboard-dialog-content)) .statusLabel[data-tone='danger'] {
   border-color: rgba(194, 65, 59, 0.25);
   background: var(--dash-coral-soft);
   color: var(--dash-coral);
 }
 
-:global(.dash-app) .keyValueGrid {
+:global(:is(.dash-app, .dashboard-dialog-content)) .keyValueGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   border-color: var(--dash-border);
   background: var(--dash-border);
 }
 
-:global(.dash-app) .keyValueItem {
+:global(:is(.dash-app, .dashboard-dialog-content)) .keyValueItem {
   background: rgba(255, 255, 255, 0.92);
 }
 
-:global(.dash-app) .keyValueLabel {
+:global(:is(.dash-app, .dashboard-dialog-content)) .keyValueLabel {
   color: var(--dash-faint);
 }
 
-:global(.dash-app) .keyValueValue {
+:global(:is(.dash-app, .dashboard-dialog-content)) .keyValueValue {
   color: var(--dash-text);
 }
 
-:global(.dash-app) .emptyIcon {
+:global(:is(.dash-app, .dashboard-dialog-content)) .emptyIcon {
   border-color: rgba(164, 22, 26, 0.16);
   background: var(--dash-primary-soft);
   color: var(--dash-primary);
 }
 
-:global(.dash-app) .notice {
+:global(:is(.dash-app, .dashboard-dialog-content)) .notice {
   border-color: rgba(61, 103, 150, 0.22);
   background: var(--dash-info-soft);
   color: var(--dash-text);
 }
 
-:global(.dash-app) .notice[data-kind='error'] {
+:global(:is(.dash-app, .dashboard-dialog-content)) .notice[data-kind='error'] {
   border-color: rgba(194, 65, 59, 0.24);
   background: var(--dash-coral-soft);
 }
 
-:global(.dash-app) .notice[data-kind='success'] {
+:global(:is(.dash-app, .dashboard-dialog-content)) .notice[data-kind='success'] {
   border-color: rgba(22, 128, 106, 0.24);
   background: var(--dash-teal-soft);
 }
 
-:global(.dash-app) .commandButton {
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton {
   border-color: var(--dash-border);
   background: transparent;
   color: var(--dash-text);
 }
 
-:global(.dash-app) .commandButton:hover:not(:disabled) {
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton:hover:not(:disabled) {
   border-color: var(--dash-border-strong);
   background: var(--dash-primary-soft);
   color: var(--dash-text);
 }
 
-:global(.dash-app) .commandButton[data-tone='primary'] {
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton[data-tone='primary'] {
   border-color: var(--dash-primary);
   background: var(--dash-primary);
   color: #fff;
 }
 
-:global(.dash-app) .commandButton[data-tone='primary']:hover:not(:disabled) {
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton[data-tone='primary']:hover:not(:disabled) {
   border-color: #851317;
   background: #851317;
   color: #fff;
 }
 
-:global(.dash-app) .commandButton[data-tone='danger'] {
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton[data-tone='danger'] {
   border-color: rgba(194, 65, 59, 0.3);
   background: var(--dash-coral-soft);
   color: var(--dash-coral);
 }
 
-:global(.dash-app) .backLink {
+/*
+ * Off, not faded out.
+ *
+ * The base button fades a disabled control to 50% opacity, which on a light
+ * surface turned a filled primary command into pale text on pale fill — the
+ * operator could not read the label of the button they were waiting on, or tell
+ * a disabled command apart from a decorative one. A disabled control is still a
+ * control: it keeps a border, a fill and a legible label, and only stops looking
+ * pressable.
+ */
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton:disabled,
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton[data-tone='primary']:disabled,
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton[data-tone='danger']:disabled {
+  border-color: var(--dash-border);
+  background: var(--dash-tint);
   color: var(--dash-muted);
+  opacity: 1;
 }
 
-:global(.dash-app) .backLink:hover {
+/* Working, not disabled: a command mid-flight keeps its own colour so the
+   screen still says which button is running. */
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton[data-busy='true'],
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton[data-tone='primary'][data-busy='true'] {
+  border-color: var(--dash-primary);
+  background: var(--dash-primary);
+  color: #fff;
+  opacity: 1;
+}
+
+:global(:is(.dash-app, .dashboard-dialog-content)) .commandButton[data-busy='true'][data-tone='default'] {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-primary-soft);
   color: var(--dash-text);
 }
 
-:global(.dash-app) .dataList th {
+:global(:is(.dash-app, .dashboard-dialog-content)) .backLink {
+  color: var(--dash-muted);
+}
+
+:global(:is(.dash-app, .dashboard-dialog-content)) .backLink:hover {
+  color: var(--dash-text);
+}
+
+:global(:is(.dash-app, .dashboard-dialog-content)) .dataList th {
   border-color: var(--dash-border);
   background: #faf6f3;
   color: var(--dash-faint);
 }
 
-:global(.dash-app) .dataList td {
+:global(:is(.dash-app, .dashboard-dialog-content)) .dataList td {
   border-color: var(--dash-border);
   color: var(--dash-text);
 }
@@ -370,7 +418,7 @@
 
 @media (min-width: 64rem) {
   .keyValueGrid,
-  :global(.dash-app) .keyValueGrid {
+  :global(:is(.dash-app, .dashboard-dialog-content)) .keyValueGrid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
@@ -422,12 +470,12 @@
     text-transform: uppercase;
   }
 
-  :global(.dash-app) .dataList tr {
+  :global(:is(.dash-app, .dashboard-dialog-content)) .dataList tr {
     border-color: var(--dash-border);
     background: #fff;
   }
 
-  :global(.dash-app) .dataList td::before {
+  :global(:is(.dash-app, .dashboard-dialog-content)) .dataList td::before {
     color: var(--dash-faint);
   }
 }

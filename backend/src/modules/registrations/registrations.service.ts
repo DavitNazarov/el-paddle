@@ -501,6 +501,183 @@ export async function replaceRegistrationPlayer(input: {
   });
 }
 
+/**
+ * The team pulls itself out.
+ *
+ * Every ingredient already existed — the `WITHDRAWN` status, `withdrawnAt`, the
+ * `REGISTRATION_WITHDRAWN` notification — but only an administrator could reach
+ * them, so a club that could not travel had to email someone. The club leader
+ * owns the entry, so the club leader ends it, under the same locked-bracket and
+ * event-stage guards that protect a lineup change: once a draw holds the entry,
+ * the way out is a walkover an admin records, not a silent disappearance.
+ */
+export async function withdrawRegistration(input: {
+  registrationId: string;
+  actorId: string;
+  reason: string;
+  expectedVersion: number;
+  commandId: string;
+}) {
+  const hash = payloadHash(input);
+
+  return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'registration.withdraw', input.commandId, hash);
+    if (replay) {
+      const current = await tx.eventRegistration.findUnique({
+        where: { id: input.registrationId },
+        include: registrationInclude,
+      });
+      if (!current) jsonError('Registration not found.', 404);
+      return current;
+    }
+
+    const [actorMembership, registration] = await Promise.all([
+      tx.clubMember.findUnique({ where: { userId: input.actorId } }),
+      tx.eventRegistration.findUnique({
+        where: { id: input.registrationId },
+        include: registrationInclude,
+      }),
+    ]);
+
+    assertClubLeaderCanManageRegistration(actorMembership, registration?.clubId ?? null);
+    if (!registration) jsonError('Registration not found.', 404);
+    if (registration.version !== input.expectedVersion) {
+      jsonError('Registration changed. Refresh and try again.', 409);
+    }
+    if (registration.status === RegistrationStatus.WITHDRAWN) return registration;
+    assertLeaderEditableRegistrationStatus(registration.status);
+    assertRegistrationTransition(registration.status, RegistrationStatus.WITHDRAWN);
+    if (
+      registration.event.status === EventStatus.ONGOING ||
+      registration.event.status === EventStatus.COMPLETED
+    ) {
+      jsonError('The event has already started. Ask an administrator to record a walkover.', 409);
+    }
+
+    const lockedBracket = await tx.bracket.findFirst({
+      where: {
+        eventId: registration.eventId,
+        categoryId: registration.categoryId,
+        status: BracketStatus.LOCKED,
+      },
+      select: { id: true },
+    });
+    if (lockedBracket) {
+      jsonError('The draw is locked, so this team is already placed. Ask an administrator to withdraw it.', 409);
+    }
+
+    const updated = await tx.eventRegistration.update({
+      where: { id: registration.id },
+      data: {
+        status: RegistrationStatus.WITHDRAWN,
+        publicStatusReason: input.reason || null,
+        withdrawnAt: new Date(),
+        version: { increment: 1 },
+      },
+      include: registrationInclude,
+    });
+
+    await tx.registrationStatusHistory.create({
+      data: {
+        registrationId: registration.id,
+        fromStatus: registration.status,
+        toStatus: RegistrationStatus.WITHDRAWN,
+        actorId: input.actorId,
+        publicReason: input.reason || null,
+        commandId: input.commandId,
+      },
+    });
+
+    await writeAudit(tx, {
+      action: 'registration.withdrawn',
+      actorId: input.actorId,
+      eventId: registration.eventId,
+      entityType: 'EventRegistration',
+      entityId: registration.id,
+      before: { status: registration.status },
+      after: { status: RegistrationStatus.WITHDRAWN },
+      publicReason: input.reason || undefined,
+    });
+
+    await queueNotifications(tx, [updated.owner, updated.teammate].map((player) => ({
+      recipientUserId: player.id,
+      recipientEmail: player.email,
+      type: NotificationType.REGISTRATION_WITHDRAWN,
+      title: 'Entry withdrawn',
+      message: `Your club withdrew its team from ${updated.event.title}.${input.reason ? ` ${input.reason}` : ''}`,
+      entityType: 'EventRegistration',
+      entityId: updated.id,
+      eventId: updated.eventId,
+      actionPath: `/dashboard/entries?entry=${updated.id}`,
+      version: updated.version,
+      metadata: { previousStatus: registration.status, status: RegistrationStatus.WITHDRAWN },
+    })));
+
+    await queueOutbox(tx, {
+      topic: 'registration.status.updated',
+      aggregateType: 'EventRegistration',
+      aggregateId: updated.id,
+      payload: {
+        eventId: updated.eventId,
+        registrationId: updated.id,
+        status: updated.status,
+        version: updated.version,
+      },
+      deduplicationKey: `registration:${updated.id}:status:v${updated.version}`,
+    });
+    await saveCommandReceipt(tx, {
+      actorId: input.actorId,
+      action: 'registration.withdraw',
+      commandId: input.commandId,
+      hash,
+      response: { registrationId: updated.id, version: updated.version },
+    });
+
+    return updated;
+  });
+}
+
+/**
+ * One decision applied to several entries, in one transaction per entry so a
+ * refusal on the twentieth does not undo the nineteen before it. The caller gets
+ * back a row per entry saying which way it went, because "approve these 32" that
+ * silently skipped one is worse than one that says which.
+ */
+export async function updateRegistrationStatusBatch(input: {
+  eventId: string;
+  registrationIds: string[];
+  status: RegistrationStatus;
+  publicReason: string;
+  internalNote: string;
+  adminId: string;
+  commandId: string;
+}) {
+  const results: { registrationId: string; ok: boolean; status?: RegistrationStatus; error?: string }[] = [];
+  for (const registrationId of input.registrationIds) {
+    try {
+      const registration = await updateRegistrationStatus(
+        registrationId,
+        input.status,
+        input.publicReason,
+        input.adminId,
+        {
+          eventId: input.eventId,
+          internalNote: input.internalNote,
+          commandId: `${input.commandId}:${registrationId}`,
+        },
+      );
+      results.push({ registrationId, ok: true, status: registration.status });
+    } catch (error) {
+      results.push({
+        registrationId,
+        ok: false,
+        error: error instanceof Error ? error.message : 'Could not update this entry.',
+      });
+    }
+  }
+  return results;
+}
+
 export async function updateRegistrationRosterPublication(input: {
   eventId: string;
   actorId: string;
@@ -628,7 +805,10 @@ export async function updateRegistrationStatus(
 }
 
 const allowedRegistrationTransitions: Record<RegistrationStatus, RegistrationStatus[]> = {
-  PENDING: [RegistrationStatus.APPROVED, RegistrationStatus.DECLINED, RegistrationStatus.NEEDS_CHANGES, RegistrationStatus.WAITLISTED, RegistrationStatus.CANCELLED],
+  // WITHDRAWN is reachable from PENDING because a team may pull out before
+  // anyone has reviewed it. CANCELLED stays the organiser's word for the same
+  // outcome; WITHDRAWN is the team's.
+  PENDING: [RegistrationStatus.APPROVED, RegistrationStatus.DECLINED, RegistrationStatus.NEEDS_CHANGES, RegistrationStatus.WAITLISTED, RegistrationStatus.CANCELLED, RegistrationStatus.WITHDRAWN],
   APPROVED: [RegistrationStatus.DECLINED, RegistrationStatus.WITHDRAWN, RegistrationStatus.CANCELLED],
   DECLINED: [],
   NEEDS_CHANGES: [RegistrationStatus.PENDING, RegistrationStatus.APPROVED, RegistrationStatus.DECLINED, RegistrationStatus.WAITLISTED, RegistrationStatus.CANCELLED, RegistrationStatus.WITHDRAWN],

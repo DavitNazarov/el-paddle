@@ -2,13 +2,24 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Search, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, Trophy, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { PlayerAvatar, PublicPageShell } from '@/components/tournament/PublicDirectoryClients';
+import { ClubCrest, PlayerAvatar, PublicPageShell } from '@/components/tournament/PublicDirectoryClients';
+import { EmptyTournamentState } from '@/components/tournament/TournamentUI';
 import { fillTemplate } from '@/lib/i18n/tournament';
+
+/** What the club has done on court, from `/api/public/clubs/:slug/stats`. */
+export type ClubRecord = {
+  members: number;
+  eventsEntered: number;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  titles: number;
+};
 
 export type ClubClientDto = {
   name: string;
@@ -27,7 +38,72 @@ export type ClubClientDto = {
   }[];
 };
 
-export function ClubClient({ club }: { club: ClubClientDto }) {
+/**
+ * The club's tournament record, read the same way a player's is: the counts
+ * first, then the one derived number a visitor actually compares clubs on.
+ * Titles are singled out because a final is the only match that ends a draw.
+ */
+function ClubRecordCard({ record }: { record: ClubRecord }) {
+  const { dictionary } = useI18n();
+  const copy = dictionary.club.record;
+  const winRate = record.matchesPlayed ? Math.round((record.wins / record.matchesPlayed) * 100) : null;
+  // The roster below states the club's size, and it drops admin accounts that
+  // `record.members` still counts. Saying it twice would say it two ways.
+  const counts: Array<[string, number]> = [
+    [copy.eventsEntered, record.eventsEntered],
+    [copy.matchesPlayed, record.matchesPlayed],
+    [copy.wins, record.wins],
+    [copy.losses, record.losses],
+  ];
+
+  return (
+    <Card className="rounded-sm border-[var(--padel-line)] bg-[var(--padel-red-2)]/40 text-[var(--padel-ivory)]">
+      <CardContent className="p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--padel-gold)]">{copy.title}</p>
+          {record.titles ? (
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--padel-gold)]">
+              <Trophy className="h-4 w-4" aria-hidden="true" />
+              <span className="tabular-nums">{record.titles}</span> {copy.titles.toLowerCase()}
+            </p>
+          ) : null}
+        </div>
+
+        <dl className="mt-6 grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-4">
+          {counts.map(([label, value]) => (
+            <div key={label}>
+              <dt className="text-[0.65rem] font-semibold uppercase text-[var(--padel-muted)]">{label}</dt>
+              <dd className="font-display mt-1.5 text-3xl tabular-nums">{value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="mt-6 border-t border-[var(--padel-line)] pt-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-[0.65rem] font-semibold uppercase text-[var(--padel-muted)]">{copy.winRate}</p>
+            <p className="font-display text-2xl tabular-nums">{winRate === null ? '—' : `${winRate}%`}</p>
+          </div>
+          {winRate === null ? (
+            <p className="mt-2 text-sm leading-6 text-[var(--padel-muted)]">{copy.noMatchesYet}</p>
+          ) : (
+            <>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--padel-ivory)]/10" aria-hidden="true">
+                <div className="h-full rounded-full bg-[var(--padel-gold)]" style={{ width: `${winRate}%` }} />
+              </div>
+              <p className="mt-2 text-sm leading-6 text-[var(--padel-muted)]">
+                {fillTemplate(copy.winRateOf, { wins: record.wins, matches: record.matchesPlayed })}
+              </p>
+            </>
+          )}
+        </div>
+
+        <p className="mt-5 text-xs leading-5 text-[var(--padel-muted)]">{copy.description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ClubClient({ club, record = null }: { club: ClubClientDto; record?: ClubRecord | null }) {
   const { dictionary } = useI18n();
   const copy = dictionary.club;
   const [query, setQuery] = useState('');
@@ -49,21 +125,19 @@ export function ClubClient({ club }: { club: ClubClientDto }) {
         {copy.allClubs}
       </Link>
 
-      <div className="mt-8 flex flex-wrap items-center gap-5">
-        {club.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={club.logoUrl} alt="" className="h-20 w-20 shrink-0 rounded-full border border-[var(--padel-line)] object-cover" />
-        ) : (
-          <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border border-[var(--padel-line)] bg-[var(--padel-ivory)]/10">
-            <Users className="h-9 w-9 text-[var(--padel-gold)]" aria-hidden="true" />
-          </span>
-        )}
-        <Badge variant="gold">{copy.badge}</Badge>
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem] lg:items-start">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-5">
+            <ClubCrest name={club.name} logoUrl={club.logoUrl} size="lg" />
+            <Badge variant="gold">{copy.badge}</Badge>
+          </div>
+          <h1 className="font-display mt-5 text-5xl font-semibold md:text-7xl">{club.name}</h1>
+          <p className="mt-5 max-w-2xl text-base leading-8 text-[var(--padel-muted)]">
+            {club.description || copy.fallbackDescription}
+          </p>
+        </div>
+        {record ? <ClubRecordCard record={record} /> : null}
       </div>
-      <h1 className="font-display mt-5 text-5xl font-semibold md:text-7xl">{club.name}</h1>
-      <p className="mt-5 max-w-2xl text-base leading-8 text-[var(--padel-muted)]">
-        {club.description || copy.fallbackDescription}
-      </p>
 
       <section className="mt-12 border-t border-[var(--padel-line)] pt-10" aria-labelledby="club-members-title">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -132,14 +206,8 @@ export function ClubClient({ club }: { club: ClubClientDto }) {
           ))}
         </div>
 
-        {!club.members.length ? (
-          <Card className="mt-6 rounded-sm border-[var(--padel-line)] bg-[var(--padel-red-2)]/40 text-[var(--padel-muted)]">
-            <CardContent className="p-6">{copy.empty}</CardContent>
-          </Card>
-        ) : !filtered.length ? (
-          <Card className="mt-6 rounded-sm border-[var(--padel-line)] bg-[var(--padel-red-2)]/40 text-[var(--padel-muted)]">
-            <CardContent className="p-6">{copy.searchEmpty}</CardContent>
-          </Card>
+        {!filtered.length ? (
+          <div className="mt-6"><EmptyTournamentState title={club.members.length ? copy.searchEmpty : copy.empty} /></div>
         ) : null}
       </section>
     </PublicPageShell>

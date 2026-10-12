@@ -77,48 +77,69 @@
   gap: 0.5rem;
 }
 
-.chips {
+/* What this event is waiting on: one sentence, in the same words its own
+   workspace uses. The icon and the wording carry the urgency; the colour only
+   reinforces them. */
+.need {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  min-width: 0;
+  flex: 1 1 16rem;
+  align-items: flex-start;
   gap: 0.4rem;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border: 1px solid var(--dash-border);
-  border-radius: 999px;
-  background: var(--dash-tint);
-  padding: 0.15rem 0.55rem;
-  font-size: 0.6875rem;
-  font-weight: 650;
+  margin: 0;
   color: var(--dash-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  font-size: 0.8125rem;
+  line-height: 1.2rem;
 }
 
-.chip svg {
-  height: 0.7rem;
-  width: 0.7rem;
+.need svg {
+  height: 0.9rem;
+  width: 0.9rem;
+  flex: none;
+  margin-top: 0.15rem;
 }
 
-.chip[data-tone='warning'] {
-  border-color: rgba(168, 103, 18, 0.28);
-  background: var(--dash-amber-soft);
+.need[data-tone='urgent'] {
+  color: var(--dash-primary);
+  font-weight: 650;
+}
+
+.need[data-tone='todo'] {
   color: var(--dash-amber);
 }
 
-.chip[data-tone='live'] {
-  border-color: rgba(164, 22, 26, 0.28);
-  background: var(--dash-primary-soft);
-  color: var(--dash-primary);
+.need[data-tone='clear'] {
+  color: var(--dash-muted);
 }
 
-.quiet {
-  font-size: 0.75rem;
+.need[data-tone='unknown'] {
   color: var(--dash-faint);
+  font-style: italic;
+}
+
+.needText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.needMore {
+  flex: none;
+  color: var(--dash-faint);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* The lifecycle stage, stated in a word rather than drawn as dots — the row
+   already sorts by urgency, so its position carries the progression. */
+.stage {
+  flex: none;
+  color: var(--dash-faint);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* Row controls cluster to the right; the open link stays last so it is always

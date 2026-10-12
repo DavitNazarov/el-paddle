@@ -14,6 +14,8 @@ import { bracketsRouter } from './modules/brackets/brackets.routes.js';
 import { schedulingRouter } from './modules/scheduling/scheduling.routes.js';
 import { matchesRouter } from './modules/matches/matches.routes.js';
 import { operationsRouter } from './modules/operations/operations.routes.js';
+import { resultsRouter } from './modules/results/results.routes.js';
+import { searchRouter } from './modules/search/search.routes.js';
 
 export const router = Router();
 
@@ -32,3 +34,5 @@ router.use(bracketsRouter);
 router.use(schedulingRouter);
 router.use(matchesRouter);
 router.use(operationsRouter);
+router.use(resultsRouter);
+router.use(searchRouter);

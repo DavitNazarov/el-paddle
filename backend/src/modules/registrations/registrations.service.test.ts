@@ -32,6 +32,27 @@ describe('registration lifecycle', () => {
     expect(() => assertRegistrationTransition(RegistrationStatus.DECLINED, RegistrationStatus.APPROVED)).toThrow();
     expect(() => assertRegistrationTransition(RegistrationStatus.CANCELLED, RegistrationStatus.PENDING)).toThrow();
   });
+
+  /**
+   * A club may pull out before anyone has looked at its entry. `CANCELLED` is
+   * the organiser's word for the same outcome and stays reachable too; the two
+   * are not interchangeable, which is why both edges exist.
+   */
+  it('lets a team withdraw from every state a club leader can still act on', () => {
+    for (const from of [
+      RegistrationStatus.PENDING,
+      RegistrationStatus.APPROVED,
+      RegistrationStatus.NEEDS_CHANGES,
+      RegistrationStatus.WAITLISTED,
+    ]) {
+      expect(() => assertRegistrationTransition(from, RegistrationStatus.WITHDRAWN)).not.toThrow();
+    }
+  });
+
+  it('keeps a withdrawal final', () => {
+    expect(() => assertRegistrationTransition(RegistrationStatus.WITHDRAWN, RegistrationStatus.APPROVED)).toThrow();
+    expect(() => assertRegistrationTransition(RegistrationStatus.WITHDRAWN, RegistrationStatus.PENDING)).toThrow();
+  });
 });
 
 describe('club leader lineup management', () => {

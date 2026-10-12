@@ -30,6 +30,25 @@ describe('resolveSharedCookieDomain', () => {
     ).toBe('.elpadell.com');
   });
 
+  it('does not invent a cookie domain on a shared hosting suffix', () => {
+    expect(
+      resolveSharedCookieDomain({
+        frontendUrls: ['https://elpadel-web.onrender.com'],
+        backendUrl: 'https://elpadel-api.onrender.com',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('rejects an explicit hosting-suffix COOKIE_DOMAIN', () => {
+    expect(() =>
+      resolveSharedCookieDomain({
+        cookieDomain: '.onrender.com',
+        frontendUrls: ['https://elpadel-web.onrender.com'],
+        backendUrl: 'https://elpadel-api.onrender.com',
+      }),
+    ).toThrow(/COOKIE_DOMAIN/);
+  });
+
   it('rejects URL-shaped COOKIE_DOMAIN values', () => {
     expect(() =>
       resolveSharedCookieDomain({

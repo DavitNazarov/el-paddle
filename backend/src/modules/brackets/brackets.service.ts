@@ -1,10 +1,12 @@
-import { BracketStatus, MatchResultType, MatchRound, MatchSide, MatchStatus, NotificationType, OpponentRequestStatus, ScoringMode, type Prisma } from '../../generated/prisma/client.js';
+import { BracketStatus, MatchRound, MatchSide, MatchStatus, NotificationType, OpponentRequestStatus, ScoringMode, type Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../../database/prisma.js';
 import { jsonError } from '../../common/http.js';
 import { findCommandReceipt, payloadHash, saveCommandReceipt } from '../../common/commands.js';
 import { queueNotifications, queueOutbox, writeAudit } from '../../common/domain-events.js';
 import { entryUserSelect } from '../../common/includes.js';
+import { writeParticipantSnapshot } from '../../common/snapshots.js';
 import { isValidSetCount } from '../matches/set-engine.js';
+import { applyByes } from './byes.js';
 
 export const bracketInclude = {
   eventCategory: { include: { category: true } },
@@ -253,24 +255,6 @@ export async function placeBracketEntry(input: { eventId: string; bracketId: str
   });
 }
 
-async function snapshotEntry(tx: Prisma.TransactionClient, matchId: string, side: MatchSide, entryId: string) {
-  const entry = await tx.eventRegistration.findUnique({ where: { id: entryId }, include: { owner: { select: { ...entryUserSelect, clubMemberships: { select: { club: { select: { id: true, name: true } } }, take: 1 } } }, teammate: { select: entryUserSelect } } });
-  if (!entry) jsonError('Bracket entry not found.', 409);
-  const club = entry.owner.clubMemberships[0]?.club;
-  if (!club) jsonError('Bracket entry no longer belongs to a club.', 409);
-  const name = (user: typeof entry.owner) => [user.name, user.surname].filter(Boolean).join(' ') || user.email;
-  await tx.matchParticipantSnapshot.create({ data: { matchId, side, entryId, ownerUserId: entry.owner.id, ownerName: name(entry.owner), teammateUserId: entry.teammate.id, teammateName: name(entry.teammate as typeof entry.owner), clubId: club.id, clubName: club.name } });
-}
-
-async function advanceBye(tx: Prisma.TransactionClient, matchId: string, entryId: string) {
-  const match = await tx.match.update({ where: { id: matchId }, data: { winnerEntryId: entryId, status: MatchStatus.COMPLETED, resultType: MatchResultType.BYE, completedAt: new Date(), version: { increment: 1 } } });
-  if (match.nextMatchId && match.nextMatchSlot) {
-    const data = match.nextMatchSlot === MatchSide.A ? { participantAEntryId: entryId } : { participantBEntryId: entryId };
-    const next = await tx.match.update({ where: { id: match.nextMatchId }, data });
-    if (next.participantAEntryId && next.participantBEntryId) await tx.match.update({ where: { id: next.id }, data: { status: MatchStatus.READY } });
-  }
-}
-
 export async function lockBracket(input: { eventId: string; bracketId: string; actorId: string; expectedVersion: number; commandId: string }) {
   const hash = payloadHash(input);
   return prisma.$transaction(async (tx) => {
@@ -285,15 +269,185 @@ export async function lockBracket(input: { eventId: string; bracketId: string; a
     const entryIds = firstRound.flatMap((match) => [match.participantAEntryId, match.participantBEntryId]).filter((id): id is string => Boolean(id));
     if (new Set(entryIds).size !== entryIds.length || entryIds.length < 2) jsonError('Bracket contains missing or duplicate entries.', 409);
     for (const match of firstRound) {
-      if (match.participantAEntryId) await snapshotEntry(tx, match.id, MatchSide.A, match.participantAEntryId);
-      if (match.participantBEntryId) await snapshotEntry(tx, match.id, MatchSide.B, match.participantBEntryId);
-      if (match.participantAEntryId && !match.participantBEntryId) await advanceBye(tx, match.id, match.participantAEntryId);
-      if (!match.participantAEntryId && match.participantBEntryId) await advanceBye(tx, match.id, match.participantBEntryId);
+      if (match.participantAEntryId) await writeParticipantSnapshot(tx, { matchId: match.id, side: MatchSide.A, entryId: match.participantAEntryId });
+      if (match.participantBEntryId) await writeParticipantSnapshot(tx, { matchId: match.id, side: MatchSide.B, entryId: match.participantBEntryId });
     }
-    const updated = await tx.bracket.update({ where: { id: bracket.id }, data: { status: BracketStatus.LOCKED, lockedAt: new Date(), lockedById: input.actorId, version: { increment: 1 } }, include: bracketInclude });
+    await tx.bracket.update({ where: { id: bracket.id }, data: { status: BracketStatus.LOCKED, lockedAt: new Date(), lockedById: input.actorId, version: { increment: 1 } } });
+    // Byes are resolved after the draw is frozen, so a bye that decides the final
+    // can complete the bracket rather than be overwritten by the lock.
+    await applyByes(tx, bracket.id);
+    const updated = await tx.bracket.findUniqueOrThrow({ where: { id: bracket.id }, include: bracketInclude });
     await writeAudit(tx, { action: 'bracket.locked', actorId: input.actorId, eventId: bracket.eventId, entityType: 'Bracket', entityId: bracket.id, before: { status: bracket.status }, after: { status: updated.status } });
     await queueOutbox(tx, { topic: 'bracket.locked', aggregateType: 'Bracket', aggregateId: bracket.id, payload: { eventId: bracket.eventId, bracketId: bracket.id, version: updated.version }, deduplicationKey: `bracket:${bracket.id}:locked:v${updated.version}` });
     await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.lock', commandId: input.commandId, hash });
+    return updated;
+  });
+}
+
+/**
+ * Frees the entries a draw is holding — the applied pairings go back to being
+ * approved pairings. Shared by discarding a draft and by unlocking, because in
+ * both cases the match a pairing was applied to is about to stop existing in the
+ * form the pairing claimed.
+ */
+async function releaseAppliedPairings(tx: Prisma.TransactionClient, bracketId: string) {
+  const matchIds = (await tx.match.findMany({ where: { bracketId }, select: { id: true } })).map((match) => match.id);
+  if (!matchIds.length) return [];
+  const applied = await tx.opponentRequest.findMany({
+    where: { appliedMatchId: { in: matchIds }, status: OpponentRequestStatus.APPLIED_TO_BRACKET },
+    select: { id: true },
+  });
+  if (!applied.length) return [];
+  await tx.opponentRequest.updateMany({
+    where: { id: { in: applied.map((request) => request.id) } },
+    data: { status: OpponentRequestStatus.APPROVED_BY_ADMIN, appliedMatchId: null, version: { increment: 1 } },
+  });
+  return applied.map((request) => request.id);
+}
+
+/**
+ * Throw a draft draw away.
+ *
+ * One bracket exists per event category, so a draw built against the wrong
+ * category — or seeded before half the entries were approved — used to be
+ * permanent: it could be regenerated but never removed, and its category could
+ * never be given a different one. Draft only, because a locked draw holds frozen
+ * identity and results; that one is unlocked first.
+ */
+export async function deleteBracket(input: { eventId: string; bracketId: string; actorId: string; commandId: string }) {
+  const hash = payloadHash(input);
+  return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'bracket.delete', input.commandId, hash);
+    if (replay) return { bracketId: input.bracketId, releasedRequestIds: [] as string[] };
+
+    const bracket = await tx.bracket.findFirst({ where: { id: input.bracketId, eventId: input.eventId } });
+    if (!bracket) jsonError('Bracket not found.', 404);
+    if (bracket.status !== BracketStatus.DRAFT) {
+      jsonError('Only a draft draw can be discarded. Unlock this one first.', 409);
+    }
+    const event = await tx.event.findUnique({ where: { id: input.eventId }, select: { status: true } });
+    if (event?.status === 'COMPLETED') jsonError('Reopen the completed event before editing its bracket.', 409);
+
+    const releasedRequestIds = await releaseAppliedPairings(tx, bracket.id);
+    await writeAudit(tx, {
+      action: 'bracket.deleted',
+      actorId: input.actorId,
+      eventId: bracket.eventId,
+      entityType: 'Bracket',
+      entityId: bracket.id,
+      before: { categoryId: bracket.categoryId, size: bracket.size, status: bracket.status },
+      after: { deleted: true, releasedRequestIds },
+    });
+    // Matches, round configs and snapshots cascade from the bracket row.
+    await tx.bracket.delete({ where: { id: bracket.id } });
+    await queueOutbox(tx, {
+      topic: 'bracket.updated',
+      aggregateType: 'Bracket',
+      aggregateId: bracket.id,
+      payload: { eventId: bracket.eventId, bracketId: bracket.id, deleted: true },
+      deduplicationKey: `bracket:${bracket.id}:deleted`,
+    });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.delete', commandId: input.commandId, hash });
+    return { bracketId: bracket.id, releasedRequestIds };
+  });
+}
+
+/**
+ * The mirror of the completed-event reopen, for a draw locked too early.
+ *
+ * Locking is the one bracket step with no way back, so a draw locked with the
+ * wrong entry — or before a late approval — could only be fixed by cancelling
+ * the category. Refused the moment the draw stops being hypothetical: a match
+ * that has started or finished for any reason other than a bye is a result, and
+ * results are corrected on the match, not by rewinding the draw around them.
+ *
+ * Publication is deliberately not cleared here. An unlock that silently
+ * unpublished would change what the public sees as a side effect of an
+ * administrative repair, so the publication is taken down first, by the person
+ * who took the decision to.
+ */
+export async function unlockBracket(input: { eventId: string; bracketId: string; actorId: string; reason: string; expectedVersion: number; commandId: string }) {
+  const hash = payloadHash(input);
+  return prisma.$transaction(async (tx) => {
+    const replay = await findCommandReceipt(tx, input.actorId, 'bracket.unlock', input.commandId, hash);
+    if (replay) return tx.bracket.findUniqueOrThrow({ where: { id: input.bracketId }, include: bracketInclude });
+
+    const bracket = await tx.bracket.findFirst({ where: { id: input.bracketId, eventId: input.eventId }, include: { matches: true } });
+    if (!bracket) jsonError('Bracket not found.', 404);
+    if (bracket.status === BracketStatus.DRAFT) jsonError('This draw is already a draft.', 409);
+    if (bracket.version !== input.expectedVersion) jsonError('Bracket changed. Refresh and try again.', 409);
+    if (bracket.publishedAt) jsonError('Unpublish the draw before unlocking it.', 409);
+
+    const played = bracket.matches.filter(
+      (match) =>
+        match.status === MatchStatus.IN_PROGRESS ||
+        (match.status === MatchStatus.COMPLETED && match.resultType !== 'BYE'),
+    );
+    if (played.length) {
+      jsonError(`Match ${played[0]!.matchNumber} has already been played, so this draw cannot be unlocked.`, 409);
+    }
+
+    const scheduled = await tx.scheduleItem.count({ where: { match: { bracketId: bracket.id } } });
+    if (scheduled) jsonError('Take this draw off the court schedule before unlocking it.', 409);
+
+    const firstRound = firstRoundForSize(bracket.size);
+    const matchIds = bracket.matches.map((match) => match.id);
+    await tx.matchParticipantSnapshot.deleteMany({ where: { matchId: { in: matchIds } } });
+
+    for (const match of bracket.matches) {
+      const keepsParticipants = match.round === firstRound;
+      const participantA = keepsParticipants ? match.participantAEntryId : null;
+      const participantB = keepsParticipants ? match.participantBEntryId : null;
+      await tx.match.update({
+        where: { id: match.id },
+        data: {
+          participantAEntryId: participantA,
+          participantBEntryId: participantB,
+          winnerEntryId: null,
+          loserEntryId: null,
+          status: participantA && participantB ? MatchStatus.READY : MatchStatus.PENDING,
+          resultType: null,
+          resultReason: null,
+          scoreA: 0,
+          scoreB: 0,
+          setCount: null,
+          startedAt: null,
+          completedAt: null,
+          version: { increment: 1 },
+        },
+      });
+    }
+
+    const updated = await tx.bracket.update({
+      where: { id: bracket.id },
+      data: {
+        status: BracketStatus.DRAFT,
+        lockedAt: null,
+        lockedById: null,
+        completedAt: null,
+        version: { increment: 1 },
+      },
+      include: bracketInclude,
+    });
+
+    await writeAudit(tx, {
+      action: 'bracket.unlocked',
+      actorId: input.actorId,
+      eventId: bracket.eventId,
+      entityType: 'Bracket',
+      entityId: bracket.id,
+      before: { status: bracket.status },
+      after: { status: updated.status },
+      publicReason: input.reason,
+    });
+    await queueOutbox(tx, {
+      topic: 'bracket.updated',
+      aggregateType: 'Bracket',
+      aggregateId: bracket.id,
+      payload: { eventId: bracket.eventId, bracketId: bracket.id, version: updated.version, unlocked: true },
+      deduplicationKey: `bracket:${bracket.id}:unlocked:v${updated.version}`,
+    });
+    await saveCommandReceipt(tx, { actorId: input.actorId, action: 'bracket.unlock', commandId: input.commandId, hash });
     return updated;
   });
 }

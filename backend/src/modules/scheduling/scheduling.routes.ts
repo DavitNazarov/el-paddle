@@ -3,11 +3,20 @@ import { Capability, UserRole } from '../../generated/prisma/client.js';
 import { isEventOrganiser, requireEventCapability, userHasCapability } from '../../common/capabilities.js';
 import { requireCommandId } from '../../common/commands.js';
 import { asyncHandler, cleanEmail, cleanString, jsonError, requireParamId, setPublicCache } from '../../common/http.js';
+import { csvFilename, sendCsv, wantsCsv } from '../../common/csv.js';
 import { serializeAdminUser, serializeCourtSchedule, serializeScheduleItem } from '../../common/serializers.js';
 import { requireUser } from '../auth/auth.service.js';
-import { addEventJudge, assignJudge, createCourt, getJudgeHome, listEventJudges, listEventSchedule, listJudgeAssignments, publishSchedule, removeScheduleItem, reorderSchedule, requireEventCourtQueue, requireJudgeQueue, revokeEventJudge, scheduleMatch, updateCourt, updateScheduleItem } from './scheduling.service.js';
+import { addEventJudge, assignJudge, autoFillSchedule, createCourt, getJudgeHome, listEventJudges, listEventSchedule, listJudgeAssignments, listUnscheduledMatches, publishSchedule, removeScheduleItem, reorderSchedule, requireEventCourtQueue, requireJudgeQueue, revokeCourtJudgeAssignment, revokeEventJudge, scheduleMatch, updateCourt, updateScheduleItem } from './scheduling.service.js';
 
 export const schedulingRouter = Router();
+
+/** Both players of an entry on one line, for a printed sheet. */
+function teamLabel(entry: { owner: { name: string | null; surname: string | null }; teammate: { name: string | null; surname: string | null } } | null) {
+  if (!entry) return '';
+  const name = (player: { name: string | null; surname: string | null }) =>
+    [player.name, player.surname].filter(Boolean).join(' ');
+  return `${name(entry.owner)} / ${name(entry.teammate)}`;
+}
 
 function dateValue(value: unknown) {
   if (!value) return undefined;
@@ -20,6 +29,29 @@ schedulingRouter.get('/api/admin/events/:eventId/schedule', asyncHandler(async (
   const eventId = requireParamId(request.params.eventId);
   await requireEventCapability(request, eventId, Capability.SCHEDULE_MANAGE);
   const courts = await listEventSchedule(eventId);
+  if (wantsCsv(request)) {
+    // Court order, then queue order — the order the day is actually played in,
+    // which is what a printed court sheet has to be.
+    sendCsv(
+      response,
+      csvFilename('schedule', eventId),
+      ['Court', 'Position', 'Match', 'Round', 'Category', 'Status', 'Planned start', 'Team A', 'Team B'],
+      courts.flatMap((court) =>
+        court.scheduleItems.map((item) => [
+          court.name,
+          item.queuePosition,
+          item.match.matchNumber,
+          item.match.round,
+          item.match.bracket.eventCategory.category.name,
+          item.status,
+          item.plannedStartAt?.toISOString() ?? '',
+          teamLabel(item.match.participantA),
+          teamLabel(item.match.participantB),
+        ]),
+      ),
+    );
+    return;
+  }
   response.json({ courts: courts.map((court) => serializeCourtSchedule(court, true)) });
 }));
 
@@ -71,6 +103,40 @@ schedulingRouter.post('/api/admin/events/:eventId/courts/:courtId/judge-assignme
   const eventId = requireParamId(request.params.eventId);
   const admin = await requireEventCapability(request, eventId, Capability.SCHEDULE_MANAGE);
   response.status(201).json({ assignment: await assignJudge({ eventId, courtId: requireParamId(request.params.courtId), judgeId: requireParamId(request.body.judgeId), actorId: admin.id, canManageAllJudges: await userHasCapability(admin.id, admin.role, Capability.JUDGE_MANAGE), startsAt: dateValue(request.body.startsAt)!, endsAt: dateValue(request.body.endsAt)! }) });
+}));
+
+schedulingRouter.delete('/api/admin/events/:eventId/courts/:courtId/judge-assignments/:assignmentId', asyncHandler(async (request, response) => {
+  const eventId = requireParamId(request.params.eventId);
+  const admin = await requireEventCapability(request, eventId, Capability.SCHEDULE_MANAGE);
+  await revokeCourtJudgeAssignment({
+    eventId,
+    courtId: requireParamId(request.params.courtId),
+    assignmentId: requireParamId(request.params.assignmentId, 'assignment id'),
+    actorId: admin.id,
+  });
+  response.json({ ok: true });
+}));
+
+schedulingRouter.get('/api/admin/events/:eventId/schedule/unscheduled', asyncHandler(async (request, response) => {
+  const eventId = requireParamId(request.params.eventId);
+  await requireEventCapability(request, eventId, Capability.SCHEDULE_MANAGE);
+  const matches = await listUnscheduledMatches(eventId);
+  response.json({ matches, total: matches.length });
+}));
+
+schedulingRouter.post('/api/admin/events/:eventId/schedule/auto-fill', asyncHandler(async (request, response) => {
+  const eventId = requireParamId(request.params.eventId);
+  const admin = await requireEventCapability(request, eventId, Capability.SCHEDULE_MANAGE);
+  const result = await autoFillSchedule({
+    eventId,
+    actorId: admin.id,
+    // Default to matches whose two teams are known; `readyOnly: false` opts in
+    // to laying out the later rounds as placeholders too.
+    readyOnly: request.body.readyOnly !== false,
+    canManageAllJudges: await userHasCapability(admin.id, admin.role, Capability.JUDGE_MANAGE),
+    commandId: requireCommandId(request.body.commandId),
+  });
+  response.json({ placed: result.placed.length, skipped: result.skipped, items: result.placed });
 }));
 
 schedulingRouter.post('/api/admin/events/:eventId/schedule/items', asyncHandler(async (request, response) => {

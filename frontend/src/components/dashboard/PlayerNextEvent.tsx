@@ -8,22 +8,10 @@ import { StatusLabel } from '@/components/tournament/TournamentUI';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { fillTemplate, tournamentCopy, tournamentRound, tournamentStatus } from '@/lib/i18n/tournament';
 import type { EventDto, NextMatchDto, RegistrationDto } from '@/types/dashboard';
+import { daysUntil } from '@/lib/utils/dates';
 import { entryNoteKey, entryPath, entryStage, entryStep } from './entryStatusModel';
 import { pairingNoteKey, type PairingState } from './pairingModel';
 import styles from './PlayerHome.module.css';
-
-/**
- * Whole days from now until the event, floored. Rendered as a count rather than
- * a formatted date because "in 6 days" is the fact a competitor is checking;
- * the exact date sits underneath it.
- */
-export function daysUntil(date: string, now: Date = new Date()) {
-  const day = 24 * 60 * 60 * 1000;
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const target = new Date(date);
-  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
-  return Math.round((startOfTarget - startOfToday) / day);
-}
 
 const outlineLinkClassName =
   'inline-flex min-h-11 items-center gap-2 rounded-md border border-[var(--dash-border)] px-4 text-sm font-semibold text-[var(--dash-text)] transition-colors hover:border-[var(--dash-border-strong)] hover:bg-[var(--dash-primary-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--padel-focus-ring)]';

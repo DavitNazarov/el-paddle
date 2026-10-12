@@ -188,6 +188,38 @@ export async function createUserByAdmin(input: CreateUserInput) {
   return { user: full!, invited: true as const };
 }
 
+/**
+ * Send an invitation again.
+ *
+ * The invite token is stored as a hash and can never be read back, so an
+ * invitation that went to a full mailbox, a typo'd forward, or simply expired
+ * left the account permanently stranded in `INVITED`: the only repair was
+ * deleting the account and recreating it, which loses whatever club it was
+ * already attached to. Outstanding tokens are retired first, so a resend
+ * replaces the old link rather than adding a second working one.
+ */
+export async function resendUserInvite(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, status: true },
+  });
+  if (!user) jsonError('User not found.', 404);
+  if (user.status !== UserStatus.INVITED) {
+    jsonError('This account has already been activated, so it has no invitation to re-send.', 409);
+  }
+
+  const inviteToken = createInviteToken();
+  await prisma.$transaction([
+    prisma.inviteToken.deleteMany({ where: { userId: user.id, usedAt: null } }),
+    prisma.inviteToken.create({
+      data: { userId: user.id, tokenHash: hashToken(inviteToken), expiresAt: addDays(14) },
+    }),
+  ]);
+
+  await sendAccountInviteEmail(user.email, inviteToken, user.role);
+  return { email: user.email };
+}
+
 /** The account fields a user may read and edit about themselves. */
 export async function getOwnAccount(userId: string) {
   const user = await prisma.user.findUnique({

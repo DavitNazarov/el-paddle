@@ -25,6 +25,90 @@ export function pairLabel(bracket: BracketDto, match: MatchDto, side: 'A' | 'B',
   return source ? fillTemplate(copy.winnerOfMatch, { number: source.matchNumber }) : copy.toBeDetermined;
 }
 
+/**
+ * Byes, read off the draw's shape rather than its recorded state. A slot no team
+ * can ever arrive at decides the match beside it: whoever stands there walks into
+ * the next round, and walks again if the branch feeding that round is empty too.
+ * The server applies exactly this when the bracket locks, so a draft reads the way
+ * the locked draw will.
+ */
+export type DrawByes = {
+  /** Matches decided without being played. */
+  byeMatchIds: Set<string>;
+  /** Matches no team can ever reach — the hole a rearranged draw leaves behind. */
+  emptyMatchIds: Set<string>;
+  /** Entry standing at `matchId:side` once every bye below it is applied. */
+  occupants: Map<string, string>;
+};
+
+export function byeSlotKey(matchId: string, side: 'A' | 'B') {
+  return `${matchId}:${side}`;
+}
+
+export function readByes(bracket: BracketDto): DrawByes {
+  // Match numbers run straight through the draw, so playing order is also the
+  // order in which a bye can be known: every feeder is read before its target.
+  const ordered = [...bracket.matches].sort((a, b) => a.matchNumber - b.matchNumber);
+  const feeders = new Map<string, Partial<Record<'A' | 'B', MatchDto>>>();
+  for (const match of ordered) {
+    if (!match.nextMatchId || !match.nextMatchSlot) continue;
+    const target = feeders.get(match.nextMatchId) ?? {};
+    target[match.nextMatchSlot] = match;
+    feeders.set(match.nextMatchId, target);
+  }
+
+  const byes: DrawByes = { byeMatchIds: new Set(), emptyMatchIds: new Set(), occupants: new Map() };
+  const producesWinner = new Map<string, boolean>();
+  const occupantOf = (match: MatchDto, side: 'A' | 'B') =>
+    (side === 'A' ? match.participantAEntryId : match.participantBEntryId) ?? byes.occupants.get(byeSlotKey(match.id, side)) ?? null;
+
+  for (const match of ordered) {
+    if (match.status === 'CANCELLED') {
+      byes.emptyMatchIds.add(match.id);
+      producesWinner.set(match.id, false);
+      continue;
+    }
+    if (match.resultType === 'BYE') byes.byeMatchIds.add(match.id);
+    if (match.status !== 'PENDING' && match.status !== 'READY') {
+      producesWinner.set(match.id, true);
+      continue;
+    }
+    const feeder = feeders.get(match.id) ?? {};
+    const isLive = (side: 'A' | 'B') => {
+      const source = feeder[side];
+      return Boolean(occupantOf(match, side)) || Boolean(source && producesWinner.get(source.id));
+    };
+    const liveA = isLive('A');
+    const liveB = isLive('B');
+    if (!liveA && !liveB) {
+      byes.emptyMatchIds.add(match.id);
+      producesWinner.set(match.id, false);
+      continue;
+    }
+    producesWinner.set(match.id, true);
+    if (liveA && liveB) continue;
+    const side = liveA ? 'A' : 'B';
+    const entryId = occupantOf(match, side);
+    // The live side is a match still to be played: this becomes a bye when that
+    // match produces a winner, not now.
+    if (!entryId) continue;
+    byes.byeMatchIds.add(match.id);
+    if (match.nextMatchId && match.nextMatchSlot) byes.occupants.set(byeSlotKey(match.nextMatchId, match.nextMatchSlot), entryId);
+  }
+  return byes;
+}
+
+/** Team names by entry id, so a slot a bye fills can be named before the server fills it. */
+export function entryNames(bracket: BracketDto) {
+  const names = new Map<string, string>();
+  for (const match of bracket.matches) {
+    for (const entry of [match.participantA, match.participantB]) {
+      if (entry) names.set(entry.id, `${entry.owner.fullName} / ${entry.teammate.fullName}`);
+    }
+  }
+  return names;
+}
+
 /** Set format an unstarted match would use: its override, else the bracket round default, else one. */
 export function effectiveSetCount(bracket: BracketDto, match: MatchDto) {
   return match.setCount ?? match.setCountOverride ?? bracket.setDefaults[match.round] ?? 1;
@@ -112,25 +196,16 @@ export function placementTargets(brackets: BracketDto[], source: PlacementSlot, 
  * the lifecycle, but from this screen it is the last thing left to do, so it
  * reads as the final stop rather than a separate switch.
  */
-export const drawStages = ['DRAFT', 'LOCKED', 'PUBLISHED'] as const;
-
 export type DrawSummary = {
   categoryId: string;
   categoryName: string;
   /** False when no bracket row exists yet — the draw has not entered the sequence. */
   created: boolean;
-  /** Index into `drawStages`, or -1 when the draw has not been created. */
-  stageIndex: number;
   entries: number;
   matchCount: number;
   completedCount: number;
   champion: string | null;
 };
-
-function stageIndexOf(bracket: BracketDto) {
-  if (bracket.publishedAt) return 2;
-  return bracket.status === 'DRAFT' ? 0 : 1;
-}
 
 /** One summary per category, in the event's own category order. */
 export function buildDrawSummaries(
@@ -145,7 +220,6 @@ export function buildDrawSummaries(
         categoryId: category.id,
         categoryName: category.name,
         created: false,
-        stageIndex: -1,
         entries: 0,
         matchCount: 0,
         completedCount: 0,
@@ -158,7 +232,6 @@ export function buildDrawSummaries(
       categoryId: category.id,
       categoryName: category.name,
       created: true,
-      stageIndex: stageIndexOf(bracket),
       entries: bracket.size,
       matchCount: bracket.matches.length,
       completedCount: bracket.matches.filter((match) => match.status === 'COMPLETED').length,

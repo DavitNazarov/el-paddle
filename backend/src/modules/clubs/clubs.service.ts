@@ -42,6 +42,16 @@ export async function listAdminClubs(range: ListRange = {}) {
   return toPage(rows, pageSize);
 }
 
+/**
+ * Every club, for the public directory and for the club pickers that share this
+ * read. The logo and the roster size are carried because the directory has to
+ * tell one club from another before a visitor opens any of them; a picker that
+ * only wants a name ignores them.
+ *
+ * The count excludes admins for the same reason `serializePublicClub` drops
+ * them from the roster: the number here is a promise about the list the visitor
+ * reaches by clicking, and the two have to agree.
+ */
 export async function listPublicClubs() {
   return prisma.club.findMany({
     orderBy: { name: 'asc' },
@@ -49,6 +59,9 @@ export async function listPublicClubs() {
       id: true,
       name: true,
       slug: true,
+      description: true,
+      logoUrl: true,
+      _count: { select: { members: { where: { user: { role: { not: UserRole.ADMIN } } } } } },
     },
   });
 }
@@ -424,6 +437,102 @@ export async function inviteClubMate(input: InviteClubMateInput) {
   return { mate, invited };
 }
 
+/**
+ * An invitation that never arrived.
+ *
+ * The mate row already exists with `INVITED` status and a hashed token nobody
+ * can read back, so the only honest repair is a fresh token: the old ones are
+ * deleted first, because two live invitations to one address means the older
+ * mail still works after the leader thought they had replaced it.
+ */
+export async function resendClubMateInvite(input: {
+  actorUserId: string;
+  memberId: string;
+  inviterName: string;
+  clubName: string;
+}) {
+  const [actor, target] = await Promise.all([
+    prisma.clubMember.findUnique({ where: { userId: input.actorUserId } }),
+    prisma.clubMember.findUnique({
+      where: { id: input.memberId },
+      include: { user: { select: { id: true, email: true, status: true } } },
+    }),
+  ]);
+
+  if (!actor || actor.membershipRole !== ClubMembershipRole.LEADER) {
+    jsonError('Only the club leader can re-send an invitation.', 403);
+  }
+  if (!target || target.clubId !== actor.clubId) jsonError('Club member not found.', 404);
+  if (target.user.status !== UserStatus.INVITED) {
+    jsonError('This member has already accepted their invitation.', 409);
+  }
+
+  const inviteToken = createInviteToken();
+  await prisma.$transaction(async (tx) => {
+    await tx.inviteToken.deleteMany({ where: { userId: target.user.id, usedAt: null } });
+    await tx.inviteToken.create({
+      data: {
+        userId: target.user.id,
+        tokenHash: hashToken(inviteToken),
+        expiresAt: addDays(14),
+      },
+    });
+    await writeAudit(tx, {
+      action: 'club.mate_invite_resent',
+      actorId: input.actorUserId,
+      entityType: 'ClubMembership',
+      entityId: target.id,
+      after: { userId: target.user.id },
+    });
+  });
+
+  await sendClubMateInviteEmail(target.user.email, input.inviterName, input.clubName, inviteToken);
+  return { email: target.user.email };
+}
+
+/**
+ * Take back an invitation nobody accepted. The account was created by this club
+ * and has never been signed in to, so it goes with the membership — which is
+ * also what frees the address to be invited again, here or by another club.
+ */
+export async function revokeClubMateInvite(actorUserId: string, memberId: string) {
+  return prisma.$transaction(async (tx) => {
+    const [actor, target] = await Promise.all([
+      tx.clubMember.findUnique({ where: { userId: actorUserId } }),
+      tx.clubMember.findUnique({
+        where: { id: memberId },
+        include: { user: { select: { id: true, email: true, status: true } } },
+      }),
+    ]);
+
+    if (!actor || actor.membershipRole !== ClubMembershipRole.LEADER) {
+      jsonError('Only the club leader can withdraw an invitation.', 403);
+    }
+    if (!target || target.clubId !== actor.clubId) jsonError('Club member not found.', 404);
+    if (target.user.status !== UserStatus.INVITED) {
+      jsonError('This member has already accepted their invitation, so remove them instead.', 409);
+    }
+
+    const entries = await tx.eventRegistration.count({
+      where: { OR: [{ ownerId: target.user.id }, { teammateId: target.user.id }] },
+    });
+    if (entries) {
+      jsonError('This player appears in an entry. Remove them from the roster instead.', 409);
+    }
+
+    await writeAudit(tx, {
+      action: 'club.mate_invite_revoked',
+      actorId: actorUserId,
+      entityType: 'ClubMembership',
+      entityId: target.id,
+      before: { clubId: target.clubId, userId: target.user.id },
+      after: { revoked: true },
+    });
+    await tx.user.delete({ where: { id: target.user.id } });
+    return { email: target.user.email };
+  });
+}
+
 export async function addClubMember(clubId: string, email: string, roleTitle: string) {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) jsonError('User not found. The member needs an account first.', 404);
@@ -463,6 +572,57 @@ export async function getPublicClubBySlug(slug: string) {
   return club;
 }
 
+/**
+ * A club's record, over published results only.
+ *
+ * Read from the participant snapshots, which carry the club the team *entered*
+ * under — so a player who has since moved clubs does not retroactively rewrite
+ * the record of either one.
+ */
+export async function getPublicClubStats(clubId: string) {
+  const [matches, memberCount, entryGroups] = await Promise.all([
+    prisma.match.findMany({
+      where: {
+        status: 'COMPLETED',
+        resultType: { not: 'BYE' },
+        bracket: { event: { resultsPublishedAt: { not: null } } },
+        snapshots: { some: { clubId } },
+      },
+      select: {
+        winnerEntryId: true,
+        round: true,
+        snapshots: { where: { clubId }, select: { entryId: true } },
+      },
+    }),
+    prisma.clubMember.count({ where: { clubId } }),
+    prisma.eventRegistration.groupBy({
+      by: ['eventId'],
+      where: { clubId, status: RegistrationStatus.APPROVED },
+    }),
+  ]);
+
+  let wins = 0;
+  let losses = 0;
+  let titles = 0;
+  for (const match of matches) {
+    for (const snapshot of match.snapshots) {
+      const won = snapshot.entryId === match.winnerEntryId;
+      if (won) wins += 1;
+      else losses += 1;
+      if (won && match.round === 'FINAL') titles += 1;
+    }
+  }
+
+  return {
+    members: memberCount,
+    eventsEntered: entryGroups.length,
+    matchesPlayed: wins + losses,
+    wins,
+    losses,
+    titles,
+  };
+}
+
 type MembershipSummary = {
   clubId: string;
   membershipRole: ClubMembershipRole;
@@ -484,6 +644,20 @@ export function assertClubKickAllowed(
 }
 
 /**
+ * Leaving is the same write as being removed, minus the leader: the player
+ * resolves their own unfinished entries and their membership row goes. A leader
+ * cannot walk out, because the club would be left with nobody able to review a
+ * join request or edit the profile — they hand leadership over first, and a club
+ * of one asks an admin to delete it instead.
+ */
+export function assertClubLeaveAllowed(target: MembershipSummary | null) {
+  if (!target) jsonError('You do not belong to a club.', 404);
+  if (target.membershipRole === ClubMembershipRole.LEADER) {
+    jsonError('Hand leadership to another member before leaving the club.', 409);
+  }
+}
+
+/**
  * Adding a group mate creates an account, joins it to the club, and mails an
  * invitation in the club's name, so it is a leadership action in the same way
  * removing a player is. Every other roster write already required LEADER; this
@@ -500,7 +674,7 @@ export async function requireClubLeadership(actorUserId: string, clubId: string)
   }
 }
 
-type MemberRemovalResolution = {
+export type MemberRemovalResolution = {
   registrationId: string;
   expectedVersion: number;
   action: 'REPLACE' | 'WITHDRAW';
@@ -570,7 +744,17 @@ async function findAffectedMemberRegistrations(
   });
 }
 
-export async function getClubMemberRemovalImpact(actorUserId: string, memberId: string) {
+/**
+ * What has to be resolved before a membership can end, and who could take the
+ * departing player's place. `mode` decides whose authority is being checked —
+ * a leader removing someone, or a member removing themselves — and nothing
+ * else: the entries are the same entries either way.
+ */
+export async function getClubMemberRemovalImpact(
+  actorUserId: string,
+  memberId: string,
+  mode: 'KICK' | 'LEAVE' = 'KICK',
+) {
   const [actor, target] = await Promise.all([
     prisma.clubMember.findUnique({ where: { userId: actorUserId } }),
     prisma.clubMember.findUnique({
@@ -578,7 +762,12 @@ export async function getClubMemberRemovalImpact(actorUserId: string, memberId: 
       include: { user: true },
     }),
   ]);
-  assertClubKickAllowed(actor, target);
+  if (mode === 'LEAVE') {
+    if (!target || target.userId !== actorUserId) jsonError('Club member not found.', 404);
+    assertClubLeaveAllowed(target);
+  } else {
+    assertClubKickAllowed(actor, target);
+  }
 
   const [registrations, replacementMemberships] = await Promise.all([
     findAffectedMemberRegistrations(prisma, target!.clubId, target!.userId),
@@ -678,6 +867,10 @@ export async function getPlayerClubDetails(userId: string) {
           fullName:
             [member.user.name, member.user.surname].filter(Boolean).join(' ') ||
             member.user.email,
+          // The roster has to be able to tell an accepted member from one who
+          // was invited and never arrived: they look identical otherwise, and
+          // only one of them can be entered in an event.
+          status: member.user.status,
         },
       })),
     joinRequests: isLeader
@@ -699,6 +892,7 @@ export async function removeClubMember(
   actorUserId: string,
   memberId: string,
   resolutions: MemberRemovalResolution[] = [],
+  mode: 'KICK' | 'LEAVE' = 'KICK',
 ) {
   return prisma.$transaction(async (tx) => {
     const [actor, target] = await Promise.all([
@@ -712,7 +906,12 @@ export async function removeClubMember(
       }),
     ]);
 
-    assertClubKickAllowed(actor, target);
+    if (mode === 'LEAVE') {
+      if (!target || target.userId !== actorUserId) jsonError('Club member not found.', 404);
+      assertClubLeaveAllowed(target);
+    } else {
+      assertClubKickAllowed(actor, target);
+    }
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`club-member-removal:${target!.userId}`}))`;
 
     const affectedRegistrations = await findAffectedMemberRegistrations(
@@ -949,7 +1148,7 @@ export async function removeClubMember(
 
     const removed = await tx.clubMember.delete({ where: { id: target!.id } });
     await writeAudit(tx, {
-      action: 'club.member_removed',
+      action: mode === 'LEAVE' ? 'club.member_left' : 'club.member_removed',
       actorId: actorUserId,
       entityType: 'ClubMembership',
       entityId: removed.id,
@@ -960,7 +1159,10 @@ export async function removeClubMember(
       recipientUserId: target!.user.id,
       recipientEmail: target!.user.email,
       type: NotificationType.CLUB_MEMBERSHIP_REMOVED,
-      title: `You were removed from ${target!.club.name}`,
+      title:
+        mode === 'LEAVE'
+          ? `You left ${target!.club.name}`
+          : `You were removed from ${target!.club.name}`,
       message: `You are no longer a member of ${target!.club.name}. You can request to join another club or create your own club.`,
       entityType: 'ClubMembership',
       entityId: removed.id,
@@ -985,6 +1187,208 @@ export async function removeClubMember(
     });
     return removed;
   });
+}
+
+/**
+ * The leader edits the club they lead.
+ *
+ * `updateClub` already existed and was reachable only through the admin route,
+ * so a club that was renamed, rebranded, or had a typo in its slug had to queue
+ * behind an administrator. Leadership is resolved here rather than passed in, so
+ * the caller can never name someone else's club.
+ */
+export async function updateOwnClub(
+  actorUserId: string,
+  input: ClubProfileInput,
+  ip?: string | null,
+) {
+  const membership = await prisma.clubMember.findUnique({ where: { userId: actorUserId } });
+  if (!membership) jsonError('You do not belong to a club.', 404);
+  if (membership.membershipRole !== ClubMembershipRole.LEADER) {
+    jsonError('Only the club leader can edit the club profile.', 403);
+  }
+  return updateClub(membership.clubId, input, actorUserId, ip);
+}
+
+/**
+ * Leadership moves in one step, because the two halves are not independently
+ * valid: a club with two leaders and a club with none are both broken states,
+ * and the second is unrecoverable without an administrator.
+ */
+export async function transferClubLeadership(actorUserId: string, memberId: string) {
+  return prisma.$transaction(async (tx) => {
+    const [actor, target] = await Promise.all([
+      tx.clubMember.findUnique({ where: { userId: actorUserId } }),
+      tx.clubMember.findUnique({
+        where: { id: memberId },
+        include: {
+          club: { select: { id: true, name: true } },
+          user: { select: { id: true, email: true, status: true } },
+        },
+      }),
+    ]);
+
+    if (!actor || actor.membershipRole !== ClubMembershipRole.LEADER) {
+      jsonError('Only the club leader can hand over leadership.', 403);
+    }
+    if (!target || target.clubId !== actor.clubId) jsonError('Club member not found.', 404);
+    if (target.id === actor.id) jsonError('You already lead this club.', 409);
+    if (target.user.status !== UserStatus.ACTIVE) {
+      jsonError('Leadership can only pass to an active member.', 409);
+    }
+
+    await tx.clubMember.update({
+      where: { id: actor.id },
+      data: { membershipRole: ClubMembershipRole.MEMBER },
+    });
+    const promoted = await tx.clubMember.update({
+      where: { id: target.id },
+      data: { membershipRole: ClubMembershipRole.LEADER },
+    });
+
+    await writeAudit(tx, {
+      action: 'club.leadership_transferred',
+      actorId: actorUserId,
+      entityType: 'Club',
+      entityId: actor.clubId,
+      before: { leaderUserId: actor.userId },
+      after: { leaderUserId: target.userId },
+    });
+    await queueNotification(tx, {
+      recipientUserId: target.user.id,
+      recipientEmail: target.user.email,
+      type: NotificationType.CLUB_JOIN_REQUEST_APPROVED,
+      title: `You now lead ${target.club.name}`,
+      message: `You are the leader of ${target.club.name}. You can edit the club profile, review join requests, and manage the roster.`,
+      entityType: 'ClubMembership',
+      entityId: promoted.id,
+      actionPath: '/dashboard/club',
+      version: promoted.createdAt.getTime(),
+      metadata: { clubId: actor.clubId, previousLeaderUserId: actor.userId },
+      emailEyebrow: 'Club leadership',
+      emailActionLabel: 'Open club dashboard',
+    });
+
+    return promoted;
+  });
+}
+
+/**
+ * An administrator appointing a club's leader.
+ *
+ * `transferClubLeadership` is a leader handing over, which is no use to a club
+ * that has no leader to hand anything over — and that state is reachable: a
+ * membership row written without naming `membershipRole` takes the schema
+ * default of MEMBER, so a club seeded or imported that way has nobody able to
+ * edit it, review a join request, or change a registered team. The invariant
+ * has always said such a club "needs an administrator to fix"; this is the
+ * endpoint that actually lets one.
+ *
+ * Still a swap, not a second crown: whoever leads now stands down in the same
+ * transaction.
+ */
+export async function appointClubLeader(input: { clubId: string; memberId: string; actorId: string; ip?: string | null }) {
+  return prisma.$transaction(async (tx) => {
+    const target = await tx.clubMember.findFirst({
+      where: { id: input.memberId, clubId: input.clubId },
+      include: { user: { select: { id: true, email: true, status: true } }, club: { select: { name: true } } },
+    });
+    if (!target) jsonError('Club member not found.', 404);
+    if (target.user.status !== UserStatus.ACTIVE) {
+      jsonError('Leadership can only pass to an active member.', 409);
+    }
+
+    const current = await tx.clubMember.findFirst({
+      where: { clubId: input.clubId, membershipRole: ClubMembershipRole.LEADER },
+    });
+    if (current?.id === target.id) jsonError('This member already leads the club.', 409);
+    if (current) {
+      await tx.clubMember.update({
+        where: { id: current.id },
+        data: { membershipRole: ClubMembershipRole.MEMBER },
+      });
+    }
+    const promoted = await tx.clubMember.update({
+      where: { id: target.id },
+      data: { membershipRole: ClubMembershipRole.LEADER },
+    });
+
+    await writeAudit(tx, {
+      action: 'club.leader_appointed',
+      actorId: input.actorId,
+      entityType: 'Club',
+      entityId: input.clubId,
+      before: { leaderUserId: current?.userId ?? null },
+      after: { leaderUserId: target.userId },
+      ip: input.ip,
+    });
+    await queueNotification(tx, {
+      recipientUserId: target.user.id,
+      recipientEmail: target.user.email,
+      type: NotificationType.CLUB_JOIN_REQUEST_APPROVED,
+      title: `You now lead ${target.club.name}`,
+      message: `An administrator made you the leader of ${target.club.name}. You can edit the club profile, review join requests, and manage the roster.`,
+      entityType: 'ClubMembership',
+      entityId: promoted.id,
+      actionPath: '/dashboard/club',
+      version: promoted.createdAt.getTime(),
+      metadata: { clubId: input.clubId, appointedBy: input.actorId },
+      emailEyebrow: 'Club leadership',
+      emailActionLabel: 'Open club dashboard',
+    });
+
+    return promoted;
+  });
+}
+
+/** Clubs with nobody able to act for them — the queue an admin fixes from. */
+export async function listLeaderlessClubs() {
+  const clubs = await prisma.club.findMany({
+    where: { members: { none: { membershipRole: ClubMembershipRole.LEADER } } },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      _count: { select: { members: true } },
+    },
+    orderBy: { name: 'asc' },
+  });
+  return clubs.map((club) => ({
+    id: club.id,
+    name: club.name,
+    slug: club.slug,
+    members: club._count.members,
+  }));
+}
+
+/** A member leaving of their own accord; see {@link assertClubLeaveAllowed}. */
+export async function leaveClub(actorUserId: string, resolutions: MemberRemovalResolution[] = []) {
+  const membership = await prisma.clubMember.findUnique({ where: { userId: actorUserId } });
+  if (!membership) jsonError('You do not belong to a club.', 404);
+  return removeClubMember(actorUserId, membership.id, resolutions, 'LEAVE');
+}
+
+/** What a departing member has to resolve before their row can go. */
+export async function getOwnClubDepartureImpact(actorUserId: string) {
+  const membership = await prisma.clubMember.findUnique({ where: { userId: actorUserId } });
+  if (!membership) jsonError('You do not belong to a club.', 404);
+  return getClubMemberRemovalImpact(actorUserId, membership.id, 'LEAVE');
+}
+
+/**
+ * Withdraw your own pending request to join a club. The row is deleted rather
+ * than marked REJECTED: a rejection is the leader's word about you, and a
+ * player who changed their mind should be able to ask again without carrying a
+ * refusal they never received.
+ */
+export async function cancelOwnClubRequest(userId: string) {
+  const pending = await prisma.clubJoinRequest.findFirst({
+    where: { userId, status: ClubJoinRequestStatus.PENDING },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!pending) jsonError('You have no pending club request.', 404);
+  await prisma.clubJoinRequest.delete({ where: { id: pending.id } });
+  return { clubId: pending.clubId };
 }
 
 export async function requestClubMembership(userId: string, clubId: string) {
@@ -1127,10 +1531,19 @@ export async function decideClubJoinRequest(
   });
 }
 
-export function serializeClubOption(club: Pick<Club, 'id' | 'name' | 'slug'>) {
+export function serializeClubOption(
+  club: Pick<Club, 'id' | 'name' | 'slug'> & {
+    description?: string | null;
+    logoUrl?: string | null;
+    _count?: { members: number };
+  },
+) {
   return {
     id: club.id,
     name: club.name,
     slug: club.slug,
+    description: club.description ?? '',
+    logoUrl: club.logoUrl ?? '',
+    memberCount: club._count?.members ?? 0,
   };
 }

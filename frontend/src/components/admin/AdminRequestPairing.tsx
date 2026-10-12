@@ -103,6 +103,8 @@ export function AdminRequestPairing({
                 {canReleasePairing(request) ? copy.release : copy.reject}
               </CommandButton>
             ) : null}
+            {/* Nothing further can be done to a pairing already applied to the
+                draw; the bracket page is where it is undone. */}
           </div>
         )}
       </div>

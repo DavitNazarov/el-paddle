@@ -5,5 +5,5 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export { toDatetimeLocalValue } from './dates';
+export { daysUntil, toDatetimeLocalValue } from './dates';
 export { friendlyError } from './errors';

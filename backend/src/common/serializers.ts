@@ -172,8 +172,8 @@ type MatchWithEntries = Match & {
   sets?: { setNumber: number; winnerSide: 'A' | 'B'; winnerEntryId: string; decidedAt: Date }[];
   snapshots?: {
     side: 'A' | 'B';
-    clubId: string;
-    clubName: string;
+    clubId: string | null;
+    clubName: string | null;
     ownerName: string;
     teammateName: string;
   }[];

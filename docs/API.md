@@ -15,6 +15,7 @@ This document lists the HTTP API surface by audience. The route source under `ba
 - Anonymous public GETs (`/api/public/*`) send a short `Cache-Control: public, max-age=…, stale-while-revalidate=…`; authenticated and mutable responses stay uncached.
 - Event bank details (`bankAccountIban`, `bankAccountReceiver`) are omitted from list payloads and public single-event responses; they appear only on authenticated `GET /api/events/:id` and admin event responses. The register modal fetches them on demand.
 - Match-history lists (`/api/matches`, `/api/me/matches`, `/api/players/:id/matches`, `/api/clubs/:id/matches`) return `{ matches, events }`: the shared event is hoisted once into a de-duplicated `events` array and each match references it by `bracket.eventId` instead of embedding a copy.
+- Reads that produce a desk copy — the entry list, the court sheet, final results, the audit log — also answer CSV, through `?format=csv` or `Accept: text/csv`. The file is UTF-8 with a BOM so Georgian names open correctly in Excel, and any cell beginning `=`, `+`, `-` or `@` is prefixed with an apostrophe so a spreadsheet reads it as text rather than a formula.
 
 Obtain a CSRF token before a manual unsafe request:
 
@@ -38,13 +39,16 @@ The frontend `apiFetch` helper handles this automatically.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/health` | Process health |
+| GET | `/health` | Process liveness — touches nothing else, so a database blip never restarts a healthy API |
+| GET | `/health/ready` | Readiness: database reachability with latency, plus the outbox backlog (`pending`, `failed`). `503` when the database is unreachable, so a deploy gate can read the status code alone |
+| GET | `/api/meta/version` | Deployed `version`, `commit`, `environment`, and process start time, from the build environment |
 | GET | `/api/auth/csrf` | Issue CSRF cookie and token |
 | POST | `/api/auth/login` | Create a session |
 | POST | `/api/auth/logout` | Sign out this device only; revokes its `Session` row |
 | POST | `/api/auth/logout-all` | Sign out every device, including this one; bumps `sessionVersion` |
 | POST | `/api/auth/password-reset` | Request a reset link; the response never reveals whether the address has an account |
 | POST | `/api/auth/password-reset/complete` | Redeem a single-use link and set a new password; signs every device out |
+| GET | `/api/auth/password-reset/validate?token=…` | Whether a reset link is still usable (`valid`, plus `MISSING` / `UNKNOWN` / `USED` / `EXPIRED`). Read-only — it never consumes the link, so the form can refuse a dead link before a password is typed |
 | GET | `/api/auth/me` | Current user (or `null`) |
 | POST | `/api/auth/invite/complete` | Complete a teammate/club-mate/admin-created invitation (token, profile, password, club when required) |
 | GET | `/api/auth/google` | Start Google OAuth (requires prior legal consent cookie) |
@@ -86,16 +90,27 @@ All endpoints require a session. Profile and password endpoints are open to ever
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/account/profile` | Own editable account fields plus `hasPassword` (never the hash) |
-| PATCH | `/api/account/profile` | Update own name, surname, and phone; email, role, and status are not self-editable. Players must keep a phone number |
+| PATCH | `/api/account/profile` | Update own name, surname, and phone; role and status are not self-editable, and the email address has its own verified flow below |
 | POST | `/api/account/password` | Change own password. Requires the current password unless the account has none (Google-only). Revokes every other session and re-issues a cookie for the calling device |
+| POST | `/api/account/email` | Start an email change. Requires the current password when the account has one; mails a code to the **new** address. Refused when the address is taken or would change the account's role (an `ADMIN_EMAILS` address) |
+| POST | `/api/account/email/verify` | Redeem the code (`email` + `code`) and move the account to the new address. Signs every device out and re-issues a cookie for this one |
+| GET | `/api/account/sessions` | Signed-in devices: `id`, `createdAt`, `expiresAt`, `current`. No device name or address is recorded against a session, so none is reported |
+| DELETE | `/api/account/sessions/:id` | End one session. Revoking the calling device clears its cookie and answers `signedOut: true` |
 | POST | `/api/account/club` | Create a club and become its leader (players without a club) |
+| PATCH | `/api/account/club` | Edit own club name, slug, description, and logo; club leader only. Changing the slug moves the public club page |
 | POST | `/api/account/club/mate` | Add or invite a club mate by email; active accounts must join by themselves |
-| GET | `/api/account/club-details` | Own club profile, roster, and (leader only) pending join requests |
+| POST | `/api/account/club/members/:id/invite/resend` | Re-send a club-mate invitation with a fresh token; retires the previous link. Leader only, `INVITED` members only |
+| DELETE | `/api/account/club/members/:id/invite` | Withdraw an unaccepted invitation and free the address. Leader only; refused once the invitee appears in an entry |
+| PATCH | `/api/account/club/members/:id/role` | Hand leadership to another active member (a swap — the caller becomes a member); leader only |
+| GET | `/api/account/club-details` | Own club profile, roster (each member with `status`), and (leader only) pending join requests |
 | GET | `/api/account/club-requests/current` | Current player's pending join request |
 | POST | `/api/account/club-requests` | Request membership in an existing club |
+| DELETE | `/api/account/club-requests/current` | Withdraw own pending join request. The row is deleted, not rejected, so the player can ask again without carrying a refusal |
 | PATCH | `/api/account/club/join-requests/:id` | Approve or reject a join request; club leader only |
 | GET | `/api/account/club/members/:id/removal-impact` | Unfinished registrations affected by removing a member plus eligible replacements; leader only |
 | DELETE | `/api/account/club/members/:id` | Remove a member after resolving every affected registration (replace or withdraw); leader only |
+| GET | `/api/account/club/departure-impact` | The same impact read for the caller's own membership, before leaving |
+| POST | `/api/account/club/leave` | Leave the club, resolving every affected registration the same way. A leader must hand leadership on first |
 | DELETE | `/api/account` | Delete own account (the last remaining admin cannot be deleted) |
 
 ## Public data
@@ -104,16 +119,21 @@ No session required. Public routes only ever return explicitly published data.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| GET | `/api/public/search?q=&limit=` | One query across players, clubs, and published events. Returns nothing new — only what the three directories already publish — for queries of two characters or more |
 | GET | `/api/public/clubs` | Club directory (id, name, slug) |
 | GET | `/api/public/clubs/:slug` | Club profile and roster |
+| GET | `/api/public/clubs/:slug/stats` | Club record over published results: members, events entered, played/won/lost, titles. Read from participant snapshots, so it reflects the club each team *entered* under |
 | GET | `/api/public/players` | Active player directory with public match statistics |
 | GET | `/api/public/players/:id` | Public player profile |
-| GET | `/api/public/events` | Next upcoming published event plus recent past events |
+| GET | `/api/public/players/:id/stats` | The public twin of `/api/me/stats` — streak, best finish, partner records — narrowed to events that published their results |
+| GET | `/api/public/players/:id/versus/:opponentId` | Head-to-head record between two players over published results |
+| GET | `/api/public/events` | Public calendar: `upcoming` (nearest published event), `scheduled` (up to 12 published future events), `previous` (up to 24 past events) |
 | GET | `/api/public/events/:id` | Published event detail |
 | GET | `/api/public/sitemap-events` | Lightweight published-event index for the SEO sitemap |
 | GET | `/api/public/events/:eventId/registered-teams` | Approved teams once the registration roster is published |
 | GET | `/api/public/events/:eventId/brackets` | Published brackets |
 | GET | `/api/public/events/:eventId/schedule` | Published schedule |
+| GET | `/api/public/events/:eventId/results` | Final standings per category: champion, runner-up, both losing semifinalists (joint third), and the matches they were decided in. Gated on `resultsPublishedAt`; `?format=csv` returns the same as a file |
 | GET | `/api/matches` | Completed match history (published results); admins may inspect unpublished results |
 | GET | `/api/matches/:matchId` | Match detail subject to publication and viewer visibility; unpublished results are redacted |
 | GET | `/api/players/:playerId/matches` | Published player history |
@@ -131,6 +151,7 @@ No session required. Public routes only ever return explicitly published data.
 | GET | `/api/events/:id` | Event detail visible to the current user |
 | POST | `/api/registrations` | Enter one club team (owner + teammate) in an event category; requires participation, refund, and risk consent; the teammate must already be an active account in the same club, so `403` when they are unknown, still invited, or unverified; `409` when the club already has an entry |
 | PATCH | `/api/registrations/:id/lineup` | Replace one registered player with another eligible club member; club leader only; resets the entry to `PENDING` |
+| POST | `/api/registrations/:id/withdraw` | The club pulls its own team out (versioned, `commandId`, optional public reason). Club leader only. Refused once the draw is locked or the event has started — an admin records a walkover instead |
 | GET | `/api/events/:eventId/brackets` | Published brackets only (same publication gate as the public route) |
 | GET | `/api/events/:eventId/opponent-request-state` | Own requests for the event |
 | GET | `/api/events/:eventId/eligible-opponents?requestingEntryId=…` | Eligible target entries in the same category; `409` naming the blocking player when the requesting entry is itself ineligible |
@@ -140,9 +161,11 @@ No session required. Public routes only ever return explicitly published data.
 | POST | `/api/events/:eventId/opponent-requests/:requestId/accept` | Accept a received request |
 | POST | `/api/events/:eventId/opponent-requests/:requestId/refuse` | Refuse a received request (optional reason) |
 | GET | `/api/me/matches` | Own match history |
-| GET | `/api/notifications` | Notification history |
+| GET | `/api/notifications` | Notification history; `?unread=true`, `?take=` (max 100) and `?cursor=` for the next page, answered with `nextCursor` |
 | GET | `/api/notifications/unread-count` | Unread total |
 | PATCH | `/api/notifications/:id/read` | Mark one notification read |
+| PATCH | `/api/notifications/:id/unread` | Put one back as unread |
+| DELETE | `/api/notifications/:id` | Remove the reader's own copy; the entity and its audit row are untouched |
 | POST | `/api/notifications/read-all` | Mark all notifications read |
 
 ## Scoring endpoints
@@ -159,6 +182,7 @@ Admins and the event's organiser reach the same endpoints and are authorized per
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/judge/assignments` | Active and upcoming court assignments |
+| GET | `/api/judge/home` | Each live court assignment with its queue, for the judge home screen |
 | GET | `/api/judge/events/:eventId/courts/:courtId/queue` | Ordered court queue |
 | GET | `/api/judge/matches/:matchId` | Assigned match detail |
 | POST | `/api/judge/matches/:matchId/start` | Start the next ready match in the queue |
@@ -216,11 +240,12 @@ An organiser's event-scoped capabilities are exactly `BRACKET_MANAGE`, `BRACKET_
 | Method | Path | Capability |
 | --- | --- | --- |
 | GET | `/api/admin/summary` | `DASHBOARD_READ`; an organiser instead receives the same counts scoped to their events |
-| GET | `/api/admin/events/operations` | `DASHBOARD_READ`; per-event operational counts, scoped to an organiser's events exactly like the summary |
+| GET | `/api/admin/events/operations` | `DASHBOARD_READ`; per-event operational counts, scoped to an organiser's events exactly like the summary. `schedule.unscheduled` counts playable matches with no court (neither completed nor cancelled), so the season board can name that queue instead of staying silent about it |
 | GET | `/api/admin/stats/platform` | `DASHBOARD_READ`; platform statistics over `?range=7d\|30d\|90d\|12m` (default `30d`, unknown values are rejected with 400). Unlike the two rows above there is **no organiser scoping**: the payload is entirely platform totals an organiser holds no power over, so an organiser is refused. Buckets are Asia/Tbilisi days, weeks or months, and the response is cached in-process for 60 s (`generatedAt` says when it was computed) |
 | GET | `/api/events?scope=admin` | Admins see every event; an organiser sees only the events handed to them |
 | POST | `/api/events` | `EVENT_MANAGE` — admin only; organisers cannot create events |
 | PATCH | `/api/events/:id` | `EVENT_MANAGE` — admin only |
+| POST | `/api/events/:id/duplicate` | `EVENT_MANAGE` — copies title, venue, fee, IBAN, receiver and category list onto a new `date`. Entries, draws, courts, organisers and every publication flag stay with the original; the copy starts unpublished with registration open. `arrivalTime` is deliberately not carried across |
 | DELETE | `/api/events/:id` | `EVENT_MANAGE` (completed events must be reopened first) — admin only |
 | PATCH | `/api/admin/events/:id/status` | `EVENT_STATUS_MANAGE`, **event-scoped**; reopening a completed event additionally requires `EVENT_STATE_CORRECT`, which organisers never hold |
 | PATCH | `/api/admin/events/:id/tournament-publication` | `EVENT_PUBLISH` (live scoring, final results) — admin only |
@@ -237,8 +262,9 @@ Event create/update payloads include the participation fee in GEL, a Georgian IB
 | --- | --- | --- |
 | GET | `/api/admin/registrations` | `REGISTRATION_REVIEW` |
 | PATCH | `/api/admin/registrations/:id` | `REGISTRATION_REVIEW` (simple status change; decline requires a reason) |
-| GET | `/api/admin/events/:eventId/registrations` | `REGISTRATION_REVIEW` |
+| GET | `/api/admin/events/:eventId/registrations` | `REGISTRATION_REVIEW`; `?format=csv` (or `Accept: text/csv`) returns the entry list as a file |
 | PATCH | `/api/admin/events/:eventId/registrations/:id/status` | `REGISTRATION_REVIEW` (versioned command with public reason and internal note) |
+| PATCH | `/api/admin/events/:eventId/registrations/status` | `REGISTRATION_REVIEW`; one decision applied to up to 100 `registrationIds`. Each entry is decided in its own transaction and the response reports `applied`, `total`, and a per-entry result, so one refusal never undoes the rest |
 | PATCH | `/api/admin/events/:eventId/registration-roster-publication` | `EVENT_PUBLISH` |
 
 ### Opponent requests
@@ -259,20 +285,28 @@ Event create/update payloads include the participation fee in GEL, a Georgian IB
 | POST | `/api/admin/events/:eventId/brackets` | `BRACKET_MANAGE` (one draft/locked bracket per event category) |
 | POST | `/api/admin/events/:eventId/brackets/:bracketId/generate` | `BRACKET_MANAGE` (accepts approved pairing `requestIds`) |
 | POST | `/api/admin/events/:eventId/brackets/:bracketId/lock` | `BRACKET_MANAGE` (snapshots participants, applies byes) |
+
+A match carries `snapshots[]`, the participant identity frozen when the draw locked. `clubId` and `clubName` are nullable: they name the club the team entered under, which is gone once that club is deleted.
+
 | PUT | `/api/admin/events/:eventId/brackets/:bracketId/set-defaults` | `BRACKET_MANAGE` (full per-round map of set counts, 1–3) |
 | POST | `/api/admin/events/:eventId/brackets/:bracketId/placements` | `BRACKET_MANAGE` (move or swap a first-round entry; draft brackets only) |
 | PATCH | `/api/admin/events/:eventId/brackets/:bracketId/publication` | `BRACKET_PUBLISH` |
 | GET | `/api/admin/events/:eventId/brackets` | `BRACKET_MANAGE` |
+| DELETE | `/api/admin/events/:eventId/brackets/:bracketId` | `BRACKET_MANAGE`; discards a **draft** draw. Applied pairings return to `APPROVED_BY_ADMIN` and can seed a new draw; entries are untouched |
+| POST | `/api/admin/events/:eventId/brackets/:bracketId/unlock` | `EVENT_STATE_CORRECT` (admin only, reason required) — the mirror of the completed-event reopen. Returns every team to its first-round slot, clears the byes the lock derived, and deletes the participant snapshots. Refused once any match has been played, or while the draw is published or on the court schedule |
 
 ### Schedule and courts
 
 | Method | Path | Capability |
 | --- | --- | --- |
-| GET | `/api/admin/events/:eventId/schedule` | `SCHEDULE_MANAGE` |
+| GET | `/api/admin/events/:eventId/schedule` | `SCHEDULE_MANAGE`; `?format=csv` returns the court sheet in playing order |
+| GET | `/api/admin/events/:eventId/schedule/unscheduled` | `SCHEDULE_MANAGE`; playable matches with no court yet |
+| POST | `/api/admin/events/:eventId/schedule/auto-fill` | `SCHEDULE_MANAGE`; deals unplaced matches round-robin over the active courts, appending to each queue. `readyOnly` defaults to true (matches whose two teams are known). Never reorders or retimes what is already placed; reports `placed` and `skipped` |
 | POST | `/api/admin/events/:eventId/courts` | `SCHEDULE_MANAGE` |
 | PATCH | `/api/admin/events/:eventId/courts/:courtId` | `SCHEDULE_MANAGE` |
 | DELETE | `/api/admin/events/:eventId/courts/:courtId` | `SCHEDULE_MANAGE` |
 | POST | `/api/admin/events/:eventId/courts/:courtId/judge-assignments` | `SCHEDULE_MANAGE` (rejects overlapping judge intervals) |
+| DELETE | `/api/admin/events/:eventId/courts/:courtId/judge-assignments/:assignmentId` | `SCHEDULE_MANAGE`; ends one assignment and clears the judge from that court's unfinished schedule items. Refused while a match is running on the court; already-revoked assignments answer success |
 | POST | `/api/admin/events/:eventId/schedule/items` | `SCHEDULE_MANAGE` (appends a match to a court queue) |
 | PATCH | `/api/admin/events/:eventId/schedule/items/:itemId` | `SCHEDULE_MANAGE` (accepts `courtId` and `queuePosition` to move a match; requires `commandId`) |
 | DELETE | `/api/admin/events/:eventId/schedule/items/:itemId` | `SCHEDULE_MANAGE` |
@@ -293,6 +327,7 @@ Every row above is **event-scoped**. Assigning a judge to a court or a schedule 
 
 | Method | Path | Capability |
 | --- | --- | --- |
+| GET | `/api/admin/events/:eventId/matches` | `BRACKET_MANAGE`, read-only for organisers; every match of the event with `?status=` (comma-separated), `?round=`, `?categoryId=`, `?courtId=`, `?unscheduled=true` |
 | POST | `/api/admin/matches/:matchId/complete` | `MATCH_RESULT_ADMIN` (walkover/withdrawal/disqualification/admin decision with reason) |
 | POST | `/api/admin/matches/:matchId/corrections` | `MATCH_RESULT_CORRECT` (blocked once a downstream match has started) |
 | POST | `/api/admin/matches/:matchId/sets/undo` | `MATCH_RESULT_CORRECT` (reason required; reopens a completed set match) |
@@ -305,6 +340,7 @@ Every row above is **event-scoped**. Assigning a judge to a court or a schedule 
 | GET | `/api/admin/users` | `USER_MANAGE` |
 | POST | `/api/admin/users` | `USER_MANAGE` (direct password or emailed invite; players require a club) |
 | DELETE | `/api/admin/users/:id` | `USER_MANAGE` (last admin protected) |
+| POST | `/api/admin/users/:id/invite/resend` | `USER_MANAGE`; issues a fresh invitation token and retires the outstanding ones. `INVITED` accounts only |
 | POST | `/api/admin/users/:id/disqualify` | `USER_MANAGE` (end date + reason; revokes sessions) |
 | DELETE | `/api/admin/users/:id/disqualify` | `USER_MANAGE` |
 | GET | `/api/admin/judges` | `JUDGE_MANAGE` |
@@ -314,6 +350,8 @@ Every row above is **event-scoped**. Assigning a judge to a court or a schedule 
 | POST | `/api/admin/clubs` | `CLUB_MANAGE` |
 | PATCH | `/api/admin/clubs/:id` | `CLUB_MANAGE` (name, slug, description, logo; audited) |
 | DELETE | `/api/admin/clubs/:id` | `CLUB_MANAGE` (refused while a team is entered in an unfinished event) |
+| GET | `/api/admin/clubs/leaderless` | `CLUB_MANAGE`; clubs with no `LEADER` — nobody able to edit the club, review a join request, or change a registered team |
+| PATCH | `/api/admin/clubs/:id/members/:memberId/role` | `CLUB_MANAGE`; appoint a club's leader. The escape hatch for a leaderless club, which the member-facing transfer cannot rescue because it requires an existing leader. Still a swap: any current leader stands down in the same transaction |
 | POST | `/api/admin/clubs/:id/members` | `CLUB_MANAGE` (first member becomes leader) |
 | POST | `/api/categories` | `CATEGORY_MANAGE` |
 | PATCH | `/api/categories/:id` | `CATEGORY_MANAGE` |
@@ -323,7 +361,10 @@ Every row above is **event-scoped**. Assigning a judge to a court or a schedule 
 
 | Method | Path | Capability |
 | --- | --- | --- |
-| GET | `/api/admin/audit` | `AUDIT_READ` (filter by `eventId`, `action`, `take` up to 250) |
+| GET | `/api/admin/audit` | `AUDIT_READ` (filter by `eventId`, `action`, `take` up to 250); `?format=csv` returns the same rows as a file |
+| GET | `/api/admin/events/:eventId/results` | `EVENT_PUBLISH`, readable by the event's organisers; the podium before it is published. `?format=csv` for the same as a file |
+| GET | `/api/admin/outbox` | `DELIVERY_MONITOR`; the transactional outbox that carries every notification, email and realtime topic. Answers a `summary` (`pending` / `processing` / `processed` / `failed`, plus `oldestPendingAt`) and the messages themselves, failures first. Filter by `status` and `topic` |
+| POST | `/api/admin/outbox/:id/retry` | `DELIVERY_MONITOR`; returns one message to `PENDING` and clears its error. Refused for delivered messages and for one a worker currently holds |
 | GET | `/api/admin/notifications/email-deliveries` | `DELIVERY_MONITOR` (filter by `status`) |
 | POST | `/api/admin/notifications/email-deliveries/:id/retry` | `DELIVERY_MONITOR` (sent deliveries cannot be retried) |
 

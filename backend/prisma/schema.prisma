@@ -814,8 +814,11 @@ model MatchParticipantSnapshot {
   ownerName      String
   teammateUserId String
   teammateName   String
-  clubId         String
-  clubName       String
+  // A club can be deleted while its teams are still playing out an event, which
+  // nulls the entry's club. The snapshot records that honestly rather than
+  // refusing to advance a winner over a club that no longer exists.
+  clubId         String?
+  clubName       String?
   createdAt      DateTime  @default(now())
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)

@@ -1,12 +1,9 @@
 'use client';
 
-import { Building2, Mail, Phone, UserCheck } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { InlineNotice } from '@/components/tournament/TournamentUI';
-import { RegistrationStatusBadge, softButtonClassName } from '@/components/shared/dashboard/DashboardUI';
+import { Building2, Mail, Phone } from 'lucide-react';
+import { CommandButton, StatusLabel } from '@/components/tournament/TournamentUI';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { cn } from '@/lib/utils';
+import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import type { RegistrationDto } from '@/types/admin';
 import styles from './AdminReview.module.css';
 
@@ -27,45 +24,19 @@ export function isAwaitingReview(registration: RegistrationDto) {
   return registration.status === 'PENDING' || registration.status === 'NEEDS_CHANGES';
 }
 
-function Player({
-  label,
-  name,
-  email,
-  phone,
-  club,
-}: {
-  label: string;
-  name: string;
-  email: string;
-  phone: string;
-  club: string;
-}) {
-  return (
-    <div className={styles.player}>
-      <p className={styles.playerLabel}>{label}</p>
-      <p className={styles.playerName}>{name}</p>
-      <div className={styles.contact}>
-        <p>
-          <Mail aria-hidden="true" />
-          <span>{email}</span>
-        </p>
-        <p>
-          <Phone aria-hidden="true" />
-          <span>{phone}</span>
-        </p>
-        <p>
-          <Building2 aria-hidden="true" />
-          <span className={styles.club}>{club}</span>
-        </p>
-      </div>
-    </div>
-  );
+/** Both players, because a reviewer checks the pair, not one name. */
+export function teamName(registration: RegistrationDto, separator: string) {
+  return `${registration.owner.fullName}${separator}${registration.teammate.fullName}`;
 }
 
 /**
- * One entry awaiting a decision. Only the transitions this state actually
- * allows are rendered — three buttons where two are permanently disabled reads
- * as a broken screen rather than a constrained one.
+ * One entry, as a row in a queue rather than a card in a gallery.
+ *
+ * A reviewer decides on the pair, their club and their category — so those three
+ * things are the row, and the contact details sit under them in one quiet line
+ * for the times a decision needs a phone call. It used to take a two-column
+ * grid and six labelled contact fields per entry, which is a screenful for one
+ * decision and meant scrolling to compare two entries in the same category.
  */
 export function AdminRegistrationCard({
   registration,
@@ -78,80 +49,86 @@ export function AdminRegistrationCard({
   busy: boolean;
   onReview: (status: RegistrationDto['status']) => void;
 }) {
-  const { dictionary, t } = useI18n();
-  const admin = dictionary.dashboard.admin;
-  const copy = admin.registrationsPage;
+  const { locale } = useI18n();
+  const copy = tournamentCopy[locale].admin.review;
+  const awaiting = isAwaitingReview(registration);
+  const club = registration.owner.club?.name ?? copy.noClub;
+  const team = teamName(registration, copy.pairSeparator);
 
   return (
-    <article className={styles.card} data-awaiting={!readOnly && isAwaitingReview(registration)}>
-      <div className={styles.head}>
-        <div className={styles.badges}>
-          <RegistrationStatusBadge status={registration.status} />
-          <Badge className="border-[var(--dash-border)] bg-[var(--dash-tint)] text-[var(--dash-muted)]">
-            {registration.category.name}
-          </Badge>
-        </div>
-        {readOnly ? null : (
-          <div className={styles.actions}>
-            {canReviewAs(registration, 'APPROVED') ? (
-              <Button
-                variant="red"
-                className="min-h-11 rounded-md"
-                disabled={busy}
-                onClick={() => onReview('APPROVED')}
-              >
-                <UserCheck className="h-4 w-4" />
-                {admin.registrations.approve}
-              </Button>
-            ) : null}
-            {canReviewAs(registration, 'DECLINED') ? (
-              <Button
-                variant="destructive"
-                className="min-h-11 rounded-md"
-                disabled={busy}
-                onClick={() => onReview('DECLINED')}
-              >
-                {admin.registrations.decline}
-              </Button>
-            ) : null}
-            {canReviewAs(registration, 'PENDING') ? (
-              <Button
-                variant="outline"
-                className={cn(softButtonClassName, 'min-h-11 rounded-md')}
-                disabled={busy}
-                onClick={() => onReview('PENDING')}
-              >
-                {admin.registrations.pending}
-              </Button>
-            ) : null}
-          </div>
-        )}
+    <li className={styles.row} data-awaiting={!readOnly && awaiting} data-status={registration.status.toLowerCase()}>
+      <div className={styles.rowText}>
+        <p className={styles.rowMeta}>
+          <StatusLabel icon={registration.status === 'APPROVED' ? 'check' : 'dot'}>
+            {statusWord(registration.status, copy)}
+          </StatusLabel>
+          <span className={styles.rowCategory}>{registration.category.name}</span>
+          <span className={styles.rowClub}>
+            <Building2 aria-hidden="true" />
+            {club}
+          </span>
+        </p>
+
+        <p className={styles.rowTeam}>{team}</p>
+
+        <p className={styles.rowContact} aria-label={fillTemplate(copy.contactLabel, { team })}>
+          <span>
+            <Mail aria-hidden="true" />
+            {registration.owner.email}
+          </span>
+          {registration.ownerPhone ? (
+            <span>
+              <Phone aria-hidden="true" />
+              {registration.ownerPhone}
+            </span>
+          ) : null}
+          <span>
+            <Mail aria-hidden="true" />
+            {registration.teammate.email}
+          </span>
+          {registration.teammatePhone ? (
+            <span>
+              <Phone aria-hidden="true" />
+              {registration.teammatePhone}
+            </span>
+          ) : null}
+        </p>
+
+        {registration.declineReason ? (
+          <p className={styles.rowReason}>
+            {fillTemplate(copy.declinedReason, { reason: registration.declineReason })}
+          </p>
+        ) : null}
       </div>
 
-      <div className={styles.players}>
-        <Player
-          label={copy.playerOne}
-          name={registration.owner.fullName}
-          email={registration.owner.email}
-          phone={registration.ownerPhone}
-          club={registration.owner.club?.name ?? copy.noClub}
-        />
-        <Player
-          label={copy.playerTwo}
-          name={registration.teammate.fullName}
-          email={registration.teammate.email}
-          phone={registration.teammatePhone || admin.registrations.noTeammatePhone}
-          club={registration.teammate.club?.name ?? copy.noClub}
-        />
-      </div>
-
-      {registration.declineReason ? (
-        <div className={styles.reason}>
-          <InlineNotice kind="error">
-            {t('dashboard.admin.registrations.reason', { reason: registration.declineReason })}
-          </InlineNotice>
+      {readOnly ? null : (
+        <div className={styles.rowActions}>
+          {canReviewAs(registration, 'APPROVED') ? (
+            <CommandButton tone="primary" busy={busy} onClick={() => onReview('APPROVED')}>
+              {copy.approve}
+            </CommandButton>
+          ) : null}
+          {canReviewAs(registration, 'DECLINED') ? (
+            <CommandButton tone="danger" disabled={busy} onClick={() => onReview('DECLINED')}>
+              {copy.decline}
+            </CommandButton>
+          ) : null}
+          {canReviewAs(registration, 'PENDING') ? (
+            <CommandButton disabled={busy} onClick={() => onReview('PENDING')}>
+              {copy.returnToQueue}
+            </CommandButton>
+          ) : null}
         </div>
-      ) : null}
-    </article>
+      )}
+    </li>
   );
+}
+
+type ReviewCopy = (typeof tournamentCopy)['en' | 'ka']['admin']['review'];
+
+/** The state in the same word the filter above the queue uses for it. */
+function statusWord(status: RegistrationDto['status'], copy: ReviewCopy) {
+  if (status === 'APPROVED') return copy.filterApproved;
+  if (status === 'DECLINED') return copy.filterDeclined;
+  return copy.filterPending;
 }

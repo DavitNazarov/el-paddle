@@ -1,12 +1,10 @@
 import type { Metadata } from 'next';
-import { requireAdminOnlyPage } from '@/lib/adminAccess';
-import { AdminRegistrationEventsClient } from '@/components/admin/AdminRegistrationEventsClient';
+import { AdminEventToolIndexClient } from '@/components/admin/AdminEventToolIndexClient';
 
 export const metadata: Metadata = {
-  title: 'Registrations — Admin — El Padel',
+  title: 'Entries — Admin — El Padel',
 };
 
-export default async function AdminRegistrationsPage() {
-  await requireAdminOnlyPage();
-  return <AdminRegistrationEventsClient />;
+export default function AdminRegistrationsPage() {
+  return <AdminEventToolIndexClient tool="registrations" />;
 }

@@ -12,9 +12,9 @@ import {
 } from '@/components/tournament/TournamentUI';
 import { SkeletonCards } from '@/components/shared/dashboard/Feedback';
 import { useI18n } from '@/components/shared/I18nProvider';
-import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
+import { tournamentCopy } from '@/lib/i18n/tournament';
 import { ControlFilterBar, type ControlView } from './control/ControlFilterBar';
-import { ControlSummaryStrip } from './control/ControlSummaryStrip';
+import { ControlFocusBar } from './control/ControlFocusBar';
 import { CourtLane } from './control/CourtLane';
 import { DrawFlow } from './control/DrawFlow';
 import { MatchActionLayer } from './control/MatchActionLayer';
@@ -64,24 +64,25 @@ export function AdminMatchControlClient({ eventId }: { eventId: string }) {
         <BackLink href={`/admin/events/${eventId}`}>{copy.admin.common.eventWorkspace}</BackLink>
       </div>
 
+      {/* Only a failure to load the day stays on the page: it describes the
+          screen itself. Command outcomes are toasts, so they are readable over
+          the match sheet that sent them. */}
       {desk.error ? <div className="mb-4"><InlineNotice kind="error" onDismiss={desk.clearError}>{desk.error}</InlineNotice></div> : null}
-      {desk.notice ? <div className="mb-4"><InlineNotice kind="success" onDismiss={desk.clearNotice}>{desk.notice}</InlineNotice></div> : null}
       {locked ? <div className="mb-4"><InlineNotice kind="info">{control.readOnly}</InlineNotice></div> : null}
 
       <div className={styles.page}>
-        <ControlSummaryStrip
-          filters={filters}
-          onFilter={(patch) => setFilters((current) => ({ ...current, ...patch }))}
-          onShowCourts={() => setView('courts')}
-          summary={board.summary}
+        {/* One instruction, not five reports. Matches with nowhere to be played
+            are named here too, so the day has a single place to look. */}
+        <ControlFocusBar
+          board={board}
+          busy={busy}
+          eventId={eventId}
+          locked={locked}
+          onStart={(matchId) => {
+            const entry = board.byMatchId.get(matchId);
+            if (entry) void commands.start(entry.match);
+          }}
         />
-
-        {board.summary.awaitingCourt ? (
-          <InlineNotice kind="warning">
-            {fillTemplate(control.awaitingCourt, { count: board.summary.awaitingCourt })}{' '}
-            <Link className={styles.inlineLink} href={`/admin/events/${eventId}/schedule`}>{control.goToSchedule}</Link>
-          </InlineNotice>
-        ) : null}
 
         {desk.loading && !hasDraw ? (
           <SkeletonCards count={3} columns={2} label={control.loading} />

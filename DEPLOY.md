@@ -1,156 +1,72 @@
 # Production Deployment
 
+Production is Render, declared in `render.yaml`. The site and the API are already aimed at the domains you add in the dashboard:
+
+- `https://elpadell.com` and `https://www.elpadell.com` on the `elpadel-web` service (`www` redirects to the apex)
+- `https://api.elpadell.com` on the `elpadel-api` service
+
+Login, live scoring, server-rendered pages, CSV downloads, and email links all use that API host. Nothing else has to be pointed at the domain after DNS resolves. The `*.onrender.com` hostnames are Render's defaults, not the app origin, and will not share a login cookie.
+
 ## Legal launch gate
 
-Before exposing registration publicly, set every `NEXT_PUBLIC_LEGAL_*` value in the frontend environment, especially the registered legal entity name, legal form, identification number, legal address, and working privacy/contact email. Confirm the event-specific fee, cancellation deadlines, media practices, age rules, and participation wording with Georgian counsel. The site deliberately displays a launch warning on legal pages while `NEXT_PUBLIC_LEGAL_ENTITY_ID` is unset.
+Before exposing registration publicly, set every `NEXT_PUBLIC_LEGAL_*` value on `elpadel-web`, especially the registered legal entity name, legal form, identification number, legal address, and working privacy/contact email. Those values are baked into the frontend image, so save them and redeploy `elpadel-web` once. Confirm the event-specific fee, cancellation deadlines, media practices, age rules, and participation wording with Georgian counsel. The site displays a launch warning on legal pages while `NEXT_PUBLIC_LEGAL_ENTITY_ID` is unset.
 
-Deploy the `20260717170000_legal_acceptance` migration before the application version that enforces legal acceptance. Keep the policy version constants aligned between `backend/src/common/legal.ts` and `frontend/src/lib/legal.ts` whenever a material policy update requires renewed acceptance.
+Keep the policy version constants aligned between `backend/src/common/legal.ts` and `frontend/src/lib/legal.ts` whenever a material policy update requires renewed acceptance.
 
-This repository is a separated full-stack app:
+## What Render runs
 
-- `frontend/`: Next.js UI, built as a standalone Node server.
-- `backend/`: Express API, Prisma, PostgreSQL access, auth, Resend email, Google OAuth.
-- `postgres`: PostgreSQL 16 container managed by Docker Compose.
-- `worker`: PostgreSQL-backed transactional outbox processor for email delivery and scheduled expiry work.
+| Service | Kind | Role |
+| --- | --- | --- |
+| `elpadel-web` | Web | Next.js. Health check `/`. |
+| `elpadel-api` | Web | Express, Prisma, Socket.IO. Health check `/health`. One instance. |
+| `elpadel-worker` | Worker | Email outbox. No public port. |
+| `elpadel-db` | Postgres 16 | Private network only. Frankfurt. |
 
-The backend uses Socket.IO for committed tournament updates; the API process handles realtime outbox topics because it owns the Socket.IO server. The worker handles email outbox topics. The existing Nginx upgrade headers carry realtime connections without an additional public port.
+All four are in Frankfurt so the API and worker use the internal database URL. The API stays at one instance: Socket.IO lives in that process, and Render does not pin a browser to one instance.
 
-## 1. Clone On The VPS
+`elpadel-api` delivers realtime outbox topics (`RUN_OUTBOX_IN_API=true`). `elpadel-worker` delivers email. Both run `npm run prisma:migrate:deploy` before the new instance starts.
 
-SSH into the Ubuntu 24.04 VPS:
+## 1. Apply the blueprint
 
-```bash
-ssh root@YOUR_SERVER_IP
-```
+In the Render dashboard, create a Blueprint from this repository's `main` branch. Render reads `render.yaml`.
 
-Clone the repo:
+Fill the secrets it asks for:
 
-```bash
-mkdir -p /var/www
-cd /var/www
-git clone YOUR_REPO_URL el-paddle
-cd el-paddle
-```
-
-## 2. Create Production Environment
-
-Create the real `.env` from the example:
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Required values:
-
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `POSTGRES_DB`
-- `DATABASE_URL`
-- `FRONTEND_URL`
-- `BACKEND_URL`
-- `NEXT_PUBLIC_API_URL`
-- `NEXT_PUBLIC_SITE_URL` (canonical SEO origin; defaults to `https://elpadell.com` in Docker build if unset)
-- `JWT_SECRET`
+- `RESEND_API_KEY` and `RESEND_FROM_EMAIL` — required. Production refuses to start without the API key, so account email cannot pretend to send.
 - `ADMIN_EMAILS`
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — leave blank to keep Gmail login disabled.
+- `FIRST_ADMIN_BOOTSTRAP_TOKEN` — set only for the first admin, then delete it. Generate with `openssl rand -base64 48`. Production refuses to start if it is still set after an admin exists.
+- `JWT_SECRET` is generated once by the blueprint. Do not rotate it casually; existing sessions would stop verifying.
 
-Optional values:
+`NEXT_PUBLIC_LEGAL_*` on `elpadel-web` can be filled now or after the first boot. Empty values keep the in-code fallbacks, and an empty identification number leaves the launch warning up.
 
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REDIRECT_URI`
+Do not run the mock seed against this database.
 
-Bootstrap-only value:
+## 2. Add the domains
 
-- `FIRST_ADMIN_BOOTSTRAP_TOKEN` - set temporarily to create the first production admin, then remove it after the admin exists.
+On `elpadel-web`, add `elpadell.com` and `www.elpadell.com`. On `elpadel-api`, add `api.elpadell.com`. Create the DNS records Render displays for each name.
 
-# Public URLs. Replace with your real domains.
-# FRONTEND_URL accepts a comma-separated list; the first entry is used for email/OAuth redirects.
-FRONTEND_URL=https://elpadell.com,https://www.elpadell.com
-BACKEND_URL=https://api.elpadell.com
-NEXT_PUBLIC_API_URL=https://api.elpadell.com
-GOOGLE_REDIRECT_URI=https://api.elpadell.com/api/auth/google/callback
-# Canonical public site origin for SEO (robots.txt Sitemap, sitemap.xml, Open Graph, canonical URLs).
-# Prefer this over FRONTEND_URL when www and apex both appear in FRONTEND_URL.
-NEXT_PUBLIC_SITE_URL=https://elpadell.com
-POSTGRES_USER=elpadel_app
-POSTGRES_PASSWORD=GENERATED_UNIQUE_PASSWORD
-POSTGRES_DB=elpadel_prod
-DATABASE_URL=postgresql://elpadel_app:GENERATED_UNIQUE_PASSWORD@postgres:5432/elpadel_prod?schema=public
-```
+If Cloudflare still holds the zone, leave the records DNS-only (grey). An orange-cloud proxy would present Cloudflare's certificate and hide the visitor address from the API's rate limits and audit log. Render terminates TLS itself.
 
-Use a brand-new production database name, user, password, and Docker volume. Do not point production at a development, staging, demo, restored-from-local, or seeded database. The mock seed script is guarded and must not be run in production.
+No environment change and no rebuild follows this step. The blueprint already set:
 
-Generate a strong `JWT_SECRET`:
+- `FRONTEND_URL=https://elpadell.com,https://www.elpadell.com`
+- `BACKEND_URL=https://api.elpadell.com`
+- `NEXT_PUBLIC_API_URL=https://api.elpadell.com`
+- `NEXT_PUBLIC_SITE_URL=https://elpadell.com`
+- `GOOGLE_REDIRECT_URI=https://api.elpadell.com/api/auth/google/callback`
+
+The cookie domain is derived as `.elpadell.com`. Do not set `COOKIE_DOMAIN`.
+
+Gmail login also needs that callback URL added in Google Cloud. Password login does not.
+
+## 3. First admin
+
+Use this only while the database has no admin. The endpoint returns `409` after one exists.
 
 ```bash
-openssl rand -base64 48
-```
-
-Generate a one-time first-admin bootstrap token:
-
-```bash
-openssl rand -base64 48
-```
-
-Important: `NEXT_PUBLIC_API_URL` is baked into the frontend image at build time. If you change it, rebuild the frontend image with `docker compose up -d --build frontend`.
-
-## 3. Build And Start
-
-Build and start the full Docker stack:
-
-```bash
-docker compose up -d --build
-```
-
-Check container status:
-
-```bash
-docker compose ps
-```
-
-Run the non-mutating production readiness check:
-
-```bash
-npm run readiness:check
-```
-
-The compose file publishes only localhost ports for Nginx:
-
-- Frontend: `127.0.0.1:3000`
-- Backend API: `127.0.0.1:4000`
-
-Backend health endpoint:
-
-```bash
-curl http://127.0.0.1:4000/health
-```
-
-## 4. Run Prisma Migrations
-
-Run migrations after the containers are up:
-
-```bash
-docker compose exec backend npm run prisma:migrate:deploy
-```
-
-Migration strategy note:
-
-- This project uses a manual migration command.
-- This is safer than running migrations automatically in the container entrypoint because every restart or every future scaled backend replica would try to run migrations.
-- The tradeoff is that deployers must remember to run `prisma:migrate:deploy` after pulling code that includes new Prisma migrations.
-- The production backend image does not include TypeScript dev tooling, so the local `db:seed` script is not intended to run inside the production container.
-- Verify both `backend` and `worker` are healthy/running after each migration. Failed email deliveries remain retryable through the admin delivery API.
-
-## 5. Create The First Admin
-
-Use this only while the production database has no admin users. The endpoint requires `FIRST_ADMIN_BOOTSTRAP_TOKEN` and returns `409` after the first admin exists.
-
-```bash
-CSRF_TOKEN=$(curl -s -c /tmp/elpadel-cookies "$BACKEND_URL/api/auth/csrf" | sed -E 's/.*"token":"([^"]+)".*/\1/')
-curl -b /tmp/elpadel-cookies -X POST "$BACKEND_URL/api/admin/bootstrap" \
+CSRF_TOKEN=$(curl -s -c /tmp/elpadel-cookies "https://api.elpadell.com/api/auth/csrf" | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -b /tmp/elpadel-cookies -X POST "https://api.elpadell.com/api/admin/bootstrap" \
   -H "content-type: application/json" \
   -H "x-csrf-token: $CSRF_TOKEN" \
   -H "x-bootstrap-token: YOUR_FIRST_ADMIN_BOOTSTRAP_TOKEN" \
@@ -162,235 +78,25 @@ curl -b /tmp/elpadel-cookies -X POST "$BACKEND_URL/api/admin/bootstrap" \
   }'
 ```
 
-After it succeeds, remove `FIRST_ADMIN_BOOTSTRAP_TOKEN` from `.env` and recreate the backend container:
+Then delete `FIRST_ADMIN_BOOTSTRAP_TOKEN` from the `elpadel-secrets` group and redeploy `elpadel-api`.
 
-```bash
-docker compose up -d --force-recreate backend
-```
+## 4. Deploys after this
 
-## 6. Logs
+A push to `main` deploys the three services. Migrations run before the API and the worker start serving the new release. Confirm with `GET https://api.elpadell.com/health/ready` (database reachable, outbox backlog). `/health` only means the process is up; Render uses it so a database blip does not restart the API. `GET /api/meta/version` reports the running version and commit when `APP_VERSION` and `GIT_COMMIT` are set.
 
-Tail all logs:
+Changing `NEXT_PUBLIC_API_URL` or any `NEXT_PUBLIC_LEGAL_*` value requires a redeploy of `elpadel-web`, because Next inlines them at image build. Changing the API's runtime env only needs an API redeploy.
 
-```bash
-docker compose logs -f
-```
+## Backups
 
-Tail backend logs:
+Render keeps backups of `elpadel-db`. Restore from the Render database dashboard, into a new database first. The old host's `scripts/backup-offsite.sh` cron does not run here.
 
-```bash
-docker compose logs -f backend
-```
+## Retired: Contabo VPS
 
-Tail frontend logs:
+This is not the deploy path. It is the previous host, kept so DNS can be pointed back.
 
-```bash
-docker compose logs -f frontend
-```
+- Server `194.163.143.231`. Production compose project `el_paddle` in `/root/el-paddle` (branch `main`). Staging compose project `elpadel_staging` in `/root/el-paddle-staging` (branch `develop`).
+- Nginx on the host proxied `elpadell.com` to `127.0.0.1:3000` and `api.elpadell.com` to `127.0.0.1:4000`. Config template: `deploy/nginx.conf`. TLS was a Cloudflare origin cert for the site and Let's Encrypt for the API. The API records were DNS-only.
+- Update was `git pull`, `docker compose up -d --build`, then `docker compose exec backend npm run prisma:migrate:deploy`.
+- `docker-compose.yml` in this repo still builds that stack. Render builds the same Dockerfiles.
 
-Tail Postgres logs:
-
-```bash
-docker compose logs -f postgres
-```
-
-## 7. Update After Git Pull
-
-From the project directory:
-
-```bash
-cd /var/www/el-paddle
-git pull
-docker compose up -d --build
-docker compose exec backend npm run prisma:migrate:deploy
-docker compose ps
-```
-
-Take a database backup before every production migration:
-
-```bash
-mkdir -p backups
-docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > "backups/elpadel-$(date -u +%Y%m%dT%H%M%SZ).dump"
-```
-
-If only environment variables changed:
-
-```bash
-docker compose up -d --force-recreate
-```
-
-If `NEXT_PUBLIC_API_URL` changed, rebuild the frontend:
-
-```bash
-docker compose up -d --build frontend
-```
-
-## 8. Nginx Reverse Proxy
-
-The provided config is:
-
-```bash
-deploy/nginx.conf
-```
-
-It proxies:
-
-- `app.example.com` -> `127.0.0.1:3000` -> frontend container
-- `api.example.com` -> `127.0.0.1:4000` -> backend container
-
-Copy and edit it:
-
-```bash
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/el-paddle
-sudo nano /etc/nginx/sites-available/el-paddle
-```
-
-Replace:
-
-- `app.example.com`
-- `api.example.com`
-
-Enable the site:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/el-paddle /etc/nginx/sites-enabled/el-paddle
-```
-
-If the certificates already exist, test and reload:
-
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-## 9. HTTPS With Certbot
-
-Point DNS records to the VPS first:
-
-- `app.example.com` A record -> VPS IP
-- `api.example.com` A record -> VPS IP
-
-Install Certbot if it is not already installed:
-
-```bash
-sudo apt update
-sudo apt install -y certbot python3-certbot-nginx
-```
-
-First-time certificate setup matching the provided config's separate certificate paths:
-
-```bash
-sudo certbot --nginx -d app.example.com
-sudo certbot --nginx -d api.example.com
-```
-
-Certbot can create or update SSL server blocks automatically. If you prefer one shared certificate for both domains, run `sudo certbot --nginx -d app.example.com -d api.example.com` and then point both HTTPS server blocks at the same generated `/etc/letsencrypt/live/...` certificate directory.
-
-If you use the provided `deploy/nginx.conf` before certificates exist, the `ssl_certificate` paths will not exist yet and `nginx -t` will fail. In that case, either:
-
-- run `certbot --nginx` against a temporary HTTP-only server block first, then copy the provided config, or
-- comment out the HTTPS server blocks until Certbot has created certificates.
-
-Renewal check:
-
-```bash
-sudo certbot renew --dry-run
-```
-
-## 10. Backups And Restore Drills
-
-Create a compressed custom-format backup:
-
-```bash
-mkdir -p backups
-docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > "backups/elpadel-$(date -u +%Y%m%dT%H%M%SZ).dump"
-```
-
-Restore into a new database name first, never over the live database as a first step:
-
-```bash
-docker compose exec -T postgres createdb -U "$POSTGRES_USER" elpadel_restore_check
-docker compose exec -T postgres pg_restore -U "$POSTGRES_USER" -d elpadel_restore_check --clean --if-exists < backups/YOUR_BACKUP.dump
-docker compose exec -T postgres psql -U "$POSTGRES_USER" -d elpadel_restore_check -c 'select count(*) from "User";'
-```
-
-Run a restore drill before launch and after every material schema change. Record the backup file, restore timestamp, command output, and operator in your ops log.
-
-### Scheduled off-site backups
-
-`scripts/backup-offsite.sh` dumps, encrypts, uploads and prunes in one pass, and is meant to run from the project root under cron. A dump holds every account's email, phone, password hash and match history, so it is encrypted with GPG (AES-256, symmetric) **before** it leaves the host — the script refuses to run without a passphrase rather than falling back to plaintext.
-
-Add to the production `.env`:
-
-```bash
-BACKUP_RCLONE_REMOTE=b2:elpadel-backups/db
-BACKUP_PASSPHRASE=<long random passphrase>
-BACKUP_RETAIN_DAYS=30
-```
-
-**Keep a copy of `BACKUP_PASSPHRASE` somewhere that is not this server.** It is not recoverable, and a backup you cannot decrypt is not a backup. Uploaded objects are `elpadel-<stamp>.dump.gpg`; restore by decrypting first:
-
-```bash
-gpg --batch --passphrase "$BACKUP_PASSPHRASE" --decrypt backups/elpadel-YOUR_STAMP.dump.gpg | docker compose exec -T postgres pg_restore -U "$POSTGRES_USER" -d elpadel_restore_check --clean --if-exists
-```
-
-Include the decrypt step in the restore drill above — an untested passphrase is the most common way this fails.
-
-## 11. Existing System PostgreSQL Alternative
-
-The default production compose uses a PostgreSQL container with a named volume:
-
-```yaml
-el_paddle_postgres_data
-```
-
-If you intentionally want to use the VPS system-level PostgreSQL instead:
-
-1. Remove or comment out the `postgres` service from `docker-compose.yml`.
-2. Remove `backend.depends_on.postgres`.
-3. Set `DATABASE_URL` in `.env` to the reachable PostgreSQL connection string.
-
-On Linux, containers do not always have `host.docker.internal` by default, so using the bundled Postgres container is the simpler and more repeatable production setup.
-
-## 12. Production Notes / TODOs
-
-- Backend has a real health endpoint at `/health` and the backend Docker image uses it.
-- Frontend healthcheck hits `/`.
-- Docker images use Node 22 because this project uses Prisma 7.8, whose dependency tree expects Node 22+.
-- Socket.IO runs in the backend API process. Keep `RUN_OUTBOX_IN_API=true` in production so realtime outbox topics are emitted by the process with the live Socket.IO server.
-- `RESEND_API_KEY` is required in production (`NODE_ENV=production`). Without it, auth emails fail closed (no console fallback that could mark users verified without delivery).
-- After bootstrapping the first admin, remove `FIRST_ADMIN_BOOTSTRAP_TOKEN` from `.env` and recreate the backend container. In production the backend **refuses to start** if the token is still set while an admin already exists.
-- Production account creation passwords must be at least 12 characters and no more than 72 UTF-8 bytes.
-- Logout bumps `User.sessionVersion`, which invalidates outstanding JWTs for that account (stolen cookies stop working after logout).
-- Security-relevant actions emit structured `[audit]` JSON lines to stdout (login success/failure, logout, bootstrap, disqualify, account delete).
-- Gmail login is disabled unless `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` are configured.
-- Keep `.env` out of Git.
-- Nginx config in `deploy/nginx.conf` rate-limits `/api/auth/login`, `/register`, `/verify`, and `/api/admin/bootstrap`. The Express app also applies in-process limits.
-- Postgres is not published on the host in `docker-compose.yml` (backend-only network access).
-- CI runs lint, tests, build, and `npm audit --audit-level=high` on pull requests. Locally: `npm run lint && npm test && npm run build && npm run audit`.
-- Known moderate advisories in transitive `next`/`postcss` and `prisma`/`@hono/node-server` currently require major downgrades or unreleased upgrades — do **not** run `npm audit fix --force`. Re-check after Next 16.3+ / Prisma 7.9+ land.
-
-## 13. Vercel Frontend-Only Deploy
-
-The backend is not a Vercel serverless app; it is an Express API intended to run from the Docker/VPS setup above.
-
-Set the Vercel project Root Directory to:
-
-```bash
-frontend
-```
-
-With that root directory, Vercel is already inside the frontend package. `vercel.json` uses frontend-local commands:
-
-```bash
-npm ci
-npm run build
-```
-
-Set this Vercel environment variable:
-
-```dotenv
-NEXT_PUBLIC_API_URL=https://api.example.com
-```
-
-For auth cookies, deploy the frontend and API on sibling hosts of the same parent domain, for example `elpadell.com` and `api.elpadell.com`. The backend then sets `Domain=.elpadell.com` (auto-derived, or override with `COOKIE_DOMAIN`) so Next.js SSR on the site origin can read the session cookie. If the frontend remains on a `*.vercel.app` domain while the API is on another domain, browser cookie rules can block session cookies on API requests.
+To roll traffic back, point `elpadell.com`, `www`, and `api.elpadell.com` at `194.163.143.231` again and confirm the compose stacks there are the release you want. Take a fresh database backup before any such cut.

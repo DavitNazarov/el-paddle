@@ -185,6 +185,61 @@ export async function createEvent(input: CreateEventInput) {
   });
 }
 
+/**
+ * Copy an event's setup onto a new date.
+ *
+ * A club running a monthly tournament retypes the same title, venue, fee, IBAN,
+ * receiver and category list every time, and a mistyped IBAN is money going to
+ * the wrong place. Only the setup is copied: entries, draws, courts, organisers
+ * and every publication flag belong to the event that happened, so the copy
+ * starts unpublished, with registration open and nobody entered.
+ */
+export async function duplicateEvent(input: {
+  sourceId: string;
+  actorId: string;
+  date: Date;
+  title?: string;
+}) {
+  const source = await prisma.event.findUnique({
+    where: { id: input.sourceId },
+    include: eventInclude,
+  });
+  if (!source) jsonError('Event not found.', 404);
+
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.event.create({
+      data: {
+        title: input.title || source.title,
+        date: input.date,
+        location: source.location,
+        description: source.description,
+        // The arrival time is a clock time on the old date; carried across, it
+        // would name a moment before the new event exists. It is re-entered.
+        arrivalTime: null,
+        participationFee: source.participationFee,
+        bankAccountIban: source.bankAccountIban,
+        bankAccountReceiver: source.bankAccountReceiver,
+        createdById: input.actorId,
+        categories: {
+          create: source.categories.map((link) => ({ category: { connect: { id: link.categoryId } } })),
+        },
+      },
+      include: eventInclude,
+    });
+
+    await writeAudit(tx, {
+      action: 'event.duplicated',
+      actorId: input.actorId,
+      eventId: created.id,
+      entityType: 'Event',
+      entityId: created.id,
+      before: { sourceEventId: source.id, sourceTitle: source.title },
+      after: { title: created.title, date: created.date.toISOString(), categories: created.categories.length },
+    });
+    return created;
+  });
+}
+
 export async function deleteEvent(id: string, actorId: string) {
   try {
     await prisma.$transaction(async (tx) => {
@@ -285,24 +340,30 @@ export async function updateEvent(id: string, input: UpdateEventInput, expectedV
   });
 }
 
+/**
+ * The public calendar: everything already published, split at today. `upcoming`
+ * is the nearest scheduled event on its own because the home page leads with
+ * exactly one; `scheduled` is the same list unabridged, so the events page can
+ * show a season rather than a single date.
+ */
 export async function listPublicEvents() {
   const today = startOfToday();
-  const [upcoming, previous] = await Promise.all([
+  const [scheduled, previous] = await Promise.all([
     prisma.event.findMany({
       where: { isPublished: true, date: { gte: today } },
       orderBy: { date: 'asc' },
-      take: 1,
+      take: 12,
       include: eventInclude,
     }),
     prisma.event.findMany({
       where: { isPublished: true, date: { lt: today } },
       orderBy: { date: 'desc' },
-      take: 6,
+      take: 24,
       include: eventInclude,
     }),
   ]);
 
-  return { upcoming: upcoming[0] ?? null, previous };
+  return { upcoming: scheduled[0] ?? null, scheduled, previous };
 }
 
 /** Lightweight published-event index for SEO sitemaps (not truncated like listPublicEvents). */

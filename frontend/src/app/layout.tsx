@@ -5,6 +5,7 @@ import { I18nProvider } from '@/components/shared/I18nProvider';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { normalizeLocale } from '@/lib/i18n';
 import { LegalFooter } from '@/components/legal/LegalFooter';
+import { ToastViewport } from '@/components/shared/Toasts';
 import {
   DEFAULT_DESCRIPTION,
   DEFAULT_OG_IMAGE_PATH,
@@ -69,6 +70,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
         <I18nProvider initialLocale={initialLocale}>
           {children}
           <LegalFooter />
+          <ToastViewport />
         </I18nProvider>
       </body>
     </html>

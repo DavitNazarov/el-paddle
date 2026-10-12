@@ -15,16 +15,13 @@ import {
   canRecordResult,
   canStart,
   clubNameOf,
-  emptyResultDraft,
   pairName,
   participantOf,
-  readResult,
+  resultOptions,
   setProgress,
   tallyOf,
   usesSets,
-  type ResultDraft,
 } from './matchModel';
-import { finishedTallyExample } from './setEngine';
 import type { ControlMatch } from './runBoard';
 import styles from './MatchControl.module.css';
 
@@ -212,11 +209,16 @@ function SetsStrip({ match }: { match: MatchDto }) {
 }
 
 /**
- * The result, written the way it is heard: two numbers. An operator is told
- * "one two", not who took which set, so the console asks once for the final set
- * tally and the server derives the sets it is made of. The submit stays off
- * until the pair of numbers is a result the server would accept, so a half-typed
- * tally can never reach it.
+ * The result, chosen rather than typed.
+ *
+ * An operator is told "two one" and has to turn that into a pair of numbers the
+ * match can actually end on — which means knowing how many sets it runs to.
+ * That arithmetic was the whole difficulty: a race to one set was being given a
+ * 1–2, and the only sign it was wrong was a submit button that stayed off.
+ *
+ * A race to three has six possible finishes, so the whole set fits on screen.
+ * Naming them states the format instead of explaining it, and nothing invalid
+ * can be entered. The command is unchanged: one tally, one request.
  */
 function ResultField({
   busy,
@@ -230,56 +232,39 @@ function ResultField({
   const { locale } = useI18n();
   const copy = tournamentCopy[locale];
   const control = copy.admin.control;
-  // A different match reuses this form, and the last one's numbers must not be
-  // its opening bid.
-  const [draft, setDraft] = useResetOnChange<ResultDraft>(match.id, emptyResultDraft);
-  const reading = readResult(match, draft);
   const winsNeeded = setProgress(match).winsNeeded;
+  const options = resultOptions(match);
+  const anyBlocked = options.some((option) => option.regresses);
 
   return (
-    <form
-      className={styles.resultForm}
-      onSubmit={(formEvent) => {
-        formEvent.preventDefault();
-        if (reading.finished && !reading.regresses) onSubmit(match, reading.a, reading.b);
-      }}
-    >
-      <div className={styles.resultRow}>
-        {SIDES.map((side) => (
-          <label key={side} className={styles.resultField}>
-            <span className="sr-only">
-              {fillTemplate(control.resultFieldLabel, { pair: pairName(participantOf(match, side), copy.common.tbd) })}
-            </span>
-            <span className={styles.resultSide} aria-hidden="true">{side}</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              className={styles.resultInput}
-              min={0}
-              max={winsNeeded}
-              placeholder="0"
-              disabled={busy}
-              value={draft[side]}
-              onChange={(fieldEvent) => setDraft((current) => ({ ...current, [side]: fieldEvent.target.value }))}
-            />
-          </label>
-        ))}
-        <CommandButton
-          type="submit"
-          tone="primary"
-          className={styles.resultSubmit}
-          busy={busy}
-          disabled={!reading.finished || reading.regresses}
-        >
-          {control.recordResult}
-        </CommandButton>
-      </div>
-      <p className={styles.resultHint}>
-        {reading.regresses
-          ? control.resultRegresses
-          : fillTemplate(control.resultHint, { example: finishedTallyExample(winsNeeded) })}
+    <div className={styles.resultPicker}>
+      <p className={styles.resultFormat}>
+        {fillTemplate(control.resultFormat, { count: winsNeeded })}
       </p>
-    </form>
+      <ul className={styles.resultOptions}>
+        {options.map((option) => {
+          const winner = pairName(participantOf(match, option.winner), copy.common.tbd);
+          return (
+            <li key={`${option.a}-${option.b}`}>
+              <button
+                type="button"
+                className={styles.resultOption}
+                data-winner={option.winner}
+                disabled={busy || option.regresses}
+                aria-label={fillTemplate(control.resultOptionLabel, { pair: winner, a: option.a, b: option.b })}
+                onClick={() => onSubmit(match, option.a, option.b)}
+              >
+                <span className={styles.resultOptionScore}>{option.a}–{option.b}</span>
+                <span className={styles.resultOptionWinner}>{winner}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className={styles.resultHint}>
+        {anyBlocked ? control.resultRegresses : control.resultPickHint}
+      </p>
+    </div>
   );
 }
 

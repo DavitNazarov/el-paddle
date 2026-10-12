@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { wwwToApexRedirect } from '@/lib/canonical-host';
 
 /**
  * Per-request Content-Security-Policy.
@@ -63,6 +64,13 @@ function contentSecurityPolicy(nonce: string) {
 }
 
 export function middleware(request: NextRequest) {
+  const redirectTo = wwwToApexRedirect(
+    request.headers.get('host'),
+    process.env.NEXT_PUBLIC_SITE_URL,
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  );
+  if (redirectTo) return NextResponse.redirect(redirectTo, 301);
+
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const policy = contentSecurityPolicy(nonce);
 

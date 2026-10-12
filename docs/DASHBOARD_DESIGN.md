@@ -98,9 +98,13 @@ exists server-side but has no screens.)
   state and a free-text search over players, clubs and match numbers — the five
   ways a desk gets interrupted. What is chosen becomes a removable chip, so the
   current question is always one line.
-- **Counts are navigation.** Each tile in the summary strip narrows the console
-  to the matches behind it, because a number an operator cannot act on is a
-  number they have to translate into a search.
+- **Lead with the instruction, not the dashboard.** The console used to open on
+  five counts — playing, ready, courts free, behind, played — and leave the
+  operator to work out which was the instruction. Four of the five are reports;
+  only one names something being lost as it is read, which is a court standing
+  free with a match waiting on it. `controlFocus` states that court and offers
+  its command. Nothing was lost: the filter bar still narrows by every state the
+  counts described, so each is a press rather than a number to interpret.
 - **One row everywhere, one place to act.** Every view is read-only; the row
   opens a sheet, and the sheet is the only surface carrying commands. Eight
   courts must not mean eight open score forms.
@@ -160,9 +164,9 @@ seventh without a reason.
 | Archetype | Question | Shape | Built |
 |---|---|---|---|
 | **Console** | "what do I do *right now*?" | One hero object + supporting meters | Match control |
-| **Board** | "where does everything stand?" | Rows, one per entity, each with position + pending work | Admin/organiser home, event pickers, court board |
+| **Board** | "where does everything stand?" | Rows, one per entity, each with position + pending work | Admin/organiser home, event pickers, courts & schedule |
 | **Queue** | "what is waiting on my decision?" | Progress meter + spined rows + only-available actions | Registration review, opponent requests |
-| **Workspace** | "how do I drive this one thing forward?" | Lifecycle hero + stage cards + state board | Event workspace |
+| **Workspace** | "how do I drive this one thing forward?" | Agenda band + header band + stage list + publication list | Event workspace |
 | **Directory** | "find and manage many similar things" | Filters + table/cards + row actions | Users, clubs, categories, club requests |
 | **Form** | "change these values" | Grouped fields + explicit save + inline errors; stepped when it asks more than one question | Event create/edit (stepped), account settings |
 
@@ -182,9 +186,19 @@ still needing a decision get an **amber spine** (`box-shadow: inset 3px 0 0`).
 Render only the transitions the current state actually allows.
 
 ### Workspace
-Lifecycle hero (ring + rail + primary action + metadata strip), then numbered
-stage cards each carrying its own live count, then a state board of every
-publishable surface.
+**What is waiting comes before where the event has reached.** `EventAgendaBand`
+leads, ranking the open queues by what they cost and stating the most expensive
+one outright — an idle court outranks every review queue, because it is the only
+one losing time as it is read. Then `EventHeaderBand` (which event, how far
+along, the primary action), then `EventStageList` — each stage carrying its live
+count, never an instruction, because the explanation is read once and the number
+is read every time — then `EventPublicationList` for the surfaces the public can
+see.
+
+`eventAgenda` is the **only** vocabulary for "what needs you". The season board
+feeds it the grouped `/api/admin/events/operations` counts through
+`operationsAsSignals`, so a row on the board and the workspace behind it can
+never describe one event two different ways.
 
 ---
 
@@ -208,6 +222,13 @@ publishable surface.
 8. **No legacy dark-theme classes.** `text-[var(--padel-ivory)]`,
    `rgba(213,201,177,…)`, `var(--padel-gold)` only render through a
    compatibility shim in `DashboardStyles`. Use `--dash-*` tokens.
+9. **Portalled surfaces need their tokens scoped twice.** Dialogs and the
+   message layer render into `<body>`, outside `.dash-app`. Anything they style
+   must also be scoped to `.dashboard-dialog-content` / `.dashboard-portal-surface`,
+   or every `var(--dash-*)` lookup inside them resolves to nothing.
+10. **An empty state says why it is empty and what fills it.** "No matches" is a
+    fact; "No matches yet — lock a draw to create them" is the screen doing its
+    job.
 
 ### The StatusLabel trap
 
@@ -262,6 +283,29 @@ Reach for these before writing anything new.
 `InlineNotice` (TournamentUI) and `FeedbackBanner` (DashboardUI) are thin
 wrappers over these — improving `Feedback` improves every call site at once.
 
+### `components/shared/Toasts.tsx` — the message layer
+**A command's outcome is a message, not a banner.** Commands are sent from
+inside dialogs, and a banner at the top of the page sits *behind* the open
+dialog — so a refusal looked like nothing had happened and the operator sent it
+again. `pushToast` renders above every layer, so the answer arrives where the
+reader is looking. The store is a module rather than a context, because
+handlers, fetch wrappers and effects all over the app push messages and none of
+them should have to be a descendant of a provider to say something failed.
+
+Three rules it encodes:
+
+- **Page-level load failures stay inline.** They describe the screen itself, not
+  a command, and they do not disappear on a timer.
+- **The server's own reason is the message** whenever it gives one. "Court is
+  busy" is what says which action to take instead; "Something went wrong" is not.
+- **An error does not auto-dismiss.** It describes something still true, and
+  match-day operators are not watching the screen when it lands. Success and
+  info leave on their own.
+
+Success wording names the specific thing that changed — "Match 4 is on Court 2",
+not "Saved" — because an operator who looked away has to be able to tell which of
+several commands landed.
+
 ### `components/tournament/TournamentUI.tsx`
 `TournamentPanel`, `TournamentSectionHeader`, `StatusLabel`, `CommandButton`,
 `EmptyTournamentState`, `BackLink`, `ResponsiveDataList`.
@@ -310,20 +354,34 @@ this product red is the brand and it is loud.
 
 ## 7. Verification workflow
 
-There is no local database, so screens cannot be driven with real data.
+The default proof is the checks, not a screenshot:
 
-1. Write a throwaway route `frontend/src/app/zz-preview-*/page.tsx` that renders
-   the presentational components with mock props inside
-   `<main className="dash-app"><DashboardStyles />…`.
-2. `preview_start` the `frontend` config; screenshot at **1280px and 375px**.
-3. Check `document.documentElement.scrollWidth === window.innerWidth` at 375px.
-4. **Delete the throwaway route** before finishing.
+```bash
+npm run lint && npm test && npm run build && git diff --check
+```
 
-This forces presentational components to be extractable and prop-driven, which
-is why `MatchLine`, `MatchSheet`, `CourtLane`, `AdminEventBoard`,
-`PlayerEntryCard`, `AdminRegistrationCard`, `BracketDrawStrip`, `BracketTree`,
-`CourtBoard`, `CourtDetail`, `AdminAttentionQueue` and `UnscheduledPool` are
-separate files.
+Scoped equivalents while iterating — `npx tsc --noEmit`, `npx eslint <paths>`,
+`npx vitest run <paths>` — run from `frontend/`.
+
+A dev server is **not** started as part of this. The maintainer keeps frontend
+(3000) and backend (4000) running themselves; a second server collides on those
+fixed ports, and an unauthenticated browser only ever reaches the login page.
+Ask for a visual check rather than starting one.
+
+When a layout genuinely has to be seen, the cheap route needs neither a login nor
+a second server: generate a standalone HTML page inlining the component's real
+`*.module.css` plus stub markup, write it to `frontend/public/`, open it through
+the already-running server, measure at 375px
+(`document.documentElement.scrollWidth === window.innerWidth`), then delete the
+file. Add a minimal reset — a bare page has no Tailwind preflight, so lists keep
+their default indent and look wrong in a way the real page does not.
+
+Either way the constraint is the same, and it is the useful one: presentational
+components must be extractable and prop-driven. That is why `MatchLine`,
+`MatchSheet`, `CourtLane`, `ControlFocusBar`, `AdminEventBoard`,
+`PlayerEntryCard`, `AdminRegistrationCard`, `BracketSwitcher`, `BracketTree`,
+`CourtColumn`, `QueueCard`, `EventAgendaBand`, `EventStageList`,
+`AdminAttentionQueue` and `UnscheduledPool` are separate files.
 Keep doing that.
 
 One caveat learned from `AdminAttentionQueue`: its item type carries React values
@@ -346,10 +404,15 @@ Then: `npm run lint && npm test && npm run build && git diff --check`.
 
 ### Done
 Event workspace · admin & organiser home · match control ·
-player home · player entries · the four event-picker routes · registration
-review · opponent requests · bracket · courts & schedule · users, clubs,
-categories and club requests · platform statistics on the admin home ·
-the whole message-state system.
+player home · player entries · player profile · the event-picker routes ·
+registration review · opponent requests · bracket · courts & schedule · users,
+clubs, categories and club applications · account settings, sessions and email
+change · platform statistics on the admin home · the whole message-state system.
+
+**Event pickers are one component.** Every sidebar step under Tournament
+operations has a picker behind it, and they all run through
+`AdminEventToolIndexClient` over one board. A step that needs its own picker
+design is a step that has drifted from the others.
 
 **Platform statistics** sit last on the admin home, below the counts and drafts:
 counts say how much exists now, statistics say how it is moving, which is one
@@ -364,44 +427,60 @@ migration onward, so earlier buckets are `null`; and "signed in recently" carrie
 no delta, because `User.lastLoginAt` holds only the latest sign-in and the
 previous period is genuinely unknowable.
 
-**Bracket** notes, since the tree is unlike anything else here. The screen leads
-with `BracketDrawStrip`: one card per category carrying draw stage
-(Draft → Locked → Published as `StageDots`), a `QueueMeter` of matches played,
-and the champion once there is one — so "which draws still need me?" is answered
-before the first tree. `BracketTree` then draws the draw, with the champion's
+**Bracket** notes, since the tree is unlike anything else here. **One draw is on
+screen at a time.** The page used to stack every category's tree with a strip of
+summary cards above repeating the same categories — two representations of one
+thing, and a three-category event was three full bracket trees deep before the
+last one could be reached. `BracketSwitcher` replaced both: a tab per category
+carrying enough of that draw's state (stage, matches played, champion) to know
+whether it needs opening at all, which is what the summary cards were really for.
+A single-category event renders no tabs, because a row of one tab is a control
+answering a question nobody asked. `BracketTree` then draws the draw, with the champion's
 route marked by an amber **spine** on every match they won and a matching
 connector between them; the trophy sits on the winning row of the final, and a
 legend names the path. The reseed drag now carries a visible grip inside the
 handle, because a `cursor: grab` is invisible on the phones this is used from;
 the move button remains the keyboard and touch path. Pure reading lives in
-`bracket/bracketModel.ts`, so both components are prop-driven and previewable.
+`bracket/bracketModel.ts` (with `bracketModel.test.ts` beside it), so both
+components are prop-driven and previewable.
+
+The tree reads byes off the draw's shape rather than off one round, and it
+projects that same reading onto a **draft** — so an unlocked draw already shows
+BYE exactly where the locked one will, and a match no team can reach says so on
+its own card instead of surfacing after the lock. `bracketModel.rounds` is
+declared in playing order and must stay complete: it, `PublicEventSections.roundOrder`
+and the `common.rounds` labels are three ordered arrays mirroring `MatchRound`,
+and a draw sized to 32 breaks visibly if one of them lags.
 
 **Courts & schedule** notes. `ScheduleDayHeader` leads with the day as three
 `QueueMeter`s — courts staffed, matches placed, matches played — plus whether
-players can see any of it. Then a **board over a detail**, because a column per
-court grew with its queue and an eight-court event ran to four screens before
-the first question — *which court needs me?* — could be answered. `CourtBoard`
-is one fixed-height tile per court: state word (`courtState`: done · live ·
-idle · ready), a progress bar, and the only two matches
-worth naming (`courtFocus` — what is on court, what is next); the rest is a
-count. The two states that mean *you* are being asked for something —
-`unstaffed`, `idle` — carry the amber spine, and the board heading totals them.
-On phones the tile is a row, so eight courts cost about a screen and a half.
-`CourtDetail` then expands exactly one court, so the page is the same length
-whether the event runs on two courts or ten, and that one queue scrolls inside
-its own panel. A court is on screen twice, so it needs two droppable ids —
-`court:` for the tile, `queue:` for the open panel — both resolving to the same
-court in `targetCourtOf`. Dragging a queued match onto another court's tile is
-still how it moves; the per-row court select remains the keyboard and touch
-path. `UnscheduledPool` is the holding area the old dropdown
-hid; it is a **drop target in both directions**, so dragging a queued match into
-it unschedules (`DELETE /schedule/items/:id`, which the server already refused
-for started matches) and dragging out of it places. Every drop resolves through
-`resolveDrop` in `schedule/scheduleModel.ts` — a pure function returning an
-intent, unit-tested in `scheduleModel.test.ts`, so the frozen-item and
-finished-queue rules live in one place rather than inside a drag handler. Forms
-moved to `ScheduleDialogs.tsx` and own their fields, resetting during render
-rather than in an effect.
+players can see any of it.
+
+Then **one column per court, plus a waiting column**, because the job on this
+screen is assignment: a match moves by being dragged from one visible queue into
+another, and that comparison cannot be made when only one queue is open at a
+time. An intermediate design put a grid of summary tiles above a single expanded
+court; it answered "which court needs me?" but made the actual work — evening out
+two queues that have drifted apart — impossible without collapsing and expanding.
+`CourtColumn` is that column, carrying the court's state word (`courtState`:
+done · live · idle · ready) and progress at its head and `QueueCard` rows
+beneath. Each court is exactly **one** drop target (`courtDroppableId`), which is
+the simplification the two-ids-per-court board could not have. The strip scrolls
+inside itself, so the page never scrolls sideways no matter how many courts an
+event runs.
+
+`UnscheduledPool` is the holding area the old dropdown hid; it is a **drop target
+in both directions**, so dragging a queued match into it unschedules
+(`DELETE /schedule/items/:id`, which the server already refused for started
+matches) and dragging out of it places. Every drop resolves through `resolveDrop`
+in `schedule/scheduleModel.ts` — a pure function returning an intent, unit-tested
+in `scheduleModel.test.ts`, so the frozen-item and finished-queue rules live in
+one place rather than inside a drag handler. A nudge that would cross a started
+or finished match is **disabled rather than refused**, which is rule 4 applied to
+a control the server owns. Every move is also available without dragging — per
+card: reorder arrows, a "move to court" picker, a remove button — so the board
+works by keyboard and on a phone. Forms moved to `ScheduleDialogs.tsx` and own
+their fields, resetting during render rather than in an effect.
 
 **Directory** notes, covering users, clubs, categories and club requests. The
 pattern is built once in `admin/directory/` and applied four times: every screen
@@ -483,11 +562,19 @@ The logic is split so each piece has one reason to change: `setEngine.ts` mirror
 the server's set race, `matchModel.ts` decides what the console may *offer*
 (`canStart`, `canRecordResult`, `canFinishEarly` mirror the server, so a control
 that would be refused is never shown), `controlModel.ts` reads one match's court,
-time and lateness, `runBoard.ts` turns brackets plus courts into lanes and the
-day's numbers, and `controlFilters.ts` is the whole narrowing vocabulary.
+time and lateness, `runBoard.ts` turns brackets plus courts into lanes,
+`controlFocus.ts` picks the single thing the day needs next out of that board,
+and `controlFilters.ts` is the whole narrowing vocabulary.
 `useControlConsole.ts` holds the fetch and every command, so the console and the
 single-court screen (`/admin/events/:eventId/control/courts/:courtId`, a lane
 given the whole width for a tablet parked at the desk) share one of each.
+
+**A result is chosen, never typed.** `finishedTallies` derives the finishes the
+match's own set format allows — two options for a race to one set, six for a race
+to three — each showing the tally and the pair it gives the match to. The format
+is stated by the options rather than explained in a hint, and a tally that would
+take back a recorded set is rendered **unavailable rather than hidden**, so the
+reason an obvious option is off stays visible.
 
 **Order is the schedule's, never the console's.** Lanes are drawn in
 `queuePosition` order and the run order sorts by planned time first, so a change
@@ -557,18 +644,20 @@ reads as a set of doorways rather than a log.
 Nothing. Every dashboard screen and all six archetypes are built.
 
 The next person here is maintaining the system rather than extending it, so the
-job changes shape: when a screen needs a new behaviour, check §5 and the four
-model files (`directoryModel`, `eventsModel`, `matchModel`, `playerEventModel`)
-before adding anything, and keep the split — client owns state and requests, one
-`*Model.ts` per screen folder for the pure reading, prop-driven presentational
-components, one CSS module, a unit test beside the model.
+job changes shape: when a screen needs a new behaviour, check §5 and the model
+files (`directoryModel`, `eventsModel`, `matchModel`, `playerEventModel`,
+`eventAgenda`, `controlFocus`, `scheduleModel`, `bracketModel`) before adding
+anything, and keep the split — client owns state and requests, one `*Model.ts`
+per screen folder for the pure reading, prop-driven presentational components,
+one CSS module, a unit test beside the model.
 
-One known wart, pre-existing and not introduced by the redesign: `formatDate`
-renders through `I18nProvider`, which reads the stored locale in an effect after
-mount. Any page showing a date therefore logs a React hydration mismatch in dev
-(server renders `1 Sept 2026`, the client re-renders `1 სექ. 2026`). It is
-visible on untouched public pages too. Fixing it means moving the locale into a
-cookie the server can read at render time.
+The date hydration mismatch is **fixed**. `I18nProvider` used to read the stored
+locale in an effect after mount, so every page showing a date logged a React
+hydration mismatch in dev (server rendered `1 Sept 2026`, the client re-rendered
+`1 სექ. 2026`). The locale is now written to an `elpadel_locale` cookie as well
+as `localStorage`, and the root layout reads it with `cookies()` at render time,
+so the server's first pass is already in the reader's locale. Keep it that way:
+anything that derives the locale from a client-only source reintroduces this.
 
 ---
 
@@ -576,10 +665,12 @@ cookie the server can read at render time.
 
 - The repo directory name **ends with a space** (`/Users/sn/ElPaddle `). Quote
   every path.
-- Two dev servers cannot run from the same Next.js directory. If port 3000 is
-  taken by another session, attach with `preview_start {url}` instead.
+- **Do not start a dev server.** Frontend (3000) and backend (4000) are already
+  running, kept up by the maintainer; a second one collides on those fixed ports
+  and would only reach a login page anyway. See §7 for what to do instead.
 - Prefer editing `tournamentCopy` in `lib/i18n/tournament.ts` over
   `en.ts`/`ka.ts` for new dashboard copy — it is `satisfies Record<Locale, …>`
-  and keeps both locales structurally in sync.
+  and keeps both locales structurally in sync. `parity.test.ts` fails if the two
+  locale files drift structurally.
 - Never change production directly; route work through `develop` → staging →
   `main`. See `docs/ENVIRONMENTS.md`.

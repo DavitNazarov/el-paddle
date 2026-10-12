@@ -10,15 +10,13 @@ import {
   CommandButton,
   EmptyTournamentState,
   InlineNotice,
-  StatusLabel,
-  TournamentPanel,
-  TournamentSectionHeader,
 } from '@/components/tournament/TournamentUI';
 import { DashboardField, DashboardModal } from '@/components/shared/dashboard/DashboardUI';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { SkeletonRows } from '@/components/shared/dashboard/Feedback';
+import { pushToast } from '@/components/shared/Toasts';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import {
   AdminRequestPairing,
@@ -47,10 +45,21 @@ function isWindowOpen(window: RequestWindow | undefined) {
   return new Date(window.opponentRequestsClosedAt) < new Date(window.opponentRequestsOpenedAt);
 }
 
+/**
+ * The pairing queue.
+ *
+ * Two things happen here and they are not equal: opening a category's window is
+ * a setting changed once, and deciding on a pairing is the work. So the windows
+ * are a compact strip at the top and the decisions are the page. Settled
+ * requests are kept — they are the record of why a pairing exists — but folded
+ * away, because nothing in them is waiting.
+ */
 export function AdminOpponentRequestsClient({ eventId }: { eventId: string }) {
   const { locale } = useI18n();
   const copy = tournamentCopy[locale];
   const requestCopy = copy.admin.requests;
+  const shared = copy.admin.common;
+
   const [event, setEvent] = useState<EventDto | null>(null);
   const [requests, setRequests] = useState<OpponentRequestDto[]>([]);
   const [windows, setWindows] = useState<RequestWindow[]>([]);
@@ -58,206 +67,262 @@ export function AdminOpponentRequestsClient({ eventId }: { eventId: string }) {
   const [busy, setBusy] = useState('');
   const [loading, setLoading] = useState(true);
   const [decision, setDecision] = useState<{ request: OpponentRequestDto; action: RequestAction } | null>(null);
-  const [decisionReason, setDecisionReason] = useState('');
+  const [reason, setReason] = useState('');
   const isCompleted = event?.status === 'COMPLETED';
 
   const load = useCallback(async () => {
-    const [eventResponse, requestResponse] = await Promise.all([
-      apiFetch(`/api/events/${eventId}`, { cache: 'no-store' }),
-      apiFetch(`/api/admin/events/${eventId}/opponent-requests`, { cache: 'no-store' }),
-    ]);
-    const eventData = await eventResponse.json() as { event?: EventDto; error?: string };
-    const requestData = await requestResponse.json() as {
-      requests?: OpponentRequestDto[];
-      windows?: RequestWindow[];
-      error?: string;
-    };
-    if (!eventResponse.ok || !requestResponse.ok) {
-      setError(eventData.error ?? requestData.error ?? requestCopy.loadError);
-    } else {
+    try {
+      const [eventResponse, requestResponse] = await Promise.all([
+        apiFetch(`/api/events/${eventId}`, { cache: 'no-store' }),
+        apiFetch(`/api/admin/events/${eventId}/opponent-requests`, { cache: 'no-store' }),
+      ]);
+      const eventData = await eventResponse.json().catch(() => ({})) as { event?: EventDto; error?: string };
+      const requestData = await requestResponse.json().catch(() => ({})) as {
+        requests?: OpponentRequestDto[];
+        windows?: RequestWindow[];
+        error?: string;
+      };
+      if (!eventResponse.ok || !requestResponse.ok) {
+        setError(eventData.error ?? requestData.error ?? requestCopy.loadError);
+        return;
+      }
       setEvent(eventData.event ?? null);
       setRequests(requestData.requests ?? []);
       setWindows(requestData.windows ?? []);
+      setError('');
+    } catch {
+      setError(requestCopy.loadError);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [requestCopy.loadError, eventId]);
+  }, [eventId, requestCopy.loadError]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
 
-  async function setWindow(categoryId: string, open: boolean) {
-    setBusy(`window-${categoryId}`);
-    setError('');
+  /**
+   * Both commands report over the screen. A decision is confirmed in a dialog,
+   * and a window is toggled from a strip that scrolls out of view behind a long
+   * queue — neither reader is looking at the top of the page afterwards.
+   */
+  const send = useCallback(async (key: string, path: string, body: unknown, failure: string, success: string) => {
+    setBusy(key);
+    try {
+      const response = await apiFetch(path, { method: 'POST', body: JSON.stringify(body) });
+      const data = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) {
+        pushToast({ tone: 'error', title: failure, message: data.error ?? shared.commandFailed });
+        return false;
+      }
+      pushToast({ tone: 'success', message: success });
+      return true;
+    } catch {
+      pushToast({ tone: 'error', title: failure, message: shared.offline });
+      return false;
+    } finally {
+      setBusy('');
+    }
+  }, [shared.commandFailed, shared.offline]);
+
+  async function setWindow(categoryId: string, categoryName: string, open: boolean) {
     const version = windows.find((item) => item.categoryId === categoryId)?.opponentRequestVersion ?? 0;
-    const response = await apiFetch(
+    const ok = await send(
+      `window-${categoryId}`,
       `/api/admin/events/${eventId}/categories/${categoryId}/opponent-requests/${open ? 'open' : 'close'}`,
-      { method: 'POST', body: JSON.stringify({ expectedVersion: version, commandId: createCommandId('request-window') }) },
+      { expectedVersion: version, commandId: createCommandId('request-window') },
+      requestCopy.windowError,
+      fillTemplate(open ? requestCopy.windowOpened : requestCopy.windowClosed2, { category: categoryName }),
     );
-    const data = await response.json() as { error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? requestCopy.windowError);
-    else void load();
+    if (ok) await load();
   }
 
   async function decide() {
     if (!decision) return;
     const { request, action } = decision;
-    const reason = decisionReason.trim();
-    if (action !== 'approve' && !reason) return;
-    setBusy(`${action}-${request.id}`);
-    setError('');
-    const response = await apiFetch(`/api/admin/events/${eventId}/opponent-requests/${request.id}/${action}`, {
-      method: 'POST',
-      body: JSON.stringify({ reason, expectedVersion: request.version, commandId: createCommandId(`request-${action}`) }),
-    });
-    const data = await response.json() as { error?: string };
-    setBusy('');
-    if (!response.ok) setError(data.error ?? requestCopy.updateError);
-    else {
-      setDecision(null);
-      setDecisionReason('');
-      void load();
-    }
+    const trimmed = reason.trim();
+    if (action !== 'approve' && !trimmed) return;
+    const a = entryName(request, 'requestingEntry');
+    const b = entryName(request, 'targetEntry');
+    const releasing = action === 'reject' && canReleasePairing(request);
+    const wording = action === 'approve'
+      ? requestCopy.approved
+      : action === 'override-refusal'
+        ? requestCopy.overridden
+        : releasing
+          ? requestCopy.released
+          : requestCopy.rejected;
+
+    const ok = await send(
+      `${action}-${request.id}`,
+      `/api/admin/events/${eventId}/opponent-requests/${request.id}/${action}`,
+      { reason: trimmed, expectedVersion: request.version, commandId: createCommandId(`request-${action}`) },
+      requestCopy.updateError,
+      fillTemplate(wording, { a, b }),
+    );
+    if (!ok) return;
+    setDecision(null);
+    setReason('');
+    await load();
   }
 
   const releasing = Boolean(decision && decision.action === 'reject' && canReleasePairing(decision.request));
   const awaiting = requests.filter(isAwaitingDecision);
   const settled = requests.filter((request) => !isAwaitingDecision(request));
+  const categories = event?.categories ?? [];
+  // Windows only exist once the field is fixed; before that the server refuses.
+  const windowsAvailable = event ? event.status !== 'REGISTRATION_OPEN' : false;
 
-  function renderPairings(list: OpponentRequestDto[]) {
-    return (
-      <ul>
-        {list.map((request) => (
-          <AdminRequestPairing
-            key={request.id}
-            request={request}
-            readOnly={isCompleted}
-            busyAction={busy}
-            onDecide={(action) => {
-              setDecision({ request, action });
-              setDecisionReason('');
-            }}
-          />
-        ))}
-      </ul>
-    );
-  }
+  const dialogTitle = decision?.action === 'approve'
+    ? requestCopy.approveTitle
+    : decision?.action === 'override-refusal'
+      ? requestCopy.overrideTitle
+      : releasing
+        ? requestCopy.releaseTitle
+        : requestCopy.rejectTitle;
+
+  const dialogBody = decision?.action === 'approve'
+    ? requestCopy.approveBody
+    : decision?.action === 'override-refusal'
+      ? requestCopy.overrideBody
+      : releasing
+        ? requestCopy.releaseBody
+        : null;
 
   return (
-    <AdminShell title={requestCopy.title} description={requestCopy.description} eyebrow={copy.admin.common.eyebrow}>
-      <div className="mb-4"><BackLink href={`/admin/events/${eventId}`}>{copy.admin.common.eventWorkspace}</BackLink></div>
-      {error ? <div className="mb-4"><InlineNotice kind="error">{error}</InlineNotice></div> : null}
+    <AdminShell title={requestCopy.title} description={requestCopy.description} eyebrow={shared.eyebrow}>
+      <div className="mb-4"><BackLink href={`/admin/events/${eventId}`}>{shared.eventWorkspace}</BackLink></div>
 
-      <div className="space-y-5">
-        {/* Each category's window is a state with one control, not two buttons
-            that give no clue which of them is currently in force. */}
-        <TournamentPanel labelledBy="request-windows">
-          <TournamentSectionHeader
-            id="request-windows"
-            title={requestCopy.windows}
-            description={isCompleted ? requestCopy.readOnly : requestCopy.categoryDescription}
-          />
-          {event?.categories.length ? (
-            <ul>
-              {event.categories.map((category) => {
+      {error ? <div className="mb-4"><InlineNotice kind="error" onDismiss={() => setError('')}>{error}</InlineNotice></div> : null}
+      {isCompleted ? <div className="mb-4"><InlineNotice kind="info">{requestCopy.readOnly}</InlineNotice></div> : null}
+
+      <section className={styles.header}>
+        <p className={styles.headerState}>
+          {awaiting.length === 0
+            ? requestCopy.queueClear
+            : awaiting.length === 1
+              ? requestCopy.queueWaitingOne
+              : fillTemplate(requestCopy.queueWaiting, { count: awaiting.length })}
+        </p>
+
+        <div className={styles.windows}>
+          <div className={styles.windowsHead}>
+            <h2 className={styles.windowsTitle}>{requestCopy.windows}</h2>
+            <p className={styles.windowsHint}>
+              {windowsAvailable ? requestCopy.windowsHint : requestCopy.windowsBeforeClose}
+            </p>
+          </div>
+          {categories.length ? (
+            <ul className={styles.windowList}>
+              {categories.map((category) => {
                 const open = isWindowOpen(windows.find((item) => item.categoryId === category.id));
                 return (
                   <li key={category.id} className={styles.windowRow}>
-                    <div className={styles.windowText}>
-                      <p className={styles.windowName}>{category.name}</p>
-                      <p className={styles.windowHint}>
-                        {open ? requestCopy.windowOpenHint : requestCopy.windowClosedHint}
-                      </p>
-                    </div>
-                    <div className={styles.windowActions}>
-                      <StatusLabel icon={open ? 'check' : 'dot'}>
-                        {open ? requestCopy.windowOpen : requestCopy.windowClosed}
-                      </StatusLabel>
-                      <CommandButton
-                        tone={open ? 'default' : 'primary'}
-                        busy={busy === `window-${category.id}`}
-                        disabled={isCompleted}
-                        onClick={() => setWindow(category.id, !open)}
-                      >
-                        {open ? requestCopy.close : requestCopy.open}
-                      </CommandButton>
-                    </div>
+                    <span className={styles.windowState} data-open={open}>
+                      <span className={styles.windowDot} aria-hidden="true" />
+                      {open ? requestCopy.windowOpen : requestCopy.windowClosed}
+                    </span>
+                    <span className={styles.windowName}>{category.name}</span>
+                    <CommandButton
+                      className={styles.windowAction}
+                      tone={open ? 'default' : 'primary'}
+                      busy={busy === `window-${category.id}`}
+                      disabled={isCompleted || !windowsAvailable}
+                      onClick={() => { void setWindow(category.id, category.name, !open); }}
+                    >
+                      {open ? requestCopy.close : requestCopy.open}
+                    </CommandButton>
                   </li>
                 );
               })}
             </ul>
           ) : (
-            <EmptyTournamentState title={loading ? copy.common.loading : requestCopy.noRequests} />
+            <p className={styles.windowsEmpty}>{requestCopy.noCategories}</p>
           )}
-        </TournamentPanel>
+        </div>
+      </section>
 
-        <TournamentPanel labelledBy="requests-awaiting">
-          <TournamentSectionHeader
-            id="requests-awaiting"
-            title={requestCopy.awaiting}
-            description={requestCopy.awaitingDescription}
-            actions={awaiting.length ? (
-              <StatusLabel icon="warning">{fillTemplate(requestCopy.count, { count: awaiting.length })}</StatusLabel>
-            ) : undefined}
-          />
-          {awaiting.length ? renderPairings(awaiting) : loading ? (
-            <SkeletonRows rows={2} label={copy.common.loading} />
-          ) : (
-            <EmptyTournamentState title={requestCopy.noAwaiting} detail={requestCopy.noAwaitingDetail} />
-          )}
-        </TournamentPanel>
+      {loading && !requests.length ? (
+        <SkeletonRows rows={3} label={requestCopy.loading} />
+      ) : awaiting.length ? (
+        <section className={styles.queuePanel} aria-labelledby="requests-awaiting">
+          <h2 id="requests-awaiting" className={styles.queueTitle}>{requestCopy.awaiting}</h2>
+          <ul className={styles.queue}>
+            {awaiting.map((request) => (
+              <AdminRequestPairing
+                key={request.id}
+                request={request}
+                readOnly={isCompleted}
+                busyAction={busy}
+                onDecide={(action) => { setDecision({ request, action }); setReason(''); }}
+              />
+            ))}
+          </ul>
+        </section>
+      ) : (
+        <EmptyTournamentState
+          title={requests.length ? requestCopy.noAwaiting : requestCopy.noRequests}
+          detail={requests.length ? requestCopy.noAwaitingDetail : requestCopy.noRequestsDetail}
+        />
+      )}
 
-        {settled.length ? (
-          <TournamentPanel labelledBy="requests-settled">
-            <TournamentSectionHeader
-              id="requests-settled"
-              title={requestCopy.settled}
-              description={requestCopy.settledDescription}
-              actions={<StatusLabel>{fillTemplate(requestCopy.count, { count: settled.length })}</StatusLabel>}
-            />
-            {renderPairings(settled)}
-          </TournamentPanel>
-        ) : null}
-      </div>
+      {settled.length ? (
+        <details className={styles.settled}>
+          <summary className={styles.settledSummary}>
+            {requestCopy.settled}
+            <span className={styles.settledCount}>{fillTemplate(requestCopy.settledCount, { count: settled.length })}</span>
+          </summary>
+          <ul className={styles.queue}>
+            {settled.map((request) => (
+              <AdminRequestPairing
+                key={request.id}
+                request={request}
+                readOnly={isCompleted}
+                busyAction={busy}
+                onDecide={(action) => { setDecision({ request, action }); setReason(''); }}
+              />
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       <DashboardModal
         open={Boolean(decision)}
-        onOpenChange={(open) => { if (!open && !busy) setDecision(null); }}
-        title={decision?.action === 'approve'
-          ? requestCopy.approveTitle
-          : decision?.action === 'reject'
-            ? (releasing ? requestCopy.releaseTitle : requestCopy.rejectTitle)
-            : requestCopy.overrideTitle}
+        onOpenChange={(open) => { if (!open && !busy) { setDecision(null); setReason(''); } }}
+        title={dialogTitle}
         description={decision
           ? `${entryName(decision.request, 'requestingEntry')} → ${entryName(decision.request, 'targetEntry')}`
           : undefined}
         size="md"
         footer={
           <ModalFormFooter
-            onCancel={() => setDecision(null)}
+            onCancel={() => { setDecision(null); setReason(''); }}
             cancelLabel={copy.common.cancel}
             submitType="button"
             onSubmitClick={() => { void decide(); }}
             busy={Boolean(decision && busy === `${decision.action}-${decision.request.id}`)}
-            disabled={Boolean(decision && decision.action !== 'approve' && !decisionReason.trim())}
+            disabled={Boolean(decision && decision.action !== 'approve' && !reason.trim())}
             submitLabel={decision?.action === 'approve'
-              ? requestCopy.approveRequest
-              : decision?.action === 'reject'
-                ? (releasing ? requestCopy.release : requestCopy.rejectRequest)
-                : requestCopy.override}
+              ? requestCopy.approve
+              : decision?.action === 'override-refusal'
+                ? requestCopy.override
+                : releasing
+                  ? requestCopy.release
+                  : requestCopy.reject}
             submitVariant={decision?.action === 'approve' ? 'red' : 'destructive'}
           />
         }
       >
-        {decision?.action === 'approve' ? (
-          <p className="text-sm leading-6 text-[rgba(88,16,16,0.72)]">{requestCopy.pairingNote}</p>
-        ) : (
+        {dialogBody ? <p className={styles.dialogBody}>{dialogBody}</p> : null}
+        {decision && decision.action !== 'approve' ? (
           <DashboardField id="decision-reason" label={requestCopy.publicReason} hint={requestCopy.publicReasonHint}>
-            <Textarea id="decision-reason" value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} rows={4} />
+            <Textarea
+              id="decision-reason"
+              autoFocus
+              rows={4}
+              value={reason}
+              onChange={(fieldEvent) => setReason(fieldEvent.target.value)}
+            />
           </DashboardField>
-        )}
+        ) : null}
       </DashboardModal>
     </AdminShell>
   );

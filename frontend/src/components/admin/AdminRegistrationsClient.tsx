@@ -1,49 +1,55 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
   DashboardField,
   DashboardModal,
-  EmptyState,
-  FeedbackBanner,
   FilterChip,
   formControlClassName,
-  softButtonClassName,
-  modalSoftButtonClassName,
 } from '@/components/shared/dashboard/DashboardUI';
-import { Reveal } from '@/components/padel/home/motion';
-import { QueueMeter } from '@/components/shared/dashboard/DashboardSignals';
-import { SkeletonCards } from '@/components/shared/dashboard/Feedback';
-import { apiFetch, createCommandId } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { SkeletonRows } from '@/components/shared/dashboard/Feedback';
+import { pushToast } from '@/components/shared/Toasts';
+import { API_BASE_URL, apiFetch, createCommandId } from '@/lib/api';
 import { useI18n } from '@/components/shared/I18nProvider';
 import { fillTemplate, tournamentCopy } from '@/lib/i18n/tournament';
 import { AdminShell } from './AdminShell';
-import { AdminRegistrationCard, isAwaitingReview } from './AdminRegistrationCard';
-import { EventOrganiserPanel } from './EventOrganiserPanel';
-import { CommandButton, StatusLabel, TournamentPanel, TournamentSectionHeader } from '@/components/tournament/TournamentUI';
+import { AdminRegistrationCard, isAwaitingReview, teamName } from './AdminRegistrationCard';
+import {
+  BackLink,
+  CommandButton,
+  EmptyTournamentState,
+  InlineNotice,
+} from '@/components/tournament/TournamentUI';
 import { ModalFormFooter } from '@/components/shared/ModalFormFooter';
 import type { EventDto, RegistrationDto, RegistrationFilter } from '@/types/admin';
+import styles from './AdminReview.module.css';
 
+/**
+ * The entry queue.
+ *
+ * One job: decide on the teams that entered. The screen used to open with three
+ * banners, an organiser panel, a publication panel, a progress meter and only
+ * then the entries — five things above the work. Now the header states the two
+ * facts a reviewer needs (how much is left, and whether the list is public), the
+ * filters carry the counts, and everything below is the queue itself.
+ */
 export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
-  const { dictionary, locale, formatDate } = useI18n();
-  const admin = dictionary.dashboard.admin;
-  const review = tournamentCopy[locale].admin.review;
-  const copy = admin.registrationsPage;
+  const { locale, formatDate } = useI18n();
+  const copy = tournamentCopy[locale];
+  const review = copy.admin.review;
+  const shared = copy.admin.common;
+
   const [registrations, setRegistrations] = useState<RegistrationDto[]>([]);
   const [event, setEvent] = useState<EventDto | null>(null);
   const [filter, setFilter] = useState<RegistrationFilter>('PENDING');
   const [declineTarget, setDeclineTarget] = useState<RegistrationDto | null>(null);
   const [declineReason, setDeclineReason] = useState('');
-  const [message, setMessage] = useState('');
+  const [rosterTarget, setRosterTarget] = useState<boolean | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
-  const [rosterPublicationTarget, setRosterPublicationTarget] = useState<boolean | null>(null);
   const isCompleted = event?.status === 'COMPLETED';
 
   const counts = useMemo(
@@ -55,40 +61,39 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
     [registrations],
   );
 
-  const awaitingCount = useMemo(() => registrations.filter(isAwaitingReview).length, [registrations]);
-
-  const filtered = useMemo(() => {
-    if (filter === 'ALL') return registrations;
-    return registrations.filter((item) => item.status === filter);
-  }, [filter, registrations]);
+  const awaiting = useMemo(() => registrations.filter(isAwaitingReview).length, [registrations]);
+  const filtered = useMemo(
+    () => (filter === 'ALL' ? registrations : registrations.filter((item) => item.status === filter)),
+    [filter, registrations],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError('');
-    const [response, eventResponse] = await Promise.all([
-      apiFetch(`/api/admin/events/${eventId}/registrations`, { cache: 'no-store' }),
-      apiFetch(`/api/events/${eventId}`, { cache: 'no-store' }),
-    ]);
-    const data = (await response.json()) as { registrations: RegistrationDto[] };
-    const eventData = await eventResponse.json() as { event?: EventDto; error?: string };
-    if (!response.ok || !eventResponse.ok) {
-      setError(eventData?.error ?? admin.messages.actionFailed);
-      setRegistrations([]);
+    try {
+      const [response, eventResponse] = await Promise.all([
+        apiFetch(`/api/admin/events/${eventId}/registrations`, { cache: 'no-store' }),
+        apiFetch(`/api/events/${eventId}`, { cache: 'no-store' }),
+      ]);
+      const data = await response.json().catch(() => ({})) as { registrations?: RegistrationDto[]; error?: string };
+      const eventData = await eventResponse.json().catch(() => ({})) as { event?: EventDto; error?: string };
+      if (!response.ok || !eventResponse.ok) {
+        setError(data.error ?? eventData.error ?? review.loadError);
+        return;
+      }
+      setRegistrations(data.registrations ?? []);
+      setEvent(eventData.event ?? null);
+      setError('');
+    } catch {
+      setError(review.loadError);
+    } finally {
       setLoading(false);
-      return;
     }
-    setRegistrations(data.registrations ?? []);
-    setEvent(eventData.event ?? null);
-    setLoading(false);
-  }, [admin.messages.actionFailed, eventId]);
+  }, [eventId, review.loadError]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void load();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
 
+  // Once the queue is empty the filter would show an empty screen over a full
+  // list, so it falls back to everything rather than looking broken.
   useEffect(() => {
     if (filter === 'PENDING' && counts.pending === 0 && registrations.length > 0) {
       const timer = window.setTimeout(() => setFilter('ALL'), 0);
@@ -96,251 +101,297 @@ export function AdminRegistrationsClient({ eventId }: { eventId: string }) {
     }
   }, [counts.pending, filter, registrations.length]);
 
-  async function setRegistrationStatus(
-    registration: RegistrationDto,
-    status: RegistrationDto['status'],
-    reason = '',
-  ) {
+  /**
+   * Decisions are reported over the screen, not on it: the decline reason is
+   * typed in a dialog, and an approval is sent from a row that may be far down a
+   * long queue. Both name the team, so an outcome is checkable at a glance.
+   */
+  const send = useCallback(async (
+    key: string,
+    path: string,
+    body: unknown,
+    failure: string,
+    success: string,
+  ) => {
+    setBusy(key);
+    try {
+      const response = await apiFetch(path, { method: 'PATCH', body: JSON.stringify(body) });
+      const data = await response.json().catch(() => ({})) as { event?: EventDto; error?: string };
+      if (!response.ok) {
+        pushToast({ tone: 'error', title: failure, message: data.error ?? shared.commandFailed });
+        return null;
+      }
+      pushToast({ tone: 'success', message: success });
+      return data;
+    } catch {
+      pushToast({ tone: 'error', title: failure, message: shared.offline });
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  }, [shared.commandFailed, shared.offline]);
+
+  async function decide(registration: RegistrationDto, status: RegistrationDto['status'], reason = '') {
     if (status === 'DECLINED' && !reason.trim()) {
       setDeclineTarget(registration);
       setDeclineReason('');
       return;
     }
-
-    setError('');
-    setMessage('');
-    setBusy(registration.id);
-    const response = await apiFetch(
+    const team = teamName(registration, review.pairSeparator);
+    const wording = status === 'APPROVED' ? review.approved : status === 'DECLINED' ? review.declined : review.returned;
+    const result = await send(
+      registration.id,
       `/api/admin/events/${eventId}/registrations/${registration.id}/status`,
       {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          status,
-          publicReason: reason.trim(),
-          expectedVersion: registration.version,
-          commandId: createCommandId('registration-status'),
-        }),
+        status,
+        publicReason: reason.trim(),
+        expectedVersion: registration.version,
+        commandId: createCommandId('registration-status'),
       },
+      review.decisionError,
+      fillTemplate(wording, { team }),
     );
-    const result = (await response.json()) as { error?: string };
-    setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? admin.messages.registrationUpdateFailed);
-      return;
-    }
+    if (!result) return;
     setDeclineTarget(null);
     setDeclineReason('');
-    setMessage(admin.messages.registrationUpdated);
     await load();
   }
 
-  async function updateRosterPublication(published: boolean) {
+  /**
+   * Approving the queue in one command.
+   *
+   * The repetitive case is real: a 32-team event is 32 identical approvals, each
+   * its own round trip and its own version check. The server decides them one at
+   * a time and reports which ones it could not, so a single refusal in the
+   * middle does not silently undo the ones before it — and the toast says how
+   * many landed rather than claiming they all did.
+   */
+  async function approveAllPending() {
+    const pending = registrations.filter((registration) => registration.status === 'PENDING');
+    if (!pending.length) return;
+    setBusy('bulk');
+    try {
+      const response = await apiFetch(`/api/admin/events/${eventId}/registrations/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          registrationIds: pending.map((registration) => registration.id),
+          status: 'APPROVED',
+          commandId: createCommandId('registration-status-batch'),
+        }),
+      });
+      const data = await response.json().catch(() => ({})) as { applied?: number; total?: number; error?: string };
+      if (!response.ok) {
+        pushToast({ tone: 'error', title: review.decisionError, message: data.error ?? shared.commandFailed });
+        return;
+      }
+      const applied = data.applied ?? 0;
+      const total = data.total ?? pending.length;
+      pushToast({
+        tone: applied === total ? 'success' : 'error',
+        message: applied === total
+          ? fillTemplate(review.bulkApproved, { count: applied })
+          : fillTemplate(review.bulkPartial, { applied, total }),
+      });
+      setBulkOpen(false);
+      await load();
+    } catch {
+      pushToast({ tone: 'error', title: review.decisionError, message: shared.offline });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** The entry list as a file — the desk copy an organiser checks players in from. */
+  function exportEntries() {
+    window.open(`${API_BASE_URL}/api/admin/events/${eventId}/registrations?format=csv`, '_blank', 'noopener');
+  }
+
+  async function setRosterPublished(published: boolean) {
     if (!event) return;
-    setError('');
-    setMessage('');
-    setBusy('roster-publication');
-    const response = await apiFetch(`/api/admin/events/${eventId}/registration-roster-publication`, {
-      method: 'PATCH',
-      body: JSON.stringify({
+    const result = await send(
+      'roster',
+      `/api/admin/events/${eventId}/registration-roster-publication`,
+      {
         published,
         expectedVersion: event.version,
         commandId: createCommandId('registration-roster-publication'),
-      }),
-    });
-    const result = await response.json() as { event?: EventDto; error?: string };
-    setBusy(null);
-    if (!response.ok) {
-      setError(result.error ?? copy.rosterUpdateFailed);
-      return;
-    }
+      },
+      review.rosterError,
+      published ? review.rosterPublished : review.rosterHidden,
+    );
+    if (!result) return;
     setEvent(result.event ?? event);
-    setRosterPublicationTarget(null);
-    setMessage(published ? copy.rosterPublishedMessage : copy.rosterUnpublishedMessage);
+    setRosterTarget(null);
   }
+
+  const rosterPublic = Boolean(event?.registrationRosterPublishedAt);
+  const canPublishRoster = rosterPublic || counts.approved > 0;
 
   return (
     <AdminShell
-      title={event ? `${copy.title} — ${event.title}` : copy.title}
-      description={event ? `${formatDate(event.date, { dateStyle: 'medium', timeStyle: 'short' })} · ${event.location}` : copy.description}
-      eyebrow={copy.eyebrow}
+      title={review.title}
+      description={event
+        ? `${event.title} · ${formatDate(event.date, { dateStyle: 'medium', timeStyle: 'short' })}`
+        : review.description}
+      eyebrow={shared.eyebrow}
     >
-      <Button asChild variant="outline" className={cn(softButtonClassName, 'mb-6 rounded-md')}>
-        <Link href="/admin/registrations">
-          <ArrowLeft className="h-4 w-4" />
-          {copy.allRegistrations}
-        </Link>
-      </Button>
-      {message ? <FeedbackBanner kind="success">{message}</FeedbackBanner> : null}
-      {error ? <FeedbackBanner kind="error">{error}</FeedbackBanner> : null}
-      {isCompleted ? <FeedbackBanner kind="success">{review.readOnly}</FeedbackBanner> : null}
+      <div className="mb-4">
+        <BackLink href={`/admin/events/${eventId}`}>{shared.eventWorkspace}</BackLink>
+      </div>
 
-      {/* Approving the entries is the point at which an event is ready to hand over. */}
-      {eventId ? (
-        <div className="mb-6">
-          <EventOrganiserPanel eventId={eventId} />
-        </div>
-      ) : null}
+      {/* Only a failure to load stays on the page. Decisions go to the message layer. */}
+      {error ? <div className="mb-4"><InlineNotice kind="error" onDismiss={() => setError('')}>{error}</InlineNotice></div> : null}
+      {isCompleted ? <div className="mb-4"><InlineNotice kind="info">{review.readOnly}</InlineNotice></div> : null}
 
-      {event ? (
-        <TournamentPanel className="mb-6">
-          <TournamentSectionHeader
-            title={copy.rosterTitle}
-            description={copy.rosterDescription}
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusLabel icon={event.registrationRosterPublishedAt ? 'check' : 'dot'}>
-                  {event.registrationRosterPublishedAt ? copy.rosterPublished : copy.rosterPrivate}
-                </StatusLabel>
-                <CommandButton
-                  tone={event.registrationRosterPublishedAt ? 'default' : 'primary'}
-                  busy={busy === 'roster-publication'}
-                  disabled={!event.registrationRosterPublishedAt && counts.approved === 0}
-                  onClick={() => setRosterPublicationTarget(!event.registrationRosterPublishedAt)}
-                >
-                  {event.registrationRosterPublishedAt ? copy.unpublishRoster : copy.publishRoster}
-                </CommandButton>
-              </div>
-            }
-          />
-          {!event.registrationRosterPublishedAt && counts.approved === 0 ? (
-            <p className="px-5 py-4 text-sm leading-6 text-[rgba(213,201,177,0.65)]">{copy.noApprovedRoster}</p>
-          ) : null}
-        </TournamentPanel>
-      ) : null}
-
-      {/* A reviewer wants to know how much of the queue is left, not just how
-          many entries exist. The meter counts entries that have a decision. */}
-      {registrations.length ? (
-        <div className="mb-6 rounded-xl border border-[var(--dash-border)] bg-white px-5 py-4">
-          <QueueMeter
-            label={review.progress}
-            done={registrations.length - awaitingCount}
-            total={registrations.length}
-            valueLabel={awaitingCount === 0
+      <section className={styles.header}>
+        <div className={styles.headerText}>
+          <p className={styles.headerState}>
+            {awaiting === 0
               ? review.queueClear
-              : fillTemplate(review.decided, { done: registrations.length - awaitingCount, total: registrations.length })}
-          />
+              : fillTemplate(review.decided, { done: registrations.length - awaiting, total: registrations.length })}
+          </p>
+          <p className={styles.headerHint}>{rosterPublic ? review.rosterPublic : review.rosterPrivate}</p>
         </div>
+        <div className={styles.headerActions}>
+          <CommandButton disabled={!registrations.length} onClick={exportEntries}>
+            {review.exportEntries}
+          </CommandButton>
+          {isCompleted ? null : (
+            <>
+              {/* Only offered while there is a queue to clear — a bulk command
+                  with nothing to act on is a button that does nothing. */}
+              {counts.pending > 0 ? (
+                <CommandButton busy={busy === 'bulk'} onClick={() => setBulkOpen(true)}>
+                  {fillTemplate(review.approveAll, { count: counts.pending })}
+                </CommandButton>
+              ) : null}
+              <CommandButton
+                tone={rosterPublic ? 'default' : 'primary'}
+                busy={busy === 'roster'}
+                disabled={!canPublishRoster}
+                onClick={() => setRosterTarget(!rosterPublic)}
+              >
+                {rosterPublic ? review.hideRoster : review.publishRoster}
+              </CommandButton>
+            </>
+          )}
+        </div>
+      </section>
+
+      {!rosterPublic && counts.approved === 0 && registrations.length > 0 ? (
+        <p className={styles.headerNote}>{review.rosterNeedsApproval}</p>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap gap-2">
+      <div className={styles.filters}>
         <FilterChip active={filter === 'ALL'} count={registrations.length} onClick={() => setFilter('ALL')}>
-          {admin.registrations.filterAll}
+          {review.filterAll}
         </FilterChip>
         <FilterChip active={filter === 'PENDING'} count={counts.pending} onClick={() => setFilter('PENDING')}>
-          {admin.registrations.filterPending}
+          {review.filterPending}
         </FilterChip>
         <FilterChip active={filter === 'APPROVED'} count={counts.approved} onClick={() => setFilter('APPROVED')}>
-          {admin.registrations.filterApproved}
+          {review.filterApproved}
         </FilterChip>
         <FilterChip active={filter === 'DECLINED'} count={counts.declined} onClick={() => setFilter('DECLINED')}>
-          {admin.registrations.filterDeclined}
+          {review.filterDeclined}
         </FilterChip>
       </div>
 
-      {loading ? (
-        <SkeletonCards count={3} columns={2} label={admin.registrations.loading} />
+      {loading && !registrations.length ? (
+        <SkeletonRows rows={4} label={review.loading} />
       ) : !registrations.length ? (
-        <EmptyState title={admin.registrations.emptyTitle} description={admin.registrations.emptyDescription} icon={ClipboardList} />
+        <EmptyTournamentState title={review.emptyTitle} detail={review.emptyDetail} />
       ) : !filtered.length ? (
-        <EmptyState
-          title={admin.registrations.emptyFilterTitle}
-          description={admin.registrations.emptyFilterDescription}
-          icon={ClipboardList}
-          action={
-            <Button variant="outline" className={cn(softButtonClassName, 'rounded-md')} onClick={() => setFilter('ALL')}>
-              {admin.registrations.filterAll}
-            </Button>
-          }
+        <EmptyTournamentState
+          title={review.emptyFilterTitle}
+          detail={review.emptyFilterDetail}
+          action={<CommandButton onClick={() => setFilter('ALL')}>{review.showAll}</CommandButton>}
         />
       ) : (
-        <div className="grid gap-4">
-          {filtered.map((registration, index) => (
-            <Reveal key={registration.id} delay={Math.min(index * 0.04, 0.2)}>
-              <AdminRegistrationCard
-                registration={registration}
-                readOnly={isCompleted}
-                busy={busy === registration.id}
-                onReview={(status) => { void setRegistrationStatus(registration, status); }}
-              />
-            </Reveal>
+        <ul className={styles.queue}>
+          {filtered.map((registration) => (
+            <AdminRegistrationCard
+              key={registration.id}
+              registration={registration}
+              readOnly={isCompleted}
+              busy={busy === registration.id}
+              onReview={(status) => { void decide(registration, status); }}
+            />
           ))}
-        </div>
+        </ul>
       )}
 
       <DashboardModal
-        open={rosterPublicationTarget !== null}
-        onOpenChange={(open) => { if (!open && busy !== 'roster-publication') setRosterPublicationTarget(null); }}
-        title={rosterPublicationTarget ? copy.publishRosterTitle : copy.unpublishRosterTitle}
-        description={rosterPublicationTarget ? copy.publishRosterDescription : copy.unpublishRosterDescription}
+        open={bulkOpen}
+        onOpenChange={(open) => { if (!open && busy !== 'bulk') setBulkOpen(false); }}
+        title={fillTemplate(review.approveAllTitle, { count: counts.pending })}
         size="md"
         footer={
           <ModalFormFooter
-            onCancel={() => setRosterPublicationTarget(null)}
-            cancelLabel={admin.messages.declineCancel}
+            onCancel={() => setBulkOpen(false)}
+            cancelLabel={copy.common.cancel}
             submitType="button"
-            onSubmitClick={() => { if (rosterPublicationTarget !== null) void updateRosterPublication(rosterPublicationTarget); }}
-            busy={busy === 'roster-publication'}
-            submitLabel={busy === 'roster-publication' ? admin.messages.saving : rosterPublicationTarget ? copy.publishRoster : copy.unpublishRoster}
-            submitVariant={rosterPublicationTarget ? 'red' : 'outline'}
+            onSubmitClick={() => { void approveAllPending(); }}
+            busy={busy === 'bulk'}
+            submitLabel={fillTemplate(review.approveAll, { count: counts.pending })}
+            submitVariant="red"
           />
         }
       >
-        <p className="rounded-lg border border-[rgba(88,16,16,0.12)] bg-white/55 p-4 text-sm leading-6 text-[rgba(88,16,16,0.72)]">
-          {fillTemplate(review.approvedTeams, { count: counts.approved })}
+        <p className={styles.dialogBody}>{review.approveAllBody}</p>
+      </DashboardModal>
+
+      <DashboardModal
+        open={rosterTarget !== null}
+        onOpenChange={(open) => { if (!open && busy !== 'roster') setRosterTarget(null); }}
+        title={rosterTarget ? review.rosterPublishTitle : review.rosterHideTitle}
+        size="md"
+        footer={
+          <ModalFormFooter
+            onCancel={() => setRosterTarget(null)}
+            cancelLabel={copy.common.cancel}
+            submitType="button"
+            onSubmitClick={() => { if (rosterTarget !== null) void setRosterPublished(rosterTarget); }}
+            busy={busy === 'roster'}
+            submitLabel={rosterTarget ? review.publishRoster : review.hideRoster}
+            submitVariant={rosterTarget ? 'red' : 'outline'}
+          />
+        }
+      >
+        <p className={styles.dialogBody}>
+          {rosterTarget
+            ? fillTemplate(review.rosterPublishBody, { count: counts.approved })
+            : review.rosterHideBody}
         </p>
       </DashboardModal>
 
       <DashboardModal
         open={Boolean(declineTarget)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeclineTarget(null);
-            setDeclineReason('');
-          }
-        }}
-        title={copy.declineTitle}
-        description={
-          declineTarget
-            ? `${copy.declineDescription} · ${declineTarget.event.title}`
-            : copy.declineDescription
-        }
+        onOpenChange={(open) => { if (!open) { setDeclineTarget(null); setDeclineReason(''); } }}
+        title={review.declineTitle}
+        description={declineTarget ? teamName(declineTarget, review.pairSeparator) : undefined}
         size="md"
         footer={
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              className={modalSoftButtonClassName}
-              onClick={() => {
-                setDeclineTarget(null);
-                setDeclineReason('');
-              }}
-            >
-              {admin.messages.declineCancel}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isCompleted || !declineTarget || !declineReason.trim() || busy === declineTarget.id}
-              onClick={() => {
-                if (!declineTarget) return;
-                void setRegistrationStatus(declineTarget, 'DECLINED', declineReason);
-              }}
-            >
-              {busy === declineTarget?.id ? admin.messages.saving : admin.messages.declineConfirm}
-            </Button>
-          </>
+          <ModalFormFooter
+            onCancel={() => { setDeclineTarget(null); setDeclineReason(''); }}
+            cancelLabel={copy.common.cancel}
+            submitType="button"
+            onSubmitClick={() => { if (declineTarget) void decide(declineTarget, 'DECLINED', declineReason); }}
+            busy={Boolean(declineTarget && busy === declineTarget.id)}
+            disabled={isCompleted || !declineReason.trim()}
+            submitLabel={review.declineSubmit}
+            submitVariant="destructive"
+          />
         }
       >
-        <DashboardField label={admin.messages.declineReason} id="decline-reason">
+        <DashboardField label={review.declineReason} id="decline-reason" hint={review.declineDescription}>
           <Textarea
             id="decline-reason"
             autoFocus
+            rows={4}
             value={declineReason}
-            onChange={(event) => setDeclineReason(event.target.value)}
-            placeholder={admin.messages.declineReasonPlaceholder}
+            onChange={(fieldEvent) => setDeclineReason(fieldEvent.target.value)}
+            placeholder={review.declineReasonPlaceholder}
             className={formControlClassName}
           />
         </DashboardField>

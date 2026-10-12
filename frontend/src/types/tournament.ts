@@ -74,7 +74,7 @@ export type MatchDto = {
   version: number;
   startedAt: string | null;
   completedAt: string | null;
-  snapshots: Array<{ side: 'A' | 'B'; clubId: string; clubName: string; ownerName: string; teammateName: string }>;
+  snapshots: Array<{ side: 'A' | 'B'; clubId: string | null; clubName: string | null; ownerName: string; teammateName: string }>;
   scheduleItem?: ScheduleItemDto | null;
   bracket?: { eventId: string; event: EventDto; eventCategory: { category: { id: string; name: string } } };
 };

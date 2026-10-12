@@ -410,8 +410,13 @@ const ROUND_DEPTH: Record<string, number> = {
  * each partner. Read-only, computed from completed matches in the order they
  * finished. Byes are not played matches and are excluded, matching the public
  * profile's definition of the record.
+ *
+ * `publicOnly` narrows it to events that have published their results, which is
+ * the same gate `getPlayerStats` in `player-stats.ts` and the public match
+ * history already apply. It is what lets this same record be shown on a public
+ * profile without an unpublished result leaking through the streak.
  */
-export async function getPlayerStats(userId: string) {
+export async function getPlayerStats(userId: string, { publicOnly = false }: { publicOnly?: boolean } = {}) {
   const entries = await prisma.eventRegistration.findMany({
     where: { OR: [{ ownerId: userId }, { teammateId: userId }] },
     select: {
@@ -431,6 +436,7 @@ export async function getPlayerStats(userId: string) {
     where: {
       status: MatchStatus.COMPLETED,
       resultType: { not: 'BYE' },
+      ...(publicOnly ? { bracket: { event: { resultsPublishedAt: { not: null } } } } : {}),
       OR: [
         { participantAEntryId: { in: entryIds } },
         { participantBEntryId: { in: entryIds } },
@@ -581,9 +587,16 @@ export type EventOperations = {
   registrations: { pending: number; approved: number; total: number };
   requests: { awaiting: number; total: number };
   brackets: { total: number; locked: number; published: number };
-  courts: { total: number; staffed: number };
-  schedule: { queued: number };
-  matches: { total: number; live: number; completed: number };
+  /** `idle` is a court with matches queued and none of them running — dead time. */
+  courts: { total: number; staffed: number; idle: number };
+  /**
+   * `unscheduled` is a playable match with no court yet. It used to be the one
+   * thing the board could not say — the count needs the draw, not the queues —
+   * so it was passed through as zero and the season row stayed silent about
+   * matches nobody could reach. One grouped read answers it.
+   */
+  schedule: { queued: number; unscheduled: number };
+  matches: { total: number; live: number; ready: number; completed: number };
 };
 
 /**
@@ -595,13 +608,37 @@ export type EventOperations = {
  * Scoping matches `getAdminSummary`: an organiser sees only the events handed
  * to them, an admin sees every event.
  */
+/** Settled: played out or called off, and so no longer waiting on a court. */
+const SETTLED_SCHEDULE_STATUSES = ['COMPLETED', 'CANCELLED'];
+
+/**
+ * A court with work still queued and nothing running on it. This is the only
+ * count here that describes time being lost rather than a decision outstanding,
+ * which is why the boards rank it above every review queue.
+ */
+function isIdleCourt(rows: Array<{ courtId: string; status: string; _count: { _all: number } }>, courtId: string) {
+  const onCourt = rows.filter((row) => row.courtId === courtId);
+  const waiting = onCourt.some((row) => !SETTLED_SCHEDULE_STATUSES.includes(row.status) && row.status !== 'IN_PROGRESS');
+  const running = onCourt.some((row) => row.status === 'IN_PROGRESS');
+  return waiting && !running;
+}
+
 export async function getEventOperations(organiserId?: string): Promise<EventOperations[]> {
   const eventScope = organiserId
     ? { organisers: { some: { userId: organiserId, revokedAt: null } } }
     : {};
 
-  const [events, registrationGroups, requestGroups, brackets, courts, staffedCourts, scheduleGroups, matchGroups] =
-    await Promise.all([
+  const [
+    events,
+    registrationGroups,
+    requestGroups,
+    brackets,
+    courts,
+    staffedCourts,
+    scheduleGroups,
+    matchGroups,
+    unscheduledGroups,
+  ] = await Promise.all([
       prisma.event.findMany({ where: eventScope, select: { id: true } }),
       prisma.eventRegistration.groupBy({
         by: ['eventId', 'status'],
@@ -624,14 +661,28 @@ export async function getEventOperations(organiserId?: string): Promise<EventOpe
         by: ['courtId'],
         where: { revokedAt: null, court: { event: eventScope } },
       }),
+      // Grouped by status as well as court: the board has to tell a court that
+      // is working through a queue from one standing free with a queue on it.
       prisma.scheduleItem.groupBy({
-        by: ['courtId'],
+        by: ['courtId', 'status'],
         where: { court: { event: eventScope } },
         _count: { _all: true },
       }),
       prisma.match.groupBy({
         by: ['bracketId', 'status'],
         where: { bracket: { event: eventScope } },
+        _count: { _all: true },
+      }),
+      // A match still to be played and not yet on a court. Completed and
+      // cancelled matches are excluded because neither is waiting for one — a
+      // bye is decided without a court by definition.
+      prisma.match.groupBy({
+        by: ['bracketId'],
+        where: {
+          bracket: { event: eventScope },
+          scheduleItem: { is: null },
+          status: { notIn: [MatchStatus.COMPLETED, MatchStatus.CANCELLED] },
+        },
         _count: { _all: true },
       }),
     ]);
@@ -646,6 +697,8 @@ export async function getEventOperations(organiserId?: string): Promise<EventOpe
     const bracketsFor = brackets.filter((row) => row.eventId === event.id);
     const courtsFor = courts.filter((row) => row.eventId === event.id);
     const matchesFor = matchGroups.filter((row) => eventOfBracket.get(row.bracketId) === event.id);
+    const scheduleFor = scheduleGroups.filter((row) => eventOfCourt.get(row.courtId) === event.id);
+    const unscheduledFor = unscheduledGroups.filter((row) => eventOfBracket.get(row.bracketId) === event.id);
     const total = (rows: Array<{ _count: { _all: number } }>) =>
       rows.reduce((sum, row) => sum + row._count._all, 0);
 
@@ -668,13 +721,16 @@ export async function getEventOperations(organiserId?: string): Promise<EventOpe
       courts: {
         total: courtsFor.length,
         staffed: courtsFor.filter((court) => staffedCourtIds.has(court.id)).length,
+        idle: courtsFor.filter((court) => isIdleCourt(scheduleGroups, court.id)).length,
       },
       schedule: {
-        queued: total(scheduleGroups.filter((row) => eventOfCourt.get(row.courtId) === event.id)),
+        queued: total(scheduleFor),
+        unscheduled: total(unscheduledFor),
       },
       matches: {
         total: total(matchesFor),
         live: total(matchesFor.filter((row) => row.status === 'IN_PROGRESS')),
+        ready: total(matchesFor.filter((row) => row.status === 'READY')),
         completed: total(matchesFor.filter((row) => row.status === 'COMPLETED')),
       },
     };

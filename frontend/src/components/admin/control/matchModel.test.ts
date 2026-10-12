@@ -6,7 +6,7 @@ import {
   canStart,
   clubNameOf,
   pairName,
-  readResult,
+  resultOptions,
   setProgress,
 } from './matchModel';
 
@@ -68,22 +68,25 @@ describe('reading a match', () => {
   });
 });
 
-describe('reading the two numbers an operator types', () => {
-  it('names the winner of a finished tally', () => {
-    expect(readResult(match({}), { A: '1', B: '2' })).toMatchObject({ a: 1, b: 2, winner: 'B', finished: true });
-    expect(readResult(match({}), { A: '2', B: '0' })).toMatchObject({ winner: 'A', finished: true });
+describe('the results a match can end on', () => {
+  it('offers every finish of the race, and only finishes', () => {
+    expect(resultOptions(match({})).map(({ a, b }) => `${a}-${b}`)).toEqual(['2-0', '2-1', '1-2', '0-2']);
   });
 
-  it('withholds a winner until both numbers form a result', () => {
-    expect(readResult(match({}), { A: '1', B: '' })).toMatchObject({ winner: null, finished: false });
-    expect(readResult(match({}), { A: '1', B: '1' })).toMatchObject({ winner: null, finished: false });
-    expect(readResult(match({}), { A: '3', B: '1' })).toMatchObject({ winner: null, finished: false });
-    expect(readResult(match({}), { A: 'x', B: '1' })).toMatchObject({ winner: null, finished: false });
+  it('follows the set format rather than a fixed list', () => {
+    const raceToOne = match({ setCount: 1, setsToWin: 1, maxSets: 1 });
+    expect(resultOptions(raceToOne).map(({ a, b }) => `${a}-${b}`)).toEqual(['1-0', '0-1']);
   });
 
-  it('flags a tally that would take back a set already recorded', () => {
-    const played = match({ scoreA: 0, scoreB: 2, sets: [{ setNumber: 1 }, { setNumber: 2 }] as MatchDto['sets'] });
-    expect(readResult(played, { A: '2', B: '1' }).regresses).toBe(true);
-    expect(readResult(match({}), { A: '2', B: '1' }).regresses).toBe(false);
+  it('names the side each result gives the match to', () => {
+    expect(resultOptions(match({})).map((option) => option.winner)).toEqual(['A', 'A', 'B', 'B']);
+  });
+
+  it('bars only the results that would take back a set already recorded', () => {
+    // B took the first set, so nothing that leaves B on zero is a result.
+    const played = match({ scoreA: 0, scoreB: 1, sets: [{ setNumber: 1 }] as MatchDto['sets'] });
+    const reading = resultOptions(played).map((option) => `${option.a}-${option.b}:${option.regresses}`);
+    expect(reading).toEqual(['2-0:true', '2-1:false', '1-2:false', '0-2:false']);
+    expect(resultOptions(match({})).some((option) => option.regresses)).toBe(false);
   });
 });

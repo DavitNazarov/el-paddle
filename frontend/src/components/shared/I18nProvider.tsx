@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { defaultLocale, dictionaries, normalizeLocale, type Locale } from '@/lib/i18n';
+import { PLATFORM_TIME_ZONE } from '@/lib/time';
 
 const localeCookieName = 'elpadel_locale';
 const localeStorageKey = 'elpadel_locale';
@@ -91,9 +92,18 @@ export function I18nProvider({
     [locale],
   );
 
+  /**
+   * The zone is pinned rather than left to the runtime, so server rendering and
+   * hydration print the same instant and both print court time. A caller that
+   * genuinely means another zone — an event abroad, carrying its own
+   * `timeZone` — still overrides it through `options`.
+   */
   const formatDate = useCallback(
     (value: string | number | Date, options?: Intl.DateTimeFormatOptions) =>
-      new Intl.DateTimeFormat(locale === 'ka' ? 'ka-GE' : 'en', options).format(new Date(value)),
+      new Intl.DateTimeFormat(locale === 'ka' ? 'ka-GE' : 'en', {
+        timeZone: PLATFORM_TIME_ZONE,
+        ...options,
+      }).format(new Date(value)),
     [locale],
   );
 
