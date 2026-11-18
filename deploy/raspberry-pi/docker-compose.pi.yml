@@ -1,0 +1,151 @@
+# El Padel backend on Raspberry Pi 4 (postgres + migrate + api + worker + tunnel).
+# Frontend stays on Vercel. No host ports: Cloudflare Tunnel reaches api over the
+# internal Docker network; Postgres is never published.
+#
+# Usage (from this directory, with a chmod-600 .env):
+#   docker compose -f docker-compose.pi.yml pull
+#   docker compose -f docker-compose.pi.yml up -d
+#
+# Local smoke (publish API on loopback, skip tunnel):
+#   docker compose -f docker-compose.pi.yml -f docker-compose.pi.smoke.yml up -d
+
+name: elpadel_pi
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+x-backend-image: &backend-image
+  image: ghcr.io/davitnazarov/elpadel-backend:${IMAGE_TAG}
+
+x-backend-security: &backend-security
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 256
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    mem_limit: 384m
+    mem_reservation: 256m
+    cpus: 1.0
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ${PG_DATA_DIR:-/srv/elpadel/pgdata}:/var/lib/postgresql/data
+      - ./postgres/postgresql.pi.conf:/etc/postgresql/postgresql.pi.conf:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.pi.conf
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+    # No ports: Docker-internal only.
+
+  migrate:
+    <<: [*backend-image, *backend-security]
+    restart: 'no'
+    mem_limit: 256m
+    cpus: 0.5
+    working_dir: /app/backend
+    # Call the Prisma CLI directly so npm never tries to write a cache on the
+    # read-only root filesystem (HOME is on tmpfs only as a belt-and-braces).
+    command: ['/app/node_modules/.bin/prisma', 'migrate', 'deploy']
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      HOME: /tmp
+      TZ: ${TZ:-UTC}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  api:
+    <<: [*backend-image, *backend-security]
+    restart: unless-stopped
+    mem_limit: 320m
+    mem_reservation: 192m
+    cpus: 1.0
+    # Load secrets from .env. Do not interpolate optional Google/cookie vars as
+    # empty strings — env.ts treats "" as set and then fails HTTPS URL checks.
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: '4000'
+      RUN_OUTBOX_IN_API: 'true'
+      NODE_OPTIONS: --max-old-space-size=192
+      GIT_COMMIT: ${IMAGE_TAG}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '-qO-',
+          'http://127.0.0.1:4000/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+    # No host ports. cloudflared reaches http://api:4000 on the compose network.
+
+  worker:
+    <<: [*backend-image, *backend-security]
+    restart: unless-stopped
+    mem_limit: 192m
+    mem_reservation: 128m
+    cpus: 0.5
+    command: ['node', 'dist/worker.js']
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=128
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.1
+    restart: unless-stopped
+    mem_limit: 96m
+    mem_reservation: 48m
+    cpus: 0.25
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+      TZ: ${TZ:-UTC}
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *default-logging
+    # Token-based tunnel: configure public hostname <PI_API_HOSTNAME> → http://api:4000
+    # in the Cloudflare Zero Trust dashboard (HTTP service on the compose network).

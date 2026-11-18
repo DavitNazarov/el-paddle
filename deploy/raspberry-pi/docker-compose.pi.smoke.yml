@@ -1,0 +1,29 @@
+# Local / CI smoke overrides. Never use on the Pi.
+# Publishes the API on loopback, uses a disposable Postgres volume, and turns
+# cloudflared into a no-op (no TUNNEL_TOKEN required).
+#
+#   docker compose -f docker-compose.pi.yml -f docker-compose.pi.smoke.yml up -d --pull missing
+
+services:
+  postgres:
+    volumes:
+      - pi_smoke_pgdata:/var/lib/postgresql/data
+      - ./postgres/postgresql.pi.conf:/etc/postgresql/postgresql.pi.conf:ro
+
+  api:
+    ports:
+      - '127.0.0.1:4400:4000'
+
+  cloudflared:
+    image: busybox:1.36.1
+    restart: 'no'
+    entrypoint: ['/bin/true']
+    command: []
+    environment: {}
+    depends_on: []
+    mem_limit: 16m
+    mem_reservation: 8m
+    cpus: 0.1
+
+volumes:
+  pi_smoke_pgdata:

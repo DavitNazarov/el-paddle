@@ -1,0 +1,23 @@
+[Unit]
+Description=El Padel PostgreSQL backup (Raspberry Pi)
+After=docker.service
+Requires=docker.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Adjust User/WorkingDirectory to the account that owns the deploy checkout.
+User=pi
+Group=pi
+WorkingDirectory=/srv/elpadel/app/deploy/raspberry-pi
+Environment=BACKUP_DIR=/srv/elpadel/backups
+# Optional off-device copy, e.g.:
+# Environment=BACKUP_OFFSITE_CMD=rclone copy /srv/elpadel/backups remote:elpadel-pi
+ExecStart=/srv/elpadel/app/deploy/raspberry-pi/scripts/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target
