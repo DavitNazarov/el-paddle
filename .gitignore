@@ -1,6 +1,11 @@
 **/.next/
+**/.open-next/
+**/.wrangler/
 **/node_modules/
 **/dist/
+frontend/.dev.vars
+frontend/cloudflare-env.d.ts
+frontend/wrangler.toml
 backend/src/generated/
 test-output/
 **/.env*

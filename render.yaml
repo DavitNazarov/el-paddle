@@ -1,5 +1,9 @@
-# Production on Render. Domains are added in the dashboard, not here.
-# The public URLs below are already the names you will attach:
+# RETIRED as the production host.
+# Frontend: Cloudflare Workers (OpenNext) — docs/CLOUDFLARE_FRONTEND.md
+# API / worker / DB: Raspberry Pi + Tunnel — deploy/raspberry-pi/RASPBERRY_PI.md
+# Kept only as a historical blueprint; do not create a new Render Blueprint from this.
+#
+# Former mapping:
 #   elpadel-web  -> https://elpadell.com and https://www.elpadell.com
 #   elpadel-api  -> https://api.elpadell.com
 # Keep elpadel-api at one instance. Socket.IO runs in that process.

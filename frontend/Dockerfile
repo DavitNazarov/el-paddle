@@ -30,6 +30,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY frontend ./frontend
 WORKDIR /app/frontend
+ENV DOCKER_BUILD=1
 RUN npm run build
 
 FROM node:22-alpine AS runner

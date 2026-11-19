@@ -2,11 +2,11 @@
 
 Runbook for hosting **postgres + migrate + api + worker** on a single Pi 4
 (~1.8 GiB RAM, SD card), exposed through **Cloudflare Tunnel**. The frontend
-stays on Vercel. This hostname is a **separate staging API**
-(`<PI_API_HOSTNAME>`); cutover from Render is a manual step you do later.
+runs on **Cloudflare Workers** (OpenNext) — see `docs/CLOUDFLARE_FRONTEND.md`.
+This hostname is the production API (`<PI_API_HOSTNAME>`).
 
-Everything here is under `deploy/raspberry-pi/`. Do not edit `render.yaml`,
-the root `docker-compose.yml`, or `frontend/` for this path.
+Everything here is under `deploy/raspberry-pi/`. Frontend Worker config lives
+under `frontend/` (`wrangler.jsonc`, OpenNext).
 
 ---
 
@@ -56,8 +56,8 @@ echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USER --password-st
 
 ### Hostname / cookies
 
-`<PI_API_HOSTNAME>` must share the **same registrable domain** as the Vercel
-frontend (e.g. `api-pi.elpadell.com` + `elpadell.com`) so session cookies with
+`<PI_API_HOSTNAME>` must share the **same registrable domain** as the Cloudflare
+Worker frontend (e.g. `api.elpadell.com` + `elpadell.com`) so session cookies with
 `SameSite=Lax` and an optional shared `COOKIE_DOMAIN` work. List every browser
 origin in `FRONTEND_URL`.
 

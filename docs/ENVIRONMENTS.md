@@ -1,32 +1,31 @@
 # Environments & Deployment Workflow
 
-Production is **Render**, in Frankfurt, from [`render.yaml`](../render.yaml). The app is already aimed at the production domains. Adding them in the Render dashboard, and creating the DNS records Render shows, is what connects the site.
+Production is **Cloudflare Workers (frontend) + Raspberry Pi (API / worker / Postgres)**.
 
-| Render service | Serves | Domain you add |
+| Piece | Serves | Domain |
 | --- | --- | --- |
-| `elpadel-web` | Next.js | `elpadell.com`, `www.elpadell.com` (www redirects to the apex) |
-| `elpadel-api` | Express + Socket.IO | `api.elpadell.com` |
-| `elpadel-worker` | Email outbox | none |
-| `elpadel-db` | Postgres 16, private | none |
+| Cloudflare Worker `el-paddle` | Next.js (OpenNext) | `elpadell.com`, `www.elpadell.com` |
+| Pi via Cloudflare Tunnel | Express + Socket.IO | API host on the same zone (e.g. `api.elpadell.com`) |
+| Pi worker | Email outbox | none |
+| Pi Postgres 16 | Database | private compose network |
 
-`www` and the API share `.elpadell.com` with the apex, so the session cookie set by the API is sent on site requests, server-rendered fetches, CSV downloads, and Socket.IO. The `*.onrender.com` hostnames stay Render's defaults and are not a login origin.
+Details: [`CLOUDFLARE_FRONTEND.md`](CLOUDFLARE_FRONTEND.md), [`../DEPLOY.md`](../DEPLOY.md), [`../deploy/raspberry-pi/RASPBERRY_PI.md`](../deploy/raspberry-pi/RASPBERRY_PI.md).
 
-Leave Cloudflare DNS-only if the zone is still there. An orange-cloud proxy hides the visitor address and presents a different certificate than Render's.
+`www` and the API share `.elpadell.com` with the apex, so the session cookie set by the API is sent on site requests, server-rendered fetches, CSV downloads, and Socket.IO.
 
 ## Deployment workflow
 
-**Changes reach production by merging to `main`.** Render auto-deploys that branch. Do not edit code or env on a server by hand.
-
 1. Develop locally. Author any Prisma migration locally (`prisma migrate dev`); migration files are committed and travel with the branch.
 2. Merge to `main`.
-3. Render builds `elpadel-web`, `elpadel-api`, and `elpadel-worker`. The API and the worker run `prisma migrate deploy` before the new release starts.
-4. Verify at `https://elpadell.com`. `GET https://api.elpadell.com/health/ready` is the deploy check (database plus outbox). `/health` only means the process is up.
+3. Cloudflare builds and deploys the Worker (`npm run cf-build` then `wrangler deploy` from `frontend/`).
+4. Backend image builds (GHCR arm64) and the Pi pulls the new tag; migrations run on the Pi compose path.
+5. Verify at `https://elpadell.com`. `GET https://<API_HOST>/health/ready` is the deploy check (database plus outbox). `/health` only means the process is up.
 
 The API stays at **one instance**. A second copy would split Socket.IO with no shared adapter.
 
-`NEXT_PUBLIC_API_URL` is `https://api.elpadell.com` at image build. Changing it, or any `NEXT_PUBLIC_LEGAL_*` value, means redeploying `elpadel-web`.
+`NEXT_PUBLIC_API_URL` is set at Worker build time. Changing it, or any `NEXT_PUBLIC_LEGAL_*` value, means redeploying the Worker.
 
-There is no second hosted environment in this blueprint. The old staging stack is retired with the VPS below.
+`render.yaml` is retired as the production host.
 
 ## Seeding
 

@@ -104,7 +104,7 @@ When changing `backend/prisma/schema.prisma`:
 4. Run backend lint, tests, and build.
 5. Update documentation when models, enums, lifecycle rules, or public APIs change.
 
-Production is Render (`render.yaml`). Migrations run as the pre-deploy command on `elpadel-api` and `elpadel-worker` (`npm run prisma:migrate:deploy` in the backend image). Apply them locally with:
+Production frontend is Cloudflare Workers (OpenNext; `frontend/wrangler.jsonc`). API, worker, and Postgres run on the Raspberry Pi behind Cloudflare Tunnel (`deploy/raspberry-pi/`). Migrations run on the Pi compose path (`npm run prisma:migrate:deploy` in the backend image). Apply them locally with:
 
 ```bash
 npm run prisma:migrate:deploy --workspace backend

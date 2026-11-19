@@ -13,6 +13,8 @@
     "build": "npm run build --workspace backend && npm run build --workspace frontend",
     "start:frontend": "npm run start --workspace frontend",
     "start:backend": "npm run start --workspace backend",
+    "cf:build": "npm run cf-build --workspace frontend",
+    "cf:deploy": "npm run deploy --workspace frontend",
     "lint": "npm run lint --workspace frontend && npm run lint --workspace backend",
     "test": "npm run test --workspace backend && npm run test --workspace frontend",
     "test:integration": "npm run test:integration --workspace backend",
@@ -34,5 +36,11 @@
     "fast-uri": "^3.1.5",
     "brace-expansion@1": "^1.1.18",
     "brace-expansion@5": "^5.0.9"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261118.1": true,
+    "fsevents@2.3.3": true,
+    "unrs-resolver@1.12.2": true
   }
 }

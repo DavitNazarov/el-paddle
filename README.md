@@ -179,6 +179,6 @@ npm run worker --workspace backend
 
 ## Deployment
 
-Production runs on Render. Follow [DEPLOY.md](DEPLOY.md). `render.yaml` already points the site at `https://elpadell.com` and the API at `https://api.elpadell.com`. Adding those domains in the Render dashboard is the connection step. Migrations run before each API and worker deploy.
+Production frontend is Cloudflare Workers; the API runs on a Raspberry Pi behind Cloudflare Tunnel. Follow [DEPLOY.md](DEPLOY.md) and [docs/CLOUDFLARE_FRONTEND.md](docs/CLOUDFLARE_FRONTEND.md). Point `elpadell.com` at the Worker and the API hostname at the tunnel. Migrations run on the Pi before each backend release.
 
 `NEXT_PUBLIC_API_URL` is compiled into the frontend bundle. A change to that URL needs a frontend rebuild.

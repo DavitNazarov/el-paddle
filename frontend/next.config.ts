@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 
 // The Content-Security-Policy is built per request in `src/middleware.ts`: it
 // carries a fresh nonce, which a static header cannot. Everything below is the
@@ -14,8 +15,10 @@ const securityHeadersWithoutCsp = [
   },
 ];
 
+// OpenNext on Cloudflare does not use `output: 'standalone'`. Keep it only for
+// the Docker image path (frontend/Dockerfile) via DOCKER_BUILD=1.
 const nextConfig: NextConfig = {
-  output: 'standalone',
+  ...(process.env.DOCKER_BUILD === '1' ? { output: 'standalone' as const } : {}),
   poweredByHeader: false,
   async headers() {
     return [
@@ -47,3 +50,5 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+initOpenNextCloudflareForDev();

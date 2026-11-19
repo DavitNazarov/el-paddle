@@ -1,0 +1,3 @@
+# Copied to .dev.vars for local `opennextjs-cloudflare preview`.
+# NEXTJS_ENV selects which Next.js .env* files load (defaults to production).
+NEXTJS_ENV=development
