@@ -19,13 +19,17 @@ Do **not** set deploy to bare `npx wrangler deploy` from the repo root without a
 
 ### Environment variables (build)
 
-Set on the Worker / build, same names as before:
+Set these under **Workers Builds → Build variables and secrets** (not only runtime Variables & Secrets). `NEXT_PUBLIC_*` are inlined during `next build`; a runtime-only value will not fix browser CSRF/login calls.
 
-- `NEXT_PUBLIC_API_URL` — Pi tunnel hostname, e.g. `https://api.elpadell.com`
-- `NEXT_PUBLIC_SITE_URL` — `https://elpadell.com`
-- `NEXT_PUBLIC_LEGAL_*` — legal launch gate values
+| Variable | Value |
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` | `https://api-pi.elpadell.com` (**origin only** — no trailing `/api`) |
+| `NEXT_PUBLIC_SITE_URL` | `https://elpadell.com` |
+| `NEXT_PUBLIC_LEGAL_*` | legal launch gate values |
 
-`NEXT_PUBLIC_*` are inlined at build time; changing them requires a redeploy.
+Request paths already start with `/api/...` (e.g. `/api/auth/csrf`). If you set `…/api` on `NEXT_PUBLIC_API_URL`, the client strips that suffix, but prefer the origin form above.
+
+After changing any of these, **redeploy** the Worker. A missing `NEXT_PUBLIC_API_URL` fails the production build on purpose so localhost is never baked into production again.
 
 ### Custom domains
 

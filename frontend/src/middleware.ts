@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { resolveApiBaseUrl } from '@/lib/api/base-url';
 import { wwwToApexRedirect } from '@/lib/canonical-host';
 
 /**
@@ -16,11 +17,6 @@ import { wwwToApexRedirect } from '@/lib/canonical-host';
  * this app sit on `fetch` calls (the data cache), not on route segments, so no
  * HTML is ever replayed from cache with a spent nonce.
  */
-function resolveApiUrl() {
-  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
-  return /^https?:\/\//i.test(configured) ? configured : 'http://localhost:4000';
-}
-
 function websocketOrigin(value: string) {
   try {
     const url = new URL(value);
@@ -31,8 +27,8 @@ function websocketOrigin(value: string) {
   }
 }
 
-const apiUrl = resolveApiUrl();
-const connectSources = ["'self'", apiUrl, websocketOrigin(apiUrl)].filter(Boolean).join(' ');
+const apiOrigin = resolveApiBaseUrl();
+const connectSources = ["'self'", apiOrigin, websocketOrigin(apiOrigin)].filter(Boolean).join(' ');
 
 // React's development build uses eval() for hot reload and callstack
 // reconstruction. Production builds never do, so the relaxation stays in dev.

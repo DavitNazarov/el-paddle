@@ -33,7 +33,7 @@ On the Pi, set:
 
 - `FRONTEND_URL=https://elpadell.com,https://www.elpadell.com`
 - `BACKEND_URL` / `GOOGLE_REDIRECT_URI` to the tunnel API hostname
-- `NEXT_PUBLIC_API_URL` on the Worker build to that same API hostname
+- `NEXT_PUBLIC_API_URL=https://api-pi.elpadell.com` on the Worker **build** variables (origin only, no `/api` suffix)
 
 The cookie domain is derived as `.elpadell.com`. Do not set `COOKIE_DOMAIN` unless you know you need it.
 

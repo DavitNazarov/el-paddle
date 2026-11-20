@@ -1,10 +1,6 @@
-function resolveApiBaseUrl() {
-  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
-  if (!configured) return 'http://localhost:4000';
-  // Never treat credential-bearing or non-HTTP values (e.g. DATABASE_URL) as the API origin.
-  if (!/^https?:\/\//i.test(configured)) return 'http://localhost:4000';
-  return configured;
-}
+import { resolveApiBaseUrl } from './base-url';
+
+export { LOCAL_DEV_API_ORIGIN, normalizeApiBaseUrl, resolveApiBaseUrl } from './base-url';
 
 export const API_BASE_URL = resolveApiBaseUrl();
 

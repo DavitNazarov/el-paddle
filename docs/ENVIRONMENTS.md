@@ -5,7 +5,7 @@ Production is **Cloudflare Workers (frontend) + Raspberry Pi (API / worker / Pos
 | Piece | Serves | Domain |
 | --- | --- | --- |
 | Cloudflare Worker `el-paddle` | Next.js (OpenNext) | `elpadell.com`, `www.elpadell.com` |
-| Pi via Cloudflare Tunnel | Express + Socket.IO | API host on the same zone (e.g. `api.elpadell.com`) |
+| Pi via Cloudflare Tunnel | Express + Socket.IO | API host on the same zone (e.g. `api-pi.elpadell.com`) |
 | Pi worker | Email outbox | none |
 | Pi Postgres 16 | Database | private compose network |
 
@@ -23,7 +23,7 @@ Details: [`CLOUDFLARE_FRONTEND.md`](CLOUDFLARE_FRONTEND.md), [`../DEPLOY.md`](..
 
 The API stays at **one instance**. A second copy would split Socket.IO with no shared adapter.
 
-`NEXT_PUBLIC_API_URL` is set at Worker build time. Changing it, or any `NEXT_PUBLIC_LEGAL_*` value, means redeploying the Worker.
+`NEXT_PUBLIC_API_URL` is set at Worker **build** time (origin only, e.g. `https://api-pi.elpadell.com` — no trailing `/api`). Changing it, or any `NEXT_PUBLIC_LEGAL_*` value, means redeploying the Worker. A missing value fails the production frontend build so localhost is not baked into the bundle.
 
 `render.yaml` is retired as the production host.
 

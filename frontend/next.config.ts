@@ -1,5 +1,16 @@
 import type { NextConfig } from 'next';
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
+import { normalizeApiBaseUrl } from './src/lib/api/base-url';
+
+// NEXT_PUBLIC_API_URL is inlined at build time. Fail production builds early when
+// it is missing so Cloudflare Workers never ship the localhost CSRF fallback.
+if (process.env.NODE_ENV === 'production' && !normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL)) {
+  throw new Error(
+    'NEXT_PUBLIC_API_URL must be set for production builds '
+    + '(e.g. https://api-pi.elpadell.com). Configure it under Cloudflare Workers '
+    + 'Builds → Build variables and secrets, then redeploy.',
+  );
+}
 
 // The Content-Security-Policy is built per request in `src/middleware.ts`: it
 // carries a fresh nonce, which a static header cannot. Everything below is the
